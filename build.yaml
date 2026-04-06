@@ -1,0 +1,11 @@
+targets:
+  $default:
+    builders:
+      freezed:
+        generate_for:
+          - lib/data/models/**
+          - lib/core/config/**
+      json_serializable:
+        generate_for:
+          - lib/data/models/**
+          - lib/core/config/**

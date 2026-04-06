@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EzyQuick — LCO Operations</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f8fb;
+  --white: #ffffff;
+  --red: #e53935;
+  --red-soft: #fff0f0;
+  --red-dark: #c62828;
+  --green: #2ecc71;
+  --green-soft: #eafaf1;
+  --green-dot: #00c853;
+  --red-dot: #ff1744;
+  --amber: #f5a623;
+  --amber-soft: #fef9ee;
+  --blue: #4a90d9;
+  --blue-soft: #eef4fb;
+  --purple: #7e57c2;
+  --purple-soft: #f3eefa;
+  --ink: #1a1d23;
+  --ink-80: #2d3139;
+  --ink-60: #4a5060;
+  --ink-40: #7a8194;
+  --ink-20: #b4bac8;
+  --ink-10: #d8dce6;
+  --ink-05: #eef0f4;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-card: 0 2px 8px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.08);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-pill: 100px;
+  --font: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --av-blue: #dbeafe; --av-blue-t: #3b82f6;
+  --av-green: #d1fae5; --av-green-t: #059669;
+  --av-amber: #fef3c7; --av-amber-t: #d97706;
+  --av-pink: #fce7f3; --av-pink-t: #db2777;
+  --av-purple: #ede9fe; --av-purple-t: #7c3aed;
+  --av-gray: #f1f5f9; --av-gray-t: #64748b;
+}
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { font-family:var(--font); background:#e8ecf2; color:var(--ink); overflow-x:hidden; -webkit-font-smoothing:antialiased; }
+
+/* ═══ DARK THEME ═══ */
+[data-theme="dark"] { 
+  --bg:#0f1219; --white:#1a2030; --ink:#e8ecf2; --ink-80:#c8cdd8; --ink-60:#a0a8b8; --ink-40:#6b7590; --ink-20:#3d4560; --ink-10:#252d40; --ink-05:#1a2235;
+  --red-soft:#2d1418; --green-soft:#0d261a; --amber-soft:#2d2210; --blue-soft:#101e35; --purple-soft:#1a1530;
+  --shadow-sm:0 1px 3px rgba(0,0,0,0.2); --shadow-card:0 2px 8px rgba(0,0,0,0.2),0 0 1px rgba(0,0,0,0.3); --shadow-lg:0 8px 30px rgba(0,0,0,0.4);
+  --av-blue:#1e2d4a; --av-blue-t:#60a5fa; --av-green:#0d2e1e; --av-green-t:#34d399; --av-amber:#2d2510; --av-amber-t:#fbbf24; --av-pink:#2d1525; --av-pink-t:#f472b6; --av-purple:#1e1535; --av-purple-t:#a78bfa; --av-gray:#1e2535; --av-gray-t:#94a3b8;
+}
+[data-theme="dark"] body { background:#080a10; }
+[data-theme="dark"] .phone { box-shadow:0 0 60px rgba(0,0,0,0.4); }
+@media(min-width:500px){ [data-theme="dark"] .phone { border-color:#2a3245; } }
+[data-theme="dark"] .header { background:var(--white); border-bottom-color:var(--ink-10); }
+[data-theme="dark"] .header-avatar { box-shadow:0 2px 8px rgba(229,57,53,0.15); }
+[data-theme="dark"] .notif-badge { border-color:var(--white); }
+[data-theme="dark"] .wallet-bar { background:var(--ink-05); }
+[data-theme="dark"] .topup-btn { box-shadow:0 2px 8px rgba(229,57,53,0.15); }
+[data-theme="dark"] .search-box { background:var(--white); border-color:var(--ink-10); }
+[data-theme="dark"] .search-box input { color:var(--ink); }
+[data-theme="dark"] .header-icon-btn { background:var(--ink-05); color:var(--ink-40); }
+[data-theme="dark"] .bottom-nav { background:var(--white); border-top-color:var(--ink-10); box-shadow:0 -2px 12px rgba(0,0,0,0.2); }
+[data-theme="dark"] .nav-item.active .nav-icon { background:var(--red-soft); }
+[data-theme="dark"] .pill-toggle { background:var(--ink-05); }
+[data-theme="dark"] .pill-tab[data-tab="active"].active { background:#0d2e1e; color:#34d399; }
+[data-theme="dark"] .pill-tab[data-tab="active"].active .tab-badge { background:rgba(52,211,153,0.15); color:#34d399; }
+[data-theme="dark"] .pill-tab[data-tab="deactivated"].active { background:#2d1418; color:#f87171; }
+[data-theme="dark"] .pill-tab[data-tab="deactivated"].active .tab-badge { background:rgba(248,113,113,0.15); color:#f87171; }
+[data-theme="dark"] .pill-tab[data-tab="fresh"].active { background:#1a2e10; color:#4ade80; }
+[data-theme="dark"] .pill-tab[data-tab="fresh"].active .tab-badge { background:rgba(74,222,128,0.15); color:#4ade80; }
+[data-theme="dark"] .pill-tab[data-tab="misc"].active { background:#2d2210; color:#fbbf24; }
+[data-theme="dark"] .pill-tab[data-tab="misc"].active .tab-badge { background:rgba(251,191,36,0.15); color:#fbbf24; }
+[data-theme="dark"] .pill-tab:not(.active) .tab-badge { background:var(--ink-05); color:var(--ink-40); }
+[data-theme="dark"] .sub-item { background:var(--white); }
+[data-theme="dark"] .sub-actions { border-top-color:var(--ink-10); }
+[data-theme="dark"] .sub-act { border-right-color:var(--ink-10); }
+[data-theme="dark"] .sub-act:active { background:var(--ink-05); }
+[data-theme="dark"] .sub-meta code { background:var(--ink-05); color:var(--ink-60); }
+[data-theme="dark"] .ov-donut svg circle:first-child { stroke:var(--ink-10); }
+[data-theme="dark"] .ov-leg { background:var(--white); }
+[data-theme="dark"] .al-chip { background:var(--white); }
+[data-theme="dark"] .al-chip-icon { opacity:.9; }
+[data-theme="dark"] .detail-sheet { background:var(--white); }
+[data-theme="dark"] .detail-handle span { background:var(--ink-10); }
+[data-theme="dark"] .detail-close { background:var(--ink-05); }
+[data-theme="dark"] .detail-profile { border-bottom-color:var(--ink-10); }
+[data-theme="dark"] .detail-grid { background:var(--ink-10); }
+[data-theme="dark"] .detail-cell { background:var(--white); }
+[data-theme="dark"] .detail-packages { border-top-color:var(--ink-10); }
+[data-theme="dark"] .detail-pkg { border-bottom-color:var(--ink-10); }
+[data-theme="dark"] .box-actions { border-top-color:var(--ink-10); }
+[data-theme="dark"] .box-action-circle { background:var(--ink-05); }
+[data-theme="dark"] .modal-sheet { background:var(--white); }
+[data-theme="dark"] .modal-handle span { background:var(--ink-10); }
+[data-theme="dark"] .modal-summary { background:var(--ink-05); }
+[data-theme="dark"] .preset-btn { background:var(--ink-05); border-color:var(--ink-10); }
+[data-theme="dark"] .preset-btn.sel { border-color:var(--red); background:var(--red-soft); }
+[data-theme="dark"] .modal-input,.modal-textarea { background:var(--ink-05); border-color:var(--ink-10); color:var(--ink); }
+[data-theme="dark"] .modal-confirm:disabled { background:var(--ink-10)!important; color:var(--ink-40)!important; }
+[data-theme="dark"] .sort-btn,[data-theme="dark"] .view-toggle { background:var(--white); border-color:var(--ink-10); color:var(--ink-60); }
+[data-theme="dark"] .alpha-letter { color:var(--ink-20); }
+[data-theme="dark"] .alpha-letter.has-items { color:var(--ink-40); }
+[data-theme="dark"] .wh-card { background:var(--white); }
+[data-theme="dark"] .wh-row { border-bottom-color:var(--ink-10); color:var(--ink-60); }
+[data-theme="dark"] .toast.success { background:#0d2e1e; color:#4ade80; border-color:#166534; }
+[data-theme="dark"] .toast.info { background:#101e35; color:#60a5fa; border-color:#1e40af; }
+[data-theme="dark"] .ai-fab { box-shadow:0 4px 20px rgba(229,57,53,0.2); }
+[data-theme="dark"] .ai-fab-badge { border-color:var(--white); }
+/* Theme toggle button */
+.theme-toggle { position:relative; width:36px; height:36px; border-radius:10px; background:var(--bg); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--ink-40); transition:all .3s; overflow:hidden; }
+[data-theme="dark"] .theme-toggle { background:var(--ink-05); }
+.theme-toggle:active { transform:scale(.92); }
+.theme-toggle .sun-icon,.theme-toggle .moon-icon { position:absolute; transition:all .35s ease; }
+.theme-toggle .sun-icon { opacity:1; transform:rotate(0deg) scale(1); }
+.theme-toggle .moon-icon { opacity:0; transform:rotate(90deg) scale(0.5); }
+[data-theme="dark"] .theme-toggle .sun-icon { opacity:0; transform:rotate(-90deg) scale(0.5); }
+[data-theme="dark"] .theme-toggle .moon-icon { opacity:1; transform:rotate(0deg) scale(1); }
+
+.phone { width:100%; max-width:400px; min-height:100vh; margin:0 auto; background:var(--bg); position:relative; overflow:hidden; box-shadow:0 0 60px rgba(0,0,0,0.12); }
+@media(min-width:500px){ body{display:flex;align-items:flex-start;justify-content:center;padding:20px 0;min-height:100vh;} .phone{min-height:860px;max-height:900px;border-radius:32px;border:6px solid #1a1d23;overflow-y:auto;} }
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes popIn{from{transform:scale(0.9);opacity:0}to{transform:scale(1);opacity:1}}
+.a1{animation:fadeUp .35s ease-out .05s both} .a2{animation:fadeUp .35s ease-out .1s both} .a3{animation:fadeUp .35s ease-out .15s both} .a4{animation:fadeUp .35s ease-out .2s both} .a5{animation:fadeUp .35s ease-out .25s both}
+
+::-webkit-scrollbar{width:3px} ::-webkit-scrollbar-thumb{background:var(--ink-10);border-radius:3px}
+
+/* ═══ SVG ICON SYSTEM ═══ */
+.icon { display:inline-flex; align-items:center; justify-content:center; flex-shrink:0; }
+.icon svg { display:block; }
+
+/* ═══ HEADER ═══ */
+.header { background:var(--white); padding:14px 18px 10px; position:sticky; top:0; z-index:50; border-bottom:1px solid var(--ink-05); }
+.header-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.header-identity { display:flex; align-items:center; gap:10px; }
+.header-avatar { width:38px; height:38px; border-radius:12px; background:linear-gradient(135deg,var(--red),var(--red-dark)); display:flex; align-items:center; justify-content:center; color:white; font-weight:800; font-size:14px; box-shadow:0 2px 8px rgba(229,57,53,0.25); }
+.header-name { font-size:15px; font-weight:700; color:var(--ink); line-height:1.2; }
+.header-business { font-size:10px; color:var(--ink-40); font-weight:500; }
+.header-actions { display:flex; align-items:center; gap:6px; }
+.header-icon-btn { width:36px; height:36px; border-radius:10px; background:var(--bg); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; color:var(--ink-40); position:relative; transition:all .15s; }
+.header-icon-btn:active { transform:scale(.92); background:var(--ink-05); }
+.notif-badge { position:absolute; top:4px; right:4px; width:7px; height:7px; border-radius:50%; background:var(--red); border:2px solid var(--white); }
+
+.wallet-bar { display:flex; align-items:center; justify-content:space-between; background:var(--bg); border-radius:8px; padding:6px 10px; }
+.wallet-left { display:flex; align-items:center; gap:6px; }
+.wallet-icon { width:24px; height:24px; border-radius:6px; background:var(--green-soft); display:flex; align-items:center; justify-content:center; color:var(--green); }
+.wallet-amount { font-size:15px; font-weight:800; color:var(--ink); font-family:var(--mono); }
+.wallet-amount span { font-size:10px; color:var(--ink-40); font-weight:500; font-family:var(--font); }
+.wallet-last { font-size:8px; color:var(--ink-20); font-weight:500; margin-top:0; }
+.topup-btn { background:var(--red); color:white; border:none; border-radius:var(--radius-pill); padding:5px 12px; font-size:10px; font-weight:700; cursor:pointer; font-family:var(--font); letter-spacing:.02em; box-shadow:0 2px 8px rgba(229,57,53,0.2); transition:all .15s; display:flex; align-items:center; gap:3px; }
+.topup-btn:active { transform:scale(.95); }
+
+/* ═══ SECTION LABEL ═══ */
+.section-label { font-size:10px; font-weight:700; color:var(--ink-20); letter-spacing:.08em; text-transform:uppercase; padding:8px 18px 4px; }
+
+/* ═══ OVERVIEW — Donut + Legend ═══ */
+.overview-row { display:flex; align-items:center; gap:10px; padding:0 14px 6px; }
+.ov-donut { position:relative; width:70px; height:70px; flex-shrink:0; }
+.ov-donut svg { width:70px; height:70px; transform:rotate(-90deg); }
+.ov-donut-center { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.ov-donut-val { font-size:15px; font-weight:800; font-family:var(--mono); color:var(--ink); line-height:1; }
+.ov-donut-lbl { font-size:8px; font-weight:600; color:var(--ink-40); }
+.ov-legend { flex:1; display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.ov-leg { display:flex; align-items:center; gap:5px; background:var(--white); border-radius:8px; padding:6px 8px; box-shadow:var(--shadow-card); cursor:pointer; transition:all .15s; }
+.ov-leg:active { transform:scale(.97); }
+.ov-leg-dot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+.ov-leg-val { font-size:13px; font-weight:800; font-family:var(--mono); line-height:1; }
+.ov-leg-lbl { font-size:8px; color:var(--ink-40); font-weight:500; }
+.ov-leg-info { display:flex; flex-direction:column; gap:1px; }
+
+/* ═══ ALERTS — scrollable chips ═══ */
+.alerts-scroll { display:flex; gap:6px; padding:4px 14px 6px; overflow-x:auto; }
+.alerts-scroll::-webkit-scrollbar { height:0; }
+.al-chip { display:flex; align-items:center; gap:5px; background:var(--white); border-radius:8px; padding:5px 10px; box-shadow:var(--shadow-card); flex-shrink:0; cursor:pointer; transition:all .15s; }
+.al-chip:active { transform:scale(.96); }
+.al-chip-icon { width:18px; height:18px; border-radius:5px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.al-chip-val { font-size:12px; font-weight:800; font-family:var(--mono); line-height:1; }
+.al-chip-lbl { font-size:7px; color:var(--ink-40); font-weight:600; line-height:1; }
+.al-chip-info { display:flex; flex-direction:column; gap:1px; }
+
+/* ═══ PILL TOGGLE ═══ */
+.tab-section { padding:10px 18px 0; }
+.pill-toggle { display:flex; background:var(--ink-05); border-radius:var(--radius-pill); padding:3px; margin-bottom:10px; }
+.pill-tab { flex:1; text-align:center; padding:9px 0; border-radius:var(--radius-pill); font-size:12px; font-weight:600; color:var(--ink-40); cursor:pointer; transition:all .25s; border:none; background:none; font-family:var(--font); }
+.pill-tab.active { box-shadow:0 1px 4px rgba(0,0,0,0.06); font-weight:700; }
+.pill-tab .tab-badge { display:inline-flex; align-items:center; justify-content:center; min-width:18px; height:16px; border-radius:8px; font-size:9px; font-weight:700; margin-left:4px; padding:0 4px; }
+/* Per-tab active colors */
+.pill-tab[data-tab="active"].active { background:#e6f9ee; color:#059669; }
+.pill-tab[data-tab="active"].active .tab-badge { background:rgba(5,150,105,0.15); color:#059669; }
+.pill-tab[data-tab="deactivated"].active { background:#fee2e2; color:#dc2626; }
+.pill-tab[data-tab="deactivated"].active .tab-badge { background:rgba(220,38,38,0.15); color:#dc2626; }
+.pill-tab[data-tab="fresh"].active { background:#d1fae5; color:#047857; }
+.pill-tab[data-tab="fresh"].active .tab-badge { background:rgba(4,120,87,0.15); color:#047857; }
+.pill-tab[data-tab="misc"].active { background:#fef3c7; color:#b45309; }
+.pill-tab[data-tab="misc"].active .tab-badge { background:rgba(180,83,9,0.15); color:#b45309; }
+.pill-tab:not(.active) .tab-badge { background:var(--ink-05); color:var(--ink-40); }
+
+/* ═══ SEARCH + TOOLBAR ═══ */
+.list-toolbar { padding:0 18px 8px; display:flex; flex-direction:column; gap:8px; }
+.search-box { display:flex; align-items:center; gap:8px; background:var(--white); border:1.5px solid var(--ink-10); border-radius:var(--radius-pill); padding:3px 4px 3px 14px; transition:border-color .2s; }
+.search-box:focus-within { border-color:var(--red); }
+.search-box input { flex:1; border:none; outline:none; background:none; font-size:13px; font-weight:500; color:var(--ink); font-family:var(--font); padding:8px 0; }
+.search-box input::placeholder { color:var(--ink-20); }
+.search-box .search-go { width:34px; height:34px; border-radius:50%; background:var(--red); color:white; border:none; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:all .15s; }
+.search-box .search-go:active { transform:scale(.9); }
+.filter-bar { display:flex; align-items:center; gap:6px; justify-content:space-between; }
+.filter-left { display:flex; align-items:center; gap:6px; }
+.sort-btn,.view-toggle { background:var(--white); border:1px solid var(--ink-05); border-radius:8px; padding:6px 10px; font-size:11px; font-weight:600; color:var(--ink-60); cursor:pointer; font-family:var(--font); display:flex; align-items:center; gap:4px; transition:all .15s; }
+.sort-btn:active,.view-toggle:active { background:var(--ink-05); }
+.view-toggle.active { background:var(--red-soft); color:var(--red); border-color:var(--red-soft); }
+
+/* ═══ ALPHA BAR (vertical, right side) ═══ */
+.list-with-alpha { display:flex; padding:0 0 0 18px; position:relative; }
+.alpha-bar { display:flex; flex-direction:column; align-items:center; gap:0; padding:4px 2px; width:22px; flex-shrink:0; position:sticky; top:120px; align-self:flex-start; }
+.alpha-letter { width:22px; height:20px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; color:var(--ink-20); cursor:pointer; background:transparent; border:none; font-family:var(--font); transition:all .12s; flex-shrink:0; padding:0; line-height:1; }
+.alpha-letter:active,.alpha-letter.active { background:var(--red); color:white; border-radius:4px; }
+.alpha-letter.has-items { color:var(--ink-40); }
+
+/* ═══ SUBSCRIBER LIST ═══ */
+.sub-list { padding:0 6px 0 0; flex:1; min-width:0; }
+.sub-item { background:var(--white); border-radius:var(--radius); margin-bottom:8px; box-shadow:var(--shadow-card); transition:all .2s; border:1px solid transparent; overflow:hidden; }
+.sub-item:active { border-color:var(--ink-10); }
+
+/* Top row: avatar + info + status (tappable to open detail) */
+.sub-top { display:flex; align-items:center; gap:10px; padding:11px 12px 8px; cursor:pointer; }
+.avatar { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; flex-shrink:0; }
+.sub-info { flex:1; min-width:0; }
+.sub-name { font-size:13px; font-weight:700; color:var(--ink); margin-bottom:1px; line-height:1.2; }
+.sub-meta { font-size:10px; color:var(--ink-40); font-weight:500; display:flex; gap:5px; flex-wrap:wrap; align-items:center; }
+.sub-meta code { font-family:var(--mono); font-size:9px; color:var(--ink-60); background:var(--ink-05); padding:1px 4px; border-radius:3px; }
+.sub-right { display:flex; flex-direction:column; align-items:flex-end; gap:3px; flex-shrink:0; }
+.status-dot { width:9px; height:9px; border-radius:50%; }
+.status-dot.active { background:var(--green-dot); }
+.status-dot.suspended { background:var(--amber); }
+.status-dot.deactivated { background:var(--red-dot); }
+.status-dot.fresh { background:var(--blue); }
+.sub-due { font-size:9px; color:var(--ink-20); font-weight:500; white-space:nowrap; }
+
+/* Bottom row: inline action buttons */
+.sub-actions { display:flex; border-top:1px solid var(--ink-05); }
+.sub-act {
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; padding:8px 2px; cursor:pointer; border:none; background:none;
+  font-family:var(--font); transition:all .12s;
+  border-right:1px solid var(--ink-05);
+  min-height:44px; /* Apple HIG minimum touch target */
+}
+.sub-act:last-child { border-right:none; }
+.sub-act:active { background:var(--ink-05); }
+.sub-act-icon { display:flex; align-items:center; justify-content:center; color:var(--ink-40); transition:color .15s; }
+.sub-act-label { font-size:8px; font-weight:600; color:var(--ink-20); letter-spacing:.02em; line-height:1; }
+.sub-act:active .sub-act-icon { transform:scale(.85); }
+/* Colored action variants */
+.sub-act.recharge .sub-act-icon { color:var(--red); }
+.sub-act.recharge .sub-act-label { color:var(--red); }
+.sub-act.refresh .sub-act-icon { color:var(--blue); }
+.sub-act.activate .sub-act-icon { color:var(--green); }
+.sub-act.deactivate .sub-act-icon { color:var(--red-dot); }
+.sub-act.upgrade .sub-act-icon { color:var(--purple); }
+.sub-act.add .sub-act-icon { color:var(--amber); }
+
+/* ═══ DETAIL SHEET ═══ */
+.detail-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; display:none; align-items:flex-end; justify-content:center; animation:fadeIn .2s ease-out; backdrop-filter:blur(4px); }
+.detail-overlay.open { display:flex; }
+.detail-sheet { background:var(--white); border-radius:24px 24px 0 0; width:100%; max-width:400px; max-height:88vh; overflow-y:auto; animation:slideUp .3s ease-out; }
+.detail-handle { text-align:center; padding:8px 0 2px; }
+.detail-handle span { display:inline-block; width:36px; height:4px; border-radius:2px; background:var(--ink-10); }
+.detail-header { padding:10px 20px 14px; display:flex; align-items:center; justify-content:space-between; }
+.detail-header h3 { font-size:17px; font-weight:800; }
+.detail-close { width:32px; height:32px; border-radius:50%; background:var(--bg); border:none; cursor:pointer; color:var(--ink-40); display:flex; align-items:center; justify-content:center; }
+.detail-profile { display:flex; align-items:center; gap:14px; padding:0 20px 16px; border-bottom:1px solid var(--ink-05); }
+.detail-avatar { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; }
+.detail-name { font-size:16px; font-weight:700; }
+.detail-sub { font-size:12px; color:var(--ink-40); display:flex; gap:6px; align-items:center; }
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--ink-05); }
+.detail-cell { background:var(--white); padding:12px 16px; }
+.detail-cell-label { font-size:9px; font-weight:600; color:var(--ink-20); letter-spacing:.06em; text-transform:uppercase; margin-bottom:3px; }
+.detail-cell-value { font-size:13px; font-weight:700; color:var(--ink); font-family:var(--mono); }
+.detail-cell-value.danger { color:var(--red); }
+.detail-cell-value.success { color:var(--green-dot); }
+.detail-packages { padding:14px 20px; border-top:1px solid var(--ink-05); }
+.detail-pkg-label { font-size:10px; font-weight:700; color:var(--ink-20); letter-spacing:.06em; margin-bottom:8px; }
+.detail-pkg { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid var(--ink-05); }
+.detail-pkg:last-child { border-bottom:none; }
+.detail-pkg-name { font-size:12px; font-weight:600; color:var(--ink-80); }
+.detail-pkg-exp { font-size:10px; color:var(--ink-20); font-family:var(--mono); }
+
+/* ═══ BOX ACTIONS — circle icons matching screenshot ═══ */
+.box-actions { display:flex; justify-content:space-around; padding:18px 16px 22px; border-top:1px solid var(--ink-05); }
+.box-action { display:flex; flex-direction:column; align-items:center; gap:7px; cursor:pointer; border:none; background:none; font-family:var(--font); }
+.box-action:active .box-action-circle { transform:scale(.9); box-shadow:0 4px 16px rgba(0,0,0,0.1); }
+.box-action-circle { width:52px; height:52px; border-radius:50%; background:var(--bg); display:flex; align-items:center; justify-content:center; box-shadow:var(--shadow-sm); transition:all .2s; }
+.box-action-label { font-size:10px; font-weight:600; color:var(--ink-60); }
+
+/* ═══ BOTTOM NAV ═══ */
+.bottom-nav { position:sticky; bottom:0; z-index:100; background:var(--white); border-top:1px solid var(--ink-05); display:flex; justify-content:space-around; align-items:center; padding:6px 0 max(6px,env(safe-area-inset-bottom)); box-shadow:0 -2px 12px rgba(0,0,0,0.04); }
+.nav-item { display:flex; flex-direction:column; align-items:center; gap:2px; padding:4px 12px; cursor:pointer; border:none; background:none; font-family:var(--font); }
+.nav-item .nav-icon { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; transition:all .15s; color:var(--ink-40); }
+.nav-item .nav-label { font-size:9px; font-weight:600; color:var(--ink-40); transition:color .15s; }
+.nav-item.active .nav-icon { background:var(--red-soft); color:var(--red); }
+.nav-item.active .nav-label { color:var(--red); font-weight:700; }
+
+.ai-fab { position:fixed; bottom:max(70px,calc(60px + env(safe-area-inset-bottom))); right:max(20px,calc(50% - 180px)); width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,var(--red),var(--red-dark)); color:white; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 20px rgba(229,57,53,0.3); z-index:90; transition:all .2s; }
+.ai-fab:active { transform:scale(.9); }
+.ai-fab-badge { position:absolute; top:-2px; right:-2px; background:var(--amber); color:white; font-size:7px; font-weight:800; padding:2px 5px; border-radius:8px; border:2px solid var(--white); letter-spacing:.04em; }
+
+/* ═══ MODAL ═══ */
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:300; display:none; align-items:flex-end; justify-content:center; backdrop-filter:blur(4px); }
+.modal-overlay.open { display:flex; animation:fadeIn .2s ease-out; }
+.modal-sheet { background:var(--white); border-radius:24px 24px 0 0; width:100%; max-width:400px; max-height:80vh; overflow-y:auto; animation:slideUp .3s ease-out; }
+.modal-handle { text-align:center; padding:8px 0 2px; }
+.modal-handle span { display:inline-block; width:36px; height:4px; border-radius:2px; background:var(--ink-10); }
+.modal-header { padding:8px 20px 12px; display:flex; justify-content:space-between; align-items:center; }
+.modal-title { font-size:17px; font-weight:800; }
+.modal-body { padding:0 20px 28px; }
+.modal-ctx { font-size:12px; color:var(--ink-40); margin-bottom:14px; }
+.modal-ctx strong { color:var(--ink); }
+.plan-toggle { display:flex; background:var(--ink-05); border-radius:var(--radius-pill); padding:3px; margin-bottom:16px; }
+.plan-pill { flex:1; text-align:center; padding:10px 4px; border-radius:var(--radius-pill); font-size:11px; font-weight:600; color:var(--ink-40); cursor:pointer; border:none; background:none; font-family:var(--font); transition:all .25s; }
+.plan-pill.active { background:var(--white); color:var(--ink); font-weight:700; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+.plan-pill .plan-off { display:block; font-size:9px; color:var(--green-dot); font-weight:700; }
+.modal-summary { background:var(--bg); border-radius:var(--radius); padding:14px; margin-bottom:16px; }
+.modal-sum-row { display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px; }
+.modal-sum-row:last-child { margin-bottom:0; }
+.modal-sum-label { color:var(--ink-40); }
+.modal-sum-value { color:var(--ink-60); font-family:var(--mono); font-weight:600; }
+.modal-sum-value.green { color:var(--green-dot); }
+.modal-sum-divider { border-top:1px solid var(--ink-10); padding-top:8px; margin-top:2px; }
+.modal-sum-total { font-size:14px; font-weight:800; color:var(--ink); }
+.modal-sum-total-val { font-size:16px; font-weight:800; color:var(--ink); font-family:var(--mono); }
+.modal-confirm { width:100%; padding:14px; border:none; border-radius:var(--radius-pill); background:var(--red); color:white; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--font); box-shadow:0 4px 16px rgba(229,57,53,0.25); transition:all .15s; }
+.modal-confirm:active { transform:scale(.97); }
+.modal-confirm:disabled { background:var(--ink-10)!important; color:var(--ink-40)!important; box-shadow:none!important; cursor:not-allowed; }
+.preset-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:14px; }
+.preset-btn { background:var(--bg); border:1.5px solid var(--ink-05); border-radius:12px; padding:14px; cursor:pointer; font-family:var(--mono); font-size:15px; font-weight:700; color:var(--ink); transition:all .15s; text-align:center; }
+.preset-btn.sel { border-color:var(--red); background:var(--red-soft); }
+
+/* ═══ TOAST ═══ */
+.toast { position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:999; padding:12px 20px; border-radius:var(--radius-pill); font-size:13px; font-weight:600; font-family:var(--font); box-shadow:var(--shadow-lg); display:none; align-items:center; gap:8px; max-width:360px; animation:popIn .3s ease-out; }
+.toast.show { display:flex; }
+.toast.success { background:#e8f8ee; color:#15803d; border:1px solid #bbf7d0; }
+.toast.info { background:#eef4fb; color:#1d4ed8; border:1px solid #bfdbfe; }
+
+/* Wallet history */
+.wh-panel { display:none; padding:0 18px 8px; }
+.wh-panel.open { display:block; }
+.wh-card { background:var(--white); border-radius:var(--radius); padding:12px; box-shadow:var(--shadow-card); }
+.wh-title { font-size:10px; font-weight:700; color:var(--ink-20); letter-spacing:.06em; margin-bottom:8px; }
+.wh-row { font-size:12px; color:var(--ink-60); padding:6px 0; border-bottom:1px solid var(--ink-05); display:flex; justify-content:space-between; }
+.wh-row:last-child { border-bottom:none; }
+.wh-date { color:var(--ink-20); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     SVG ICON DEFINITIONS (hidden)
+     ═══════════════════════════════════════════════════════════ -->
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-wallet" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></symbol>
+  <symbol id="i-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
+  <symbol id="i-alert-tri" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+  <symbol id="i-credit-card" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-bar-chart" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></symbol>
+  <symbol id="i-dollar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-bot" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><line x1="12" y1="7" x2="12" y2="11"/><line x1="8" y1="16" x2="8" y2="16.01"/><line x1="16" y1="16" x2="16" y2="16.01"/></symbol>
+  <!-- Box action icons matching screenshot -->
+  <symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></symbol>
+  <symbol id="i-package" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-headphones" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"/><polyline points="17 2 12 7 7 2"/></symbol>
+  <symbol id="i-x-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></symbol>
+</svg>
+
+<div class="phone" id="app">
+
+  <!-- ═══ HEADER ═══ -->
+  <div class="header a1">
+    <div class="header-top">
+      <div class="header-identity">
+        <div class="header-avatar">SL</div>
+        <div>
+          <div class="header-name">Sri Lakshmi Cable</div>
+          <div class="header-business">LCO-4721 · Kukatpally</div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+          <span class="sun-icon"><svg class="icon" width="16" height="16"><use href="#i-sun"/></svg></span>
+          <span class="moon-icon"><svg class="icon" width="16" height="16"><use href="#i-moon"/></svg></span>
+        </button>
+        <button class="header-icon-btn" title="Language"><svg class="icon" width="18" height="18"><use href="#i-globe"/></svg></button>
+        <button class="header-icon-btn" title="Notifications"><svg class="icon" width="18" height="18"><use href="#i-bell"/></svg><span class="notif-badge"></span></button>
+      </div>
+    </div>
+    <div class="wallet-bar">
+      <div class="wallet-left">
+        <div class="wallet-icon"><svg class="icon" width="14" height="14"><use href="#i-wallet"/></svg></div>
+        <div>
+          <div class="wallet-amount" id="wallet-display">₹12,450 <span>balance</span></div>
+          <div class="wallet-last">Last: ₹5,000 on 22 Mar 2026</div>
+        </div>
+      </div>
+      <button class="topup-btn" onclick="openModal('topup')"><svg class="icon" width="14" height="14"><use href="#i-plus"/></svg> Top Up</button>
+    </div>
+  </div>
+
+  <!-- ═══ OVERVIEW — Donut + Legend ═══ -->
+  <div class="section-label a2">Overview</div>
+  <div class="overview-row a2">
+    <div class="ov-donut">
+      <svg viewBox="0 0 36 36">
+        <circle cx="18" cy="18" r="14" fill="none" stroke="#eef0f4" stroke-width="3"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="var(--green-dot)" stroke-width="3" stroke-dasharray="87.8 12.2" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="var(--red-dot)" stroke-width="3" stroke-dasharray="7.7 92.3" stroke-dashoffset="-87.8" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="14" fill="none" stroke="var(--amber)" stroke-width="3" stroke-dasharray="4.4 95.6" stroke-dashoffset="-95.5" stroke-linecap="round"/>
+      </svg>
+      <div class="ov-donut-center">
+        <div class="ov-donut-val">1,847</div>
+        <div class="ov-donut-lbl">Total</div>
+      </div>
+    </div>
+    <div class="ov-legend">
+      <div class="ov-leg" onclick="switchTab('active')"><div class="ov-leg-dot" style="background:var(--green-dot)"></div><div class="ov-leg-info"><div class="ov-leg-val" style="color:var(--green)">1,623</div><div class="ov-leg-lbl">Active</div></div></div>
+      <div class="ov-leg" onclick="switchTab('deactivated')"><div class="ov-leg-dot" style="background:var(--red-dot)"></div><div class="ov-leg-info"><div class="ov-leg-val" style="color:#dc2626">142</div><div class="ov-leg-lbl">Inactive</div></div></div>
+      <div class="ov-leg" onclick="switchTab('fresh')"><div class="ov-leg-dot" style="background:var(--amber)"></div><div class="ov-leg-info"><div class="ov-leg-val" style="color:var(--amber)">82</div><div class="ov-leg-lbl">Fresh</div></div></div>
+      <div class="ov-leg"><div class="ov-leg-dot" style="background:#7c3aed"></div><div class="ov-leg-info"><div class="ov-leg-val" style="color:#7c3aed">88%</div><div class="ov-leg-lbl">Health</div></div></div>
+    </div>
+  </div>
+
+  <!-- ═══ ALERT CHIPS — scrollable ═══ -->
+  <div class="alerts-scroll a3">
+    <div class="al-chip">
+      <div class="al-chip-icon" style="background:#eafaf1;color:var(--green)"><svg class="icon" width="10" height="10"><use href="#i-check-circle"/></svg></div>
+      <div class="al-chip-info"><div class="al-chip-val" style="color:var(--green-dot)">48</div><div class="al-chip-lbl">Recharged</div></div>
+    </div>
+    <div class="al-chip">
+      <div class="al-chip-icon" style="background:#fef9ee;color:var(--amber)"><svg class="icon" width="10" height="10"><use href="#i-alert-tri"/></svg></div>
+      <div class="al-chip-info"><div class="al-chip-val" style="color:var(--amber)">23</div><div class="al-chip-lbl">Expiring 7d</div></div>
+    </div>
+    <div class="al-chip" onclick="toggleWH()">
+      <div class="al-chip-icon" style="background:#eef4fb;color:#2563eb"><svg class="icon" width="10" height="10"><use href="#i-credit-card"/></svg></div>
+      <div class="al-chip-info"><div class="al-chip-val" style="color:#2563eb">5</div><div class="al-chip-lbl">Wallet ›</div></div>
+    </div>
+    <div class="al-chip">
+      <div class="al-chip-icon" style="background:#fce7f3;color:#db2777"><svg class="icon" width="10" height="10"><use href="#i-zap"/></svg></div>
+      <div class="al-chip-info"><div class="al-chip-val" style="color:#db2777">12</div><div class="al-chip-lbl">Overdue</div></div>
+    </div>
+  </div>
+
+  <!-- Wallet History -->
+  <div class="wh-panel" id="wh-panel">
+    <div class="wh-card">
+      <div class="wh-title">RECENT WALLET RECHARGES</div>
+      <div class="wh-row"><span>₹5,000</span><span class="wh-date">22 Mar 2026</span></div>
+      <div class="wh-row"><span>₹10,000</span><span class="wh-date">15 Mar 2026</span></div>
+      <div class="wh-row"><span>₹5,000</span><span class="wh-date">08 Mar 2026</span></div>
+      <div class="wh-row"><span>₹2,500</span><span class="wh-date">01 Mar 2026</span></div>
+      <div class="wh-row"><span>₹5,000</span><span class="wh-date">22 Feb 2026</span></div>
+    </div>
+  </div>
+
+  <!-- ═══ BOX LIST ═══ -->
+  <div class="list-toolbar a4" style="padding-top:10px">
+    <div class="search-box">
+      <svg class="icon" width="16" height="16" style="color:var(--ink-20)"><use href="#i-search"/></svg>
+      <input type="text" id="list-search" placeholder="Phone, Name, or Setup Box ID" oninput="filterList()">
+      <button class="search-go" onclick="filterList()"><svg class="icon" width="14" height="14"><use href="#i-arrow-right"/></svg></button>
+    </div>
+  </div>
+  <div class="tab-section a4" style="padding-top:0">
+    <div class="pill-toggle" id="pill-toggle">
+      <button class="pill-tab active" data-tab="active" onclick="switchTab('active')">Active <span class="tab-badge">1623</span></button>
+      <button class="pill-tab" data-tab="deactivated" onclick="switchTab('deactivated')">Inactive <span class="tab-badge">142</span></button>
+      <button class="pill-tab" data-tab="fresh" onclick="switchTab('fresh')">Fresh <span class="tab-badge">82</span></button>
+      <button class="pill-tab" data-tab="misc" onclick="switchTab('misc')">Misc</button>
+    </div>
+  </div>
+  <div style="padding:0 18px 8px;display:flex;align-items:center;justify-content:space-between">
+    <div style="display:flex;align-items:center;gap:6px">
+      <button class="sort-btn" onclick="toggleSort()"><svg class="icon" width="12" height="12"><use href="#i-sort"/></svg> <span id="sort-label">Name</span></button>
+      <button class="view-toggle" id="view-toggle" onclick="toggleView()"><svg class="icon" width="12" height="12"><use href="#i-list"/></svg> List</button>
+    </div>
+    <div style="font-size:10px;color:var(--ink-20);font-weight:600" id="result-count"></div>
+  </div>
+  <div class="list-with-alpha">
+    <div class="sub-list" id="sub-list"></div>
+    <div class="alpha-bar a5" id="alpha-bar"></div>
+  </div>
+  <div style="height:80px"></div>
+
+  <!-- ═══ BOTTOM NAV ═══ -->
+  <div class="bottom-nav">
+    <button class="nav-item active"><div class="nav-icon"><svg width="18" height="18"><use href="#i-home"/></svg></div><div class="nav-label">Home</div></button>
+    <button class="nav-item"><div class="nav-icon"><svg width="18" height="18"><use href="#i-users"/></svg></div><div class="nav-label">Subscribers</div></button>
+    <button class="nav-item"><div class="nav-icon"><svg width="18" height="18"><use href="#i-bar-chart"/></svg></div><div class="nav-label">Reports</div></button>
+    <button class="nav-item"><div class="nav-icon"><svg width="18" height="18"><use href="#i-dollar"/></svg></div><div class="nav-label">Transactions</div></button>
+    <button class="nav-item"><div class="nav-icon"><svg width="18" height="18"><use href="#i-settings"/></svg></div><div class="nav-label">Settings</div></button>
+  </div>
+</div>
+
+<!-- AI FAB -->
+<div class="ai-fab" onclick="showToast('AI Assistant coming soon!','info')">
+  <svg width="22" height="22"><use href="#i-bot"/></svg>
+  <span class="ai-fab-badge">BETA</span>
+</div>
+
+<!-- Overlays -->
+<div class="detail-overlay" id="detail-overlay" onclick="closeDetail()"><div class="detail-sheet" onclick="event.stopPropagation()" id="detail-sheet"></div></div>
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()"><div class="modal-sheet" onclick="event.stopPropagation()" id="modal-sheet"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+const AVATARS=[{bg:'var(--av-blue)',c:'var(--av-blue-t)'},{bg:'var(--av-green)',c:'var(--av-green-t)'},{bg:'var(--av-amber)',c:'var(--av-amber-t)'},{bg:'var(--av-pink)',c:'var(--av-pink-t)'},{bg:'var(--av-purple)',c:'var(--av-purple-t)'},{bg:'var(--av-gray)',c:'var(--av-gray-t)'}];
+const SUBS=[
+  {id:"C1001",name:"Raj Patel",mobile:"+91 98765 43210",stb:"STB-7842-301",vc:"027484255",area:"Brundavan",status:"active",type:"HD",due:"2026-04-13",bill:247,pkgs:["BOUQUET 3","ETV HD Family","FTA 1"]},
+  {id:"C1002",name:"Anita Sharma",mobile:"+91 87654 32109",stb:"STB-7842-302",vc:"027484256",area:"KPHB Colony",status:"deactivated",type:"SD",due:"2026-02-28",bill:185,pkgs:["Zee Telugu Pack","FTA 1"]},
+  {id:"C1003",name:"Vikram Singh",mobile:"+91 76543 21098",stb:"STB-8942-105",vc:"027484257",area:"Miyapur",status:"active",type:"HD",due:"2026-05-01",bill:312,pkgs:["Star Sports HD","BOUQUET 3","FTA 1"]},
+  {id:"C1004",name:"Meera Kumar",mobile:"+91 65432 10987",stb:"STB-8942-106",vc:"027484258",area:"Pragathi Nagar",status:"active",type:"HD",due:"2026-03-31",bill:199,pkgs:["South Regional Pack","FTA 1"]},
+  {id:"C1005",name:"Srinivas Reddy",mobile:"+91 54321 09876",stb:"STB-8942-107",vc:"027484259",area:"Bachupally",status:"suspended",type:"SD",due:"2026-03-20",bill:130,pkgs:["FTA 1"]},
+  {id:"C1006",name:"Fatima Begum",mobile:"+91 43210 98765",stb:"STB-9021-201",vc:"027484260",area:"Chandanagar",status:"active",type:"HD",due:"2026-04-22",bill:280,pkgs:["Premium Movies HD","BOUQUET 3","FTA 1"]},
+  {id:"C1007",name:"Ganesh Rao",mobile:"+91 32109 87654",stb:"STB-9021-202",vc:"027484261",area:"Lingampally",status:"fresh",type:"HD",due:"—",bill:0,pkgs:[]},
+  {id:"C1008",name:"Priya Menon",mobile:"+91 21098 76543",stb:"STB-9021-203",vc:"027484262",area:"Madinaguda",status:"active",type:"HD",due:"2026-04-05",bill:235,pkgs:["English News Pack","ETV HD Family","FTA 1"]},
+  {id:"C1009",name:"Arjun Naidu",mobile:"+91 10987 65432",stb:"STB-9021-204",vc:"027484263",area:"Nizampet",status:"active",type:"SD",due:"2026-04-18",bill:165,pkgs:["Zee Telugu Pack","FTA 1"]},
+  {id:"C1010",name:"Lakshmi Devi",mobile:"+91 99887 76655",stb:"STB-9021-205",vc:"027484264",area:"Kukatpally",status:"deactivated",type:"SD",due:"2025-12-10",bill:130,pkgs:["FTA 1"]},
+  {id:"C1011",name:"Deepak Verma",mobile:"+91 88776 65544",stb:"STB-9021-206",vc:"027484265",area:"Allwyn Colony",status:"active",type:"HD",due:"2026-05-10",bill:349,pkgs:["Premium Movies HD","Star Sports HD","FTA 1"]},
+  {id:"C1012",name:"Kavitha Reddy",mobile:"+91 77665 54433",stb:"STB-9021-207",vc:"027484266",area:"Moosapet",status:"fresh",type:"SD",due:"—",bill:0,pkgs:[]},
+];
+
+let currentTab='active', currentSort='name', alphaFilter='';
+
+function ini(n){return n.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase()}
+function avs(n){return AVATARS[n.charCodeAt(0)%AVATARS.length]}
+function du(d){return d==='—'?999:Math.ceil((new Date(d)-new Date())/864e5)}
+function fd(d){return d==='—'?'—':new Date(d).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}
+
+function icon(id,w=18,h=18){return `<svg class="icon" width="${w}" height="${h}"><use href="#i-${id}"/></svg>`}
+
+// ═══ LIST ═══
+function renderList(){
+  const q=(document.getElementById('list-search').value||'').toLowerCase();
+  let f=SUBS.filter(s=>{
+    if(currentTab==='active')return s.status==='active';
+    if(currentTab==='deactivated')return s.status==='deactivated'||s.status==='suspended';
+    if(currentTab==='fresh')return s.status==='fresh';
+    return true;
+  });
+  if(q)f=f.filter(s=>s.name.toLowerCase().includes(q)||s.mobile.replace(/\s/g,'').includes(q.replace(/\s/g,''))||s.stb.toLowerCase().includes(q)||s.vc.includes(q));
+  if(alphaFilter)f=f.filter(s=>s.name[0].toUpperCase()===alphaFilter);
+  if(currentSort==='name')f.sort((a,b)=>a.name.localeCompare(b.name));
+  else if(currentSort==='due')f.sort((a,b)=>du(a.due)-du(b.due));
+  else if(currentSort==='area')f.sort((a,b)=>a.area.localeCompare(b.area));
+  document.getElementById('result-count').textContent=`Showing ${f.length}`;
+  const list=document.getElementById('sub-list');
+  list.innerHTML='';
+  f.forEach(s=>{
+    const av=avs(s.name),d=du(s.due);
+    const dueT=d===999?'New box':d<=0?Math.abs(d)+'d overdue':d<=7?d+'d left':fd(s.due);
+    const dueC=d<=0?'var(--red-dot)':d<=7?'var(--amber)':'var(--ink-20)';
+    const el=document.createElement('div');el.className='sub-item';
+
+    // Determine context-aware actions based on status
+    let actions = '';
+    if(s.status==='active'){
+      actions=`
+        <button class="sub-act recharge" onclick="event.stopPropagation();openModal('recharge','${s.id}')" title="Recharge">
+          <span class="sub-act-icon">${icon('zap',16,16)}</span><span class="sub-act-label">Recharge</span>
+        </button>
+        <button class="sub-act refresh" onclick="event.stopPropagation();showToast('Refresh sent to ${s.vc}','success')" title="Refresh">
+          <span class="sub-act-icon">${icon('refresh',16,16)}</span><span class="sub-act-label">Refresh</span>
+        </button>
+        <button class="sub-act upgrade" onclick="event.stopPropagation();showToast('Package manager opened','info')" title="Upgrade / Downgrade">
+          <span class="sub-act-icon">${icon('package',16,16)}</span><span class="sub-act-label">Upgrade</span>
+        </button>
+        <button class="sub-act deactivate" onclick="event.stopPropagation();showToast('${s.vc} deactivated','info')" title="Deactivate">
+          <span class="sub-act-icon">${icon('power',16,16)}</span><span class="sub-act-label">Deactivate</span>
+        </button>`;
+    } else if(s.status==='deactivated'||s.status==='suspended'){
+      actions=`
+        <button class="sub-act recharge" onclick="event.stopPropagation();openModal('recharge','${s.id}')" title="Recharge">
+          <span class="sub-act-icon">${icon('zap',16,16)}</span><span class="sub-act-label">Recharge</span>
+        </button>
+        <button class="sub-act activate" onclick="event.stopPropagation();showToast('${s.vc} activated! EMM sent','success')" title="Activate">
+          <span class="sub-act-icon">${icon('power',16,16)}</span><span class="sub-act-label">Activate</span>
+        </button>
+        <button class="sub-act refresh" onclick="event.stopPropagation();showToast('Refresh sent to ${s.vc}','success')" title="Refresh">
+          <span class="sub-act-icon">${icon('refresh',16,16)}</span><span class="sub-act-label">Refresh</span>
+        </button>
+        <button class="sub-act upgrade" onclick="event.stopPropagation();showToast('Package manager opened','info')" title="Upgrade / Downgrade">
+          <span class="sub-act-icon">${icon('package',16,16)}</span><span class="sub-act-label">Upgrade</span>
+        </button>`;
+    } else { // fresh
+      actions=`
+        <button class="sub-act activate" onclick="event.stopPropagation();showToast('${s.vc} activated!','success')" title="Activate">
+          <span class="sub-act-icon">${icon('power',16,16)}</span><span class="sub-act-label">Activate</span>
+        </button>
+        <button class="sub-act add" onclick="event.stopPropagation();showToast('Add package opened','info')" title="Add Package">
+          <span class="sub-act-icon">${icon('plus',16,16)}</span><span class="sub-act-label">Add Pkg</span>
+        </button>
+        <button class="sub-act refresh" onclick="event.stopPropagation();showToast('Refresh sent to ${s.vc}','success')" title="Refresh">
+          <span class="sub-act-icon">${icon('refresh',16,16)}</span><span class="sub-act-label">Refresh</span>
+        </button>
+        <button class="sub-act" onclick="event.stopPropagation();showToast('Pairing mode for ${s.stb}','info')" title="Pairing" style="color:var(--ink-40)">
+          <span class="sub-act-icon">${icon('link',16,16)}</span><span class="sub-act-label">Pairing</span>
+        </button>`;
+    }
+
+    el.innerHTML=`
+      <div class="sub-top" onclick="openDetailById('${s.id}')">
+        <div class="avatar" style="background:${av.bg};color:${av.c}">${ini(s.name)}</div>
+        <div class="sub-info">
+          <div class="sub-name">${s.name}</div>
+          <div class="sub-meta"><span>${s.mobile}</span><code>${s.stb}</code></div>
+        </div>
+        <div class="sub-right">
+          <div class="status-dot ${s.status}"></div>
+          <div class="sub-due" style="color:${dueC}">${dueT}</div>
+        </div>
+      </div>
+      <div class="sub-actions">${actions}</div>`;
+    list.appendChild(el);
+  });
+  if(!f.length)list.innerHTML=`<div style="text-align:center;padding:40px 20px;color:var(--ink-20)"><div style="margin-bottom:8px;opacity:0.3">${icon('search',48,48)}</div><div style="font-size:14px;font-weight:600">No subscribers found</div><div style="font-size:11px;margin-top:4px">Try a different search or filter</div></div>`;
+}
+function renderAlpha(){
+  const bar=document.getElementById('alpha-bar');bar.innerHTML='';
+  // Determine which letters have subscribers in current filtered set
+  const tabFiltered=SUBS.filter(s=>{
+    if(currentTab==='active')return s.status==='active';
+    if(currentTab==='deactivated')return s.status==='deactivated'||s.status==='suspended';
+    if(currentTab==='fresh')return s.status==='fresh';
+    return true;
+  });
+  const activeLetters=new Set(tabFiltered.map(s=>s.name[0].toUpperCase()));
+  // All button
+  const all=document.createElement('button');all.className=`alpha-letter ${alphaFilter===''?'active':''}`;all.textContent='#';all.title='All';all.onclick=()=>{alphaFilter='';renderAlpha();renderList()};bar.appendChild(all);
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').forEach(l=>{
+    const b=document.createElement('button');
+    b.className=`alpha-letter ${alphaFilter===l?'active':''} ${activeLetters.has(l)?'has-items':''}`;
+    b.textContent=l;
+    b.onclick=()=>{alphaFilter=alphaFilter===l?'':l;renderAlpha();renderList()};
+    bar.appendChild(b);
+  });
+}
+function switchTab(t){currentTab=t;document.querySelectorAll('.pill-tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===t));alphaFilter='';renderAlpha();renderList()}
+function filterList(){renderList()}
+function toggleSort(){const s=['name','due','area'],l=['Name','Due Date','Area'],i=(s.indexOf(currentSort)+1)%s.length;currentSort=s[i];document.getElementById('sort-label').textContent=l[i];renderList()}
+function toggleView(){const b=document.getElementById('view-toggle');b.classList.toggle('active');b.innerHTML=b.classList.contains('active')?icon('list',12,12)+' Card':icon('list',12,12)+' List'}
+function toggleWH(){document.getElementById('wh-panel').classList.toggle('open')}
+function openDetailById(id){const s=SUBS.find(x=>x.id===id);if(s)openDetail(s)}
+
+// ═══ DETAIL — with circle action icons matching screenshot ═══
+function openDetail(s){
+  const av=avs(s.name),d=du(s.due);
+  const sheet=document.getElementById('detail-sheet');
+  sheet.innerHTML=`
+    <div class="detail-handle"><span></span></div>
+    <div class="detail-header"><h3>Subscriber Detail</h3><button class="detail-close" onclick="closeDetail()">${icon('x',16,16)}</button></div>
+    <div class="detail-profile">
+      <div class="detail-avatar" style="background:${av.bg};color:${av.c}">${ini(s.name)}</div>
+      <div><div class="detail-name">${s.name}</div><div class="detail-sub"><span class="status-dot ${s.status}" style="width:8px;height:8px"></span>${s.status.charAt(0).toUpperCase()+s.status.slice(1)} · ${s.area}</div></div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-cell"><div class="detail-cell-label">Mobile</div><div class="detail-cell-value">${s.mobile}</div></div>
+      <div class="detail-cell"><div class="detail-cell-label">STB Serial</div><div class="detail-cell-value">${s.stb}</div></div>
+      <div class="detail-cell"><div class="detail-cell-label">VC Number</div><div class="detail-cell-value">${s.vc}</div></div>
+      <div class="detail-cell"><div class="detail-cell-label">STB Type</div><div class="detail-cell-value">${s.type}</div></div>
+      <div class="detail-cell"><div class="detail-cell-label">Due Date</div><div class="detail-cell-value ${d<=0?'danger':d<=7?'':'success'}">${fd(s.due)}${d<=0&&d!==999?' !':''}</div></div>
+      <div class="detail-cell"><div class="detail-cell-label">Monthly Bill</div><div class="detail-cell-value">₹${s.bill}</div></div>
+    </div>
+    ${s.pkgs.length?`<div class="detail-packages"><div class="detail-pkg-label">ACTIVE PACKAGES</div>${s.pkgs.map(p=>`<div class="detail-pkg"><span class="detail-pkg-name">${p}</span><span class="detail-pkg-exp">${s.due!=='—'?'Exp: '+fd(s.due):'—'}</span></div>`).join('')}</div>`:''}
+    <div class="box-actions">
+      <button class="box-action" onclick="closeDetail();openModal('recharge','${s.id}')">
+        <div class="box-action-circle" style="color:var(--red)">${icon('zap',22,22)}</div>
+        <div class="box-action-label">Recharge</div>
+      </button>
+      <button class="box-action" onclick="closeDetail();showToast('Packages manager opened','info')">
+        <div class="box-action-circle" style="color:var(--ink-60)">${icon('package',22,22)}</div>
+        <div class="box-action-label">Packages</div>
+      </button>
+      <button class="box-action" onclick="closeDetail();showToast('Refresh sent to ${s.vc}','success')">
+        <div class="box-action-circle" style="color:var(--blue)">${icon('refresh',22,22)}</div>
+        <div class="box-action-label">Refresh</div>
+      </button>
+      <button class="box-action" onclick="closeDetail();showToast('Pairing mode for ${s.stb}','info')">
+        <div class="box-action-circle" style="color:var(--purple)">${icon('link',22,22)}</div>
+        <div class="box-action-label">Pairing</div>
+      </button>
+      <button class="box-action" onclick="closeDetail();showToast('Support ticket opened','info')">
+        <div class="box-action-circle" style="color:var(--ink-40)">${icon('headphones',22,22)}</div>
+        <div class="box-action-label">Support</div>
+      </button>
+    </div>
+  `;
+  document.getElementById('detail-overlay').classList.add('open');
+}
+function closeDetail(){document.getElementById('detail-overlay').classList.remove('open')}
+
+// ═══ MODALS ═══
+function openModal(type,subId){
+  const sheet=document.getElementById('modal-sheet');
+  if(type==='topup'){
+    let amt='';
+    sheet.innerHTML=`<div class="modal-handle"><span></span></div><div class="modal-header"><h3 class="modal-title">Wallet Top-Up</h3><button class="detail-close" onclick="closeModal()">${icon('x',16,16)}</button></div><div class="modal-body"><div class="preset-grid" id="pg"></div><div style="font-size:11px;font-weight:600;color:var(--ink-40);margin-bottom:4px">CUSTOM AMOUNT</div><div class="search-box" style="margin-bottom:16px"><span style="color:var(--ink-20);font-size:16px;font-weight:700">₹</span><input type="text" id="ti" placeholder="Enter amount..." inputmode="numeric" style="font-family:var(--mono);font-size:15px;font-weight:700"></div><button class="modal-confirm" id="tc" disabled>Add to Wallet</button></div>`;
+    document.getElementById('modal-overlay').classList.add('open');
+    const presets=[1000,2500,5000,10000],inp=sheet.querySelector('#ti'),btn=sheet.querySelector('#tc');
+    function up(){const g=sheet.querySelector('#pg');g.innerHTML='';presets.forEach(a=>{const p=document.createElement('button');p.className=`preset-btn ${inp.value==a?'sel':''}`;p.textContent='₹'+a.toLocaleString('en-IN');p.onclick=()=>{inp.value=a;up();btn.disabled=false;btn.textContent='Add ₹'+a.toLocaleString('en-IN')};g.appendChild(p)})}
+    inp.addEventListener('input',()=>{inp.value=inp.value.replace(/[^0-9]/g,'');const v=parseInt(inp.value)||0;btn.disabled=v<100;btn.textContent=v>=100?'Add ₹'+v.toLocaleString('en-IN'):'Add to Wallet';up()});
+    btn.onclick=()=>{showToast('₹'+(parseInt(inp.value)||0).toLocaleString('en-IN')+' added to wallet!','success');closeModal()};up();return;
+  }
+  if(type==='recharge'){
+    const sub=SUBS.find(s=>s.id===subId)||SUBS[0];let plan='R1';
+    const plans=[{id:'R1',name:'1 Month',m:1,d:0},{id:'R3',name:'3 Months',m:3,d:5},{id:'R6',name:'6 Months',m:6,d:10},{id:'R12',name:'12 Months',m:12,d:15}];
+    sheet.innerHTML=`<div class="modal-handle"><span></span></div><div class="modal-header"><h3 class="modal-title">Recharge</h3><button class="detail-close" onclick="closeModal()">${icon('x',16,16)}</button></div><div class="modal-body"><div class="modal-ctx"><strong>${sub.name}</strong> · ${sub.vc} · Monthly: ₹${sub.bill}</div><div class="plan-toggle" id="pt"></div><div class="modal-summary" id="rs"></div><button class="modal-confirm" id="rc">Pay from Wallet</button></div>`;
+    document.getElementById('modal-overlay').classList.add('open');
+    function ur(){const p=plans.find(x=>x.id===plan),total=sub.bill*p.m,disc=total*p.d/100,fin=total-disc;
+      const t=sheet.querySelector('#pt');t.innerHTML='';plans.forEach(pl=>{const pill=document.createElement('button');pill.className=`plan-pill ${plan===pl.id?'active':''}`;pill.innerHTML=`${pl.name}${pl.d>0?`<span class="plan-off">${pl.d}% off</span>`:''}`;pill.onclick=()=>{plan=pl.id;ur()};t.appendChild(pill)});
+      sheet.querySelector('#rs').innerHTML=`<div class="modal-sum-row"><span class="modal-sum-label">Subtotal (${p.m}mo × ₹${sub.bill})</span><span class="modal-sum-value">₹${total}</span></div>${disc>0?`<div class="modal-sum-row"><span class="modal-sum-label" style="color:var(--green-dot)">Discount (${p.d}%)</span><span class="modal-sum-value green">-₹${disc.toFixed(0)}</span></div>`:''}<div class="modal-sum-row modal-sum-divider"><span class="modal-sum-total">Total</span><span class="modal-sum-total-val">₹${fin.toFixed(0)}</span></div>`;
+      const b=sheet.querySelector('#rc');b.textContent=`Pay ₹${fin.toFixed(0)} from Wallet`;b.onclick=()=>{showToast(`₹${fin.toFixed(0)} debited. ${sub.name} recharged!`,'success');closeModal()}}
+    ur();return;
+  }
+}
+function closeModal(){document.getElementById('modal-overlay').classList.remove('open')}
+
+function showToast(msg,type='success'){const t=document.getElementById('toast');t.className=`toast show ${type}`;t.innerHTML=(type==='success'?icon('check-circle',16,16):icon('alert-tri',16,16))+' '+msg;setTimeout(()=>t.classList.remove('show'),2800)}
+
+function toggleTheme(){
+  const html=document.documentElement;
+  const isDark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',isDark?'light':'dark');
+  localStorage.setItem('ezyquick-theme',isDark?'light':'dark');
+}
+// Restore saved theme
+(function(){const saved=localStorage.getItem('ezyquick-theme');if(saved==='dark')document.documentElement.setAttribute('data-theme','dark')})();
+
+renderAlpha();renderList();
+</script>
+</body>
+</html>

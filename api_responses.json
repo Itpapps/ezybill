@@ -1,0 +1,1859 @@
+{
+  "login": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJhdXRodG9rZW4iOiI2OWMzODc1MmQzM2FkMi4yNTUwNTc3OCIsImlhdCI6MTc3NDQyNDkzOSwiZXhwIjoxNzgyMjAwOTM5fQ.JKhGKk4_-GhmVVZ01VXo9bNiXdcactky-F7Ng7G43cs",
+    "employeeId": "1054",
+    "first_name": "MD.ABDUL WAJEED",
+    "last_name": "",
+    "address1": "13-5-610/3/3/1,YOUSUFNAGAR,TAPPACHABUTRA,HYDERABAD-500028 13-5-610/3/3/1,YOUSUFNAGAR,TAPPACHABUTRA,HYDERABAD-500028  HYDERABAD-500028 HYDERABAD HYDERABAD(INDIA)",
+    "address2": null,
+    "address3": null,
+    "copy_rights": " ",
+    "short_name": " ",
+    "pin_code": "500028",
+    "phone": null,
+    "email": "mohdwajeedgulshan75@gmail.com",
+    "country": "IN",
+    "state": "101",
+    "district": "20",
+    "city": "2",
+    "username": "58948",
+    "dob": null,
+    "adate": null,
+    "employeeName": "MD.ABDUL WAJEED",
+    "dealerId": "1",
+    "userType": "RESELLER",
+    "useCRF": "1",
+    "useCAF": "MANUAL",
+    "useLastName": "1",
+    "useDiscount": "1",
+    "useDataFromMasterTable": "1",
+    "useMandatoryForHotel": "1",
+    "useAccountNumber": "1",
+    "employeeParentId": null,
+    "employeeParentType": null,
+    "useLcoDeposit": "1",
+    "deposit_amount": "7467.76",
+    "defaultCountry": "IN",
+    "country_name": "INDIA",
+    "defaultState": "101",
+    "defaultDistrict": "20",
+    "defaultCity": "-1",
+    "recurringServiceEdit": "0",
+    "showLcoComplaint": "0",
+    "lcoCode": "58948",
+    "lcoLocation": "GULSHAN STAR NETWORK",
+    "lcoMobileNo": "919963575490",
+    "freezecustomerparamsinapp": "0",
+    "blockpayment": 0,
+    "business_name": "GULSHAN STAR NETWORK",
+    "is_unpaidlco": "0",
+    "appMenuFormat": "DEFAULT",
+    "invoicepaymentsearchlimit": "600",
+    "lco_billtype": "0",
+    "use_lco_deposits": "1",
+    "userNotifications": [],
+    "notifyCount": 0,
+    "note_duration": 0,
+    "customer_billtype": "0",
+    "AUTO_RECEIPT_NUMBER": "1",
+    "CURRENCY_CODE": "ts. ",
+    "allow_top_up": 1,
+    "show_caf_mobile_validation": 0,
+    "patch_information": "1.4.10",
+    "stb_pairing": 1,
+    "stb_unpairing": 1,
+    "show_mia_agreement_upload": "1",
+    "accept_terms_condtions": "0",
+    "agreement_details_count": 0,
+    "access_distributor_wise": "0",
+    "is_direct_lco": 0,
+    "show_serial_vc": 0,
+    "user_image": "",
+    "show_service_extension": "1",
+    "config_values_array": {
+      "min_mobile_length": "10",
+      "max_mobile_length": "10",
+      "pincode_length": "6",
+      "country_code": "91"
+    },
+    "edit_quantity": "1",
+    "enable_box_wise_payment": "0",
+    "baid_label": ""
+  },
+  "accessControl": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "int_bulk_payment": 0,
+    "invoice_page_access": 0,
+    "payment_hist_page_access": 0,
+    "access_for_complaints": 1,
+    "int_stb_activation": "1",
+    "int_stb_deactivation": "1",
+    "int_stb_reactivation": "1",
+    "int_payment_transaction_report_access": 1
+  },
+  "dashboard": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "totalStbs": 790,
+    "totalAssignedStbs": 0,
+    "totalUnAssignedStbs": 216,
+    "totalComplaints": 0,
+    "totalClosedComplaints": 0,
+    "totalActiveCustomers": 538,
+    "totalDeactiveCustomers": 0,
+    "totalCurrentMonthBill": 0,
+    "totalDueAmount": 0,
+    "totalPaidCustomers": 0,
+    "totalUnPaidCustomers": 0,
+    "gettotalPaidCustomers": -1,
+    "gettotalUnPaidCustomers": -1,
+    "outStandingAmount": "139655.05",
+    "msoShare": 28242.499999999993,
+    "totalActiveAssignedStbs": 538,
+    "totalDeactiveAssignedStbs": 0,
+    "totalCurrentMonthMsoShare": 26095.1,
+    "currentMonthOutstanding": "46.34",
+    "currentMonthLCOBill": 0,
+    "lcocurrentmonthdueamount": null
+  },
+  "deposit": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "deposit_amount": "7467.76"
+  },
+  "wallet": {
+    "status_code": 1,
+    "status_msg": "Start Date is  required."
+  },
+  "expiryCount": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "getExpiryServicesList": [
+      {
+        "date": "2026-03-25",
+        "stb_count": "3"
+      },
+      {
+        "date": "2026-03-26",
+        "stb_count": "5"
+      },
+      {
+        "date": "2026-03-27",
+        "stb_count": "2"
+      },
+      {
+        "date": "2026-03-28",
+        "stb_count": "2"
+      },
+      {
+        "date": "2026-03-29",
+        "stb_count": "0"
+      },
+      {
+        "date": "2026-03-30",
+        "stb_count": "0"
+      }
+    ]
+  },
+  "custCount": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "customerCount": "512"
+  },
+  "custDetails": {
+    "statusCode": 0,
+    "statusMessage": "Success",
+    "customerDetailsList": [
+      {
+        "customer_id": "1413",
+        "reseller_id": "1054",
+        "online_customer": "0",
+        "customerName": "shiva  ",
+        "caf_no": "13528363",
+        "mobile_no": "918341679239",
+        "status": "1",
+        "billing_address": "HNO.13-2-2663, PURANI PULL,HYDERABAD,Telangana,INDIA",
+        "installation_address": "HNO.13-2-2663, PURANI PULL,HYDERABAD,Hyderabad,Telangana,INDIA",
+        "pin_code": "2339",
+        "crf_number": "",
+        "stb_count": "1",
+        "account_number": "13528363",
+        "pending_amount": "0.00",
+        "latitude": "0.0",
+        "longitude": "0.0",
+        "bill_type": "1",
+        "baid": null,
+        "is_direct_lco": "0"
+      },
+      {
+        "customer_id": "1428",
+        "reseller_id": "1054",
+        "online_customer": "0",
+        "customerName": "HARISH  ",
+        "caf_no": "13530100",
+        "mobile_no": "919949919911",
+        "status": "1",
+        "billing_address": "GOKULE NAGAR RAMANTHAPUR,,HYDERABAD,Telangana,INDIA",
+        "installation_address": "GOKULE NAGAR RAMANTHAPUR,,HYDERABAD,Hyderabad,Telangana,INDIA",
+        "pin_code": "2339",
+        "crf_number": "",
+        "stb_count": "1",
+        "account_number": "13530100",
+        "pending_amount": "0.00",
+        "latitude": "0.0",
+        "longitude": "0.0",
+        "bill_type": "1",
+        "baid": null,
+        "is_direct_lco": "0"
+      }
+    ],
+    "total_amount": 0,
+    "mso_share": 0,
+    "tot_mso_share": "0.00",
+    "lco_share": 0,
+    "baid_label": ""
+  },
+  "existingCust": {
+    "status_code": 1,
+    "status_msg": "Customer Details Not found",
+    "existCustomerDetails": []
+  },
+  "paymentModes": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "paymentModesList": [
+      {
+        "paymentModeId": "1",
+        "PaymentModeName": "Cash"
+      },
+      {
+        "paymentModeId": "2",
+        "PaymentModeName": "Bank"
+      },
+      {
+        "paymentModeId": "6",
+        "PaymentModeName": "Card"
+      },
+      {
+        "paymentModeId": "10",
+        "PaymentModeName": "Voucher"
+      }
+    ]
+  },
+  "receiptRanges": {
+    "status_code": 1,
+    "status_msg": "No Receipt range found.",
+    "ReceiptRanges": []
+  },
+  "complaintList": {
+    "status_code": 1,
+    "status_msg": "No records found.",
+    "lcoComplaintlist": []
+  },
+  "complaintCats": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "complaintCategories": [
+      {
+        "categoryId": "6",
+        "categoryName": "adszxvv",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "5",
+        "categoryName": "aefwe",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "7",
+        "categoryName": "awzsfawerawrsfv",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "1",
+        "categoryName": "TEST",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "4",
+        "categoryName": "test 445",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "2",
+        "categoryName": "TEST2888",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "9",
+        "categoryName": "TT3333",
+        "parent_category_id": "0"
+      },
+      {
+        "categoryId": "3",
+        "categoryName": "zeroooo",
+        "parent_category_id": "0"
+      }
+    ]
+  },
+  "complaintTypes": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "complaintStatuses": [
+      {
+        "value": "ASSIGNED"
+      },
+      {
+        "value": "INPROCESS"
+      },
+      {
+        "value": "ONHOLD"
+      },
+      {
+        "value": "RESOLVED"
+      },
+      {
+        "value": "CLOSED"
+      },
+      {
+        "value": "REOPEN"
+      }
+    ],
+    "ticket_closer_categories": []
+  },
+  "deactivationReasons": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "reasonList": [
+      {
+        "reasonId": "6",
+        "reasonName": "Deactivation Package Change",
+        "display_name": "Deactivation Package Change",
+        "act_deact_reason_id": "0",
+        "global_reason": "0"
+      },
+      {
+        "reasonId": "17",
+        "reasonName": "Unpaid Customer",
+        "display_name": "Unpaid Customer",
+        "act_deact_reason_id": "2",
+        "global_reason": "1"
+      },
+      {
+        "reasonId": "21",
+        "reasonName": "Temporary Deactivation",
+        "display_name": "Temporary Deactivation",
+        "act_deact_reason_id": "8",
+        "global_reason": "1"
+      },
+      {
+        "reasonId": "50",
+        "reasonName": "Expired Service Deactivation",
+        "display_name": "Expired Service Deactivation",
+        "act_deact_reason_id": "3",
+        "global_reason": "1"
+      }
+    ]
+  },
+  "countries": {
+    "status_code": 0,
+    "status_msg": "1054",
+    "countriesList": [
+      {
+        "iso": "AD",
+        "name": "ANDORRA"
+      },
+      {
+        "iso": "AE",
+        "name": "UNITED ARAB EMIRATES"
+      },
+      {
+        "iso": "AF",
+        "name": "AFGHANISTAN"
+      },
+      {
+        "iso": "AG",
+        "name": "ANTIGUA AND BARBUDA"
+      },
+      {
+        "iso": "AI",
+        "name": "ANGUILLA"
+      },
+      {
+        "iso": "AL",
+        "name": "ALBANIA"
+      },
+      {
+        "iso": "AM",
+        "name": "ARMENIA"
+      },
+      {
+        "iso": "AN",
+        "name": "NETHERLANDS ANTILLES"
+      },
+      {
+        "iso": "AO",
+        "name": "ANGOLA"
+      },
+      {
+        "iso": "AQ",
+        "name": "ANTARCTICA"
+      },
+      {
+        "iso": "AR",
+        "name": "ARGENTINA"
+      },
+      {
+        "iso": "AS",
+        "name": "AMERICAN SAMOA"
+      },
+      {
+        "iso": "AT",
+        "name": "AUSTRIA"
+      },
+      {
+        "iso": "AU",
+        "name": "AUSTRALIA"
+      },
+      {
+        "iso": "AW",
+        "name": "ARUBA"
+      },
+      {
+        "iso": "AZ",
+        "name": "AZERBAIJAN"
+      },
+      {
+        "iso": "BA",
+        "name": "BOSNIA AND HERZEGOVINA"
+      },
+      {
+        "iso": "BB",
+        "name": "BARBADOS"
+      },
+      {
+        "iso": "BD",
+        "name": "BANGLADESH"
+      },
+      {
+        "iso": "BE",
+        "name": "BELGIUM"
+      },
+      {
+        "iso": "BF",
+        "name": "BURKINA FASO"
+      },
+      {
+        "iso": "BG",
+        "name": "BULGARIA"
+      },
+      {
+        "iso": "BH",
+        "name": "BAHRAIN"
+      },
+      {
+        "iso": "BI",
+        "name": "BURUNDI"
+      },
+      {
+        "iso": "BJ",
+        "name": "BENIN"
+      },
+      {
+        "iso": "BM",
+        "name": "BERMUDA"
+      },
+      {
+        "iso": "BN",
+        "name": "BRUNEI DARUSSALAM"
+      },
+      {
+        "iso": "BO",
+        "name": "BOLIVIA"
+      },
+      {
+        "iso": "BR",
+        "name": "BRAZIL"
+      },
+      {
+        "iso": "BS",
+        "name": "BAHAMAS"
+      },
+      {
+        "iso": "BT",
+        "name": "BHUTAN"
+      },
+      {
+        "iso": "BV",
+        "name": "BOUVET ISLAND"
+      },
+      {
+        "iso": "BW",
+        "name": "BOTSWANA"
+      },
+      {
+        "iso": "BY",
+        "name": "BELARUS"
+      },
+      {
+        "iso": "BZ",
+        "name": "BELIZE"
+      },
+      {
+        "iso": "CA",
+        "name": "CANADA"
+      },
+      {
+        "iso": "CC",
+        "name": "COCOS (KEELING) ISLANDS"
+      },
+      {
+        "iso": "CD",
+        "name": "CONGO, THE DEMOCRATIC REPUBLIC OF THE"
+      },
+      {
+        "iso": "CF",
+        "name": "CENTRAL AFRICAN REPUBLIC"
+      },
+      {
+        "iso": "CG",
+        "name": "CONGO"
+      },
+      {
+        "iso": "CH",
+        "name": "SWITZERLAND"
+      },
+      {
+        "iso": "CI",
+        "name": "COTE D'IVOIRE"
+      },
+      {
+        "iso": "CK",
+        "name": "COOK ISLANDS"
+      },
+      {
+        "iso": "CL",
+        "name": "CHILE"
+      },
+      {
+        "iso": "CM",
+        "name": "CAMEROON"
+      },
+      {
+        "iso": "CN",
+        "name": "CHINA"
+      },
+      {
+        "iso": "CO",
+        "name": "COLOMBIA"
+      },
+      {
+        "iso": "CR",
+        "name": "COSTA RICA"
+      },
+      {
+        "iso": "CS",
+        "name": "SERBIA AND MONTENEGRO"
+      },
+      {
+        "iso": "CU",
+        "name": "CUBA"
+      },
+      {
+        "iso": "CV",
+        "name": "CAPE VERDE"
+      },
+      {
+        "iso": "CX",
+        "name": "CHRISTMAS ISLAND"
+      },
+      {
+        "iso": "CY",
+        "name": "CYPRUS"
+      },
+      {
+        "iso": "CZ",
+        "name": "CZECH REPUBLIC"
+      },
+      {
+        "iso": "DE",
+        "name": "GERMANY"
+      },
+      {
+        "iso": "DJ",
+        "name": "DJIBOUTI"
+      },
+      {
+        "iso": "DK",
+        "name": "DENMARK"
+      },
+      {
+        "iso": "DM",
+        "name": "DOMINICA"
+      },
+      {
+        "iso": "DO",
+        "name": "DOMINICAN REPUBLIC"
+      },
+      {
+        "iso": "DZ",
+        "name": "ALGERIA"
+      },
+      {
+        "iso": "EC",
+        "name": "ECUADOR"
+      },
+      {
+        "iso": "EE",
+        "name": "ESTONIA"
+      },
+      {
+        "iso": "EG",
+        "name": "EGYPT"
+      },
+      {
+        "iso": "EH",
+        "name": "WESTERN SAHARA"
+      },
+      {
+        "iso": "ER",
+        "name": "ERITREA"
+      },
+      {
+        "iso": "ES",
+        "name": "SPAIN"
+      },
+      {
+        "iso": "ET",
+        "name": "ETHIOPIA"
+      },
+      {
+        "iso": "FI",
+        "name": "FINLAND"
+      },
+      {
+        "iso": "FJ",
+        "name": "FIJI"
+      },
+      {
+        "iso": "FK",
+        "name": "FALKLAND ISLANDS (MALVINAS)"
+      },
+      {
+        "iso": "FM",
+        "name": "MICRONESIA, FEDERATED STATES OF"
+      },
+      {
+        "iso": "FO",
+        "name": "FAROE ISLANDS"
+      },
+      {
+        "iso": "FR",
+        "name": "FRANCE"
+      },
+      {
+        "iso": "GA",
+        "name": "GABON"
+      },
+      {
+        "iso": "GB",
+        "name": "UNITED KINGDOM"
+      },
+      {
+        "iso": "GD",
+        "name": "GRENADA"
+      },
+      {
+        "iso": "GE",
+        "name": "GEORGIA"
+      },
+      {
+        "iso": "GF",
+        "name": "FRENCH GUIANA"
+      },
+      {
+        "iso": "GH",
+        "name": "GHANA"
+      },
+      {
+        "iso": "GI",
+        "name": "GIBRALTAR"
+      },
+      {
+        "iso": "GL",
+        "name": "GREENLAND"
+      },
+      {
+        "iso": "GM",
+        "name": "GAMBIA"
+      },
+      {
+        "iso": "GN",
+        "name": "GUINEA"
+      },
+      {
+        "iso": "GP",
+        "name": "GUADELOUPE"
+      },
+      {
+        "iso": "GQ",
+        "name": "EQUATORIAL GUINEA"
+      },
+      {
+        "iso": "GR",
+        "name": "GREECE"
+      },
+      {
+        "iso": "GS",
+        "name": "SOUTH GEORGIA AND THE SOUTH SANDWICH ISLANDS"
+      },
+      {
+        "iso": "GT",
+        "name": "GUATEMALA"
+      },
+      {
+        "iso": "GU",
+        "name": "GUAM"
+      },
+      {
+        "iso": "GW",
+        "name": "GUINEA-BISSAU"
+      },
+      {
+        "iso": "GY",
+        "name": "GUYANA"
+      },
+      {
+        "iso": "HK",
+        "name": "HONG KONG"
+      },
+      {
+        "iso": "HM",
+        "name": "HEARD ISLAND AND MCDONALD ISLANDS"
+      },
+      {
+        "iso": "HN",
+        "name": "HONDURAS"
+      },
+      {
+        "iso": "HR",
+        "name": "CROATIA"
+      },
+      {
+        "iso": "HT",
+        "name": "HAITI"
+      },
+      {
+        "iso": "HU",
+        "name": "HUNGARY"
+      },
+      {
+        "iso": "ID",
+        "name": "INDONESIA"
+      },
+      {
+        "iso": "IE",
+        "name": "IRELAND"
+      },
+      {
+        "iso": "IL",
+        "name": "ISRAEL"
+      },
+      {
+        "iso": "IN",
+        "name": "INDIA"
+      },
+      {
+        "iso": "IO",
+        "name": "BRITISH INDIAN OCEAN TERRITORY"
+      },
+      {
+        "iso": "IQ",
+        "name": "IRAQ"
+      },
+      {
+        "iso": "IR",
+        "name": "IRAN, ISLAMIC REPUBLIC OF"
+      },
+      {
+        "iso": "IS",
+        "name": "ICELAND"
+      },
+      {
+        "iso": "IT",
+        "name": "ITALY"
+      },
+      {
+        "iso": "JM",
+        "name": "JAMAICA"
+      },
+      {
+        "iso": "JO",
+        "name": "JORDAN"
+      },
+      {
+        "iso": "JP",
+        "name": "JAPAN"
+      },
+      {
+        "iso": "KE",
+        "name": "KENYA"
+      },
+      {
+        "iso": "KG",
+        "name": "KYRGYZSTAN"
+      },
+      {
+        "iso": "KH",
+        "name": "CAMBODIA"
+      },
+      {
+        "iso": "KI",
+        "name": "KIRIBATI"
+      },
+      {
+        "iso": "KM",
+        "name": "COMOROS"
+      },
+      {
+        "iso": "KN",
+        "name": "SAINT KITTS AND NEVIS"
+      },
+      {
+        "iso": "KP",
+        "name": "KOREA, DEMOCRATIC PEOPLE'S REPUBLIC OF"
+      },
+      {
+        "iso": "KR",
+        "name": "KOREA, REPUBLIC OF"
+      },
+      {
+        "iso": "KW",
+        "name": "KUWAIT"
+      },
+      {
+        "iso": "KY",
+        "name": "CAYMAN ISLANDS"
+      },
+      {
+        "iso": "KZ",
+        "name": "KAZAKHSTAN"
+      },
+      {
+        "iso": "LA",
+        "name": "LAO PEOPLE'S DEMOCRATIC REPUBLIC"
+      },
+      {
+        "iso": "LB",
+        "name": "LEBANON"
+      },
+      {
+        "iso": "LC",
+        "name": "SAINT LUCIA"
+      },
+      {
+        "iso": "LI",
+        "name": "LIECHTENSTEIN"
+      },
+      {
+        "iso": "LK",
+        "name": "SRI LANKA"
+      },
+      {
+        "iso": "LR",
+        "name": "LIBERIA"
+      },
+      {
+        "iso": "LS",
+        "name": "LESOTHO"
+      },
+      {
+        "iso": "LT",
+        "name": "LITHUANIA"
+      },
+      {
+        "iso": "LU",
+        "name": "LUXEMBOURG"
+      },
+      {
+        "iso": "LV",
+        "name": "LATVIA"
+      },
+      {
+        "iso": "LY",
+        "name": "LIBYAN ARAB JAMAHIRIYA"
+      },
+      {
+        "iso": "MA",
+        "name": "MOROCCO"
+      },
+      {
+        "iso": "MC",
+        "name": "MONACO"
+      },
+      {
+        "iso": "MD",
+        "name": "MOLDOVA, REPUBLIC OF"
+      },
+      {
+        "iso": "MG",
+        "name": "MADAGASCAR"
+      },
+      {
+        "iso": "MH",
+        "name": "MARSHALL ISLANDS"
+      },
+      {
+        "iso": "MK",
+        "name": "MACEDONIA, THE FORMER YUGOSLAV REPUBLIC OF"
+      },
+      {
+        "iso": "ML",
+        "name": "MALI"
+      },
+      {
+        "iso": "MM",
+        "name": "MYANMAR"
+      },
+      {
+        "iso": "MN",
+        "name": "MONGOLIA"
+      },
+      {
+        "iso": "MO",
+        "name": "MACAO"
+      },
+      {
+        "iso": "MP",
+        "name": "NORTHERN MARIANA ISLANDS"
+      },
+      {
+        "iso": "MQ",
+        "name": "MARTINIQUE"
+      },
+      {
+        "iso": "MR",
+        "name": "MAURITANIA"
+      },
+      {
+        "iso": "MS",
+        "name": "MONTSERRAT"
+      },
+      {
+        "iso": "MT",
+        "name": "MALTA"
+      },
+      {
+        "iso": "MU",
+        "name": "MAURITIUS"
+      },
+      {
+        "iso": "MV",
+        "name": "MALDIVES"
+      },
+      {
+        "iso": "MW",
+        "name": "MALAWI"
+      },
+      {
+        "iso": "MX",
+        "name": "MEXICO"
+      },
+      {
+        "iso": "MY",
+        "name": "MALAYSIA"
+      },
+      {
+        "iso": "MZ",
+        "name": "MOZAMBIQUE"
+      },
+      {
+        "iso": "NA",
+        "name": "NAMIBIA"
+      },
+      {
+        "iso": "NC",
+        "name": "NEW CALEDONIA"
+      },
+      {
+        "iso": "NE",
+        "name": "NIGER"
+      },
+      {
+        "iso": "NF",
+        "name": "NORFOLK ISLAND"
+      },
+      {
+        "iso": "NG",
+        "name": "NIGERIA"
+      },
+      {
+        "iso": "NI",
+        "name": "NICARAGUA"
+      },
+      {
+        "iso": "NL",
+        "name": "NETHERLANDS"
+      },
+      {
+        "iso": "NO",
+        "name": "NORWAY"
+      },
+      {
+        "iso": "NP",
+        "name": "NEPAL"
+      },
+      {
+        "iso": "NR",
+        "name": "NAURU"
+      },
+      {
+        "iso": "NU",
+        "name": "NIUE"
+      },
+      {
+        "iso": "NZ",
+        "name": "NEW ZEALAND"
+      },
+      {
+        "iso": "OM",
+        "name": "OMAN"
+      },
+      {
+        "iso": "PA",
+        "name": "PANAMA"
+      },
+      {
+        "iso": "PE",
+        "name": "PERU"
+      },
+      {
+        "iso": "PF",
+        "name": "FRENCH POLYNESIA"
+      },
+      {
+        "iso": "PG",
+        "name": "PAPUA NEW GUINEA"
+      },
+      {
+        "iso": "PH",
+        "name": "PHILIPPINES"
+      },
+      {
+        "iso": "PK",
+        "name": "PAKISTAN"
+      },
+      {
+        "iso": "PL",
+        "name": "POLAND"
+      },
+      {
+        "iso": "PM",
+        "name": "SAINT PIERRE AND MIQUELON"
+      },
+      {
+        "iso": "PN",
+        "name": "PITCAIRN"
+      },
+      {
+        "iso": "PR",
+        "name": "PUERTO RICO"
+      },
+      {
+        "iso": "PS",
+        "name": "PALESTINIAN TERRITORY, OCCUPIED"
+      },
+      {
+        "iso": "PT",
+        "name": "PORTUGAL"
+      },
+      {
+        "iso": "PW",
+        "name": "PALAU"
+      },
+      {
+        "iso": "PY",
+        "name": "PARAGUAY"
+      },
+      {
+        "iso": "QA",
+        "name": "QATAR"
+      },
+      {
+        "iso": "RE",
+        "name": "REUNION"
+      },
+      {
+        "iso": "RO",
+        "name": "ROMANIA"
+      },
+      {
+        "iso": "RU",
+        "name": "RUSSIAN FEDERATION"
+      },
+      {
+        "iso": "RW",
+        "name": "RWANDA"
+      },
+      {
+        "iso": "SA",
+        "name": "SAUDI ARABIA"
+      },
+      {
+        "iso": "SB",
+        "name": "SOLOMON ISLANDS"
+      },
+      {
+        "iso": "SC",
+        "name": "SEYCHELLES"
+      },
+      {
+        "iso": "SD",
+        "name": "SUDAN"
+      },
+      {
+        "iso": "SE",
+        "name": "SWEDEN"
+      },
+      {
+        "iso": "SG",
+        "name": "SINGAPORE"
+      },
+      {
+        "iso": "SH",
+        "name": "SAINT HELENA"
+      },
+      {
+        "iso": "SI",
+        "name": "SLOVENIA"
+      },
+      {
+        "iso": "SJ",
+        "name": "SVALBARD AND JAN MAYEN"
+      },
+      {
+        "iso": "SK",
+        "name": "SLOVAKIA"
+      },
+      {
+        "iso": "SL",
+        "name": "SIERRA LEONE"
+      },
+      {
+        "iso": "SM",
+        "name": "SAN MARINO"
+      },
+      {
+        "iso": "SN",
+        "name": "SENEGAL"
+      },
+      {
+        "iso": "SO",
+        "name": "SOMALIA"
+      },
+      {
+        "iso": "SR",
+        "name": "SURINAME"
+      },
+      {
+        "iso": "ST",
+        "name": "SAO TOME AND PRINCIPE"
+      },
+      {
+        "iso": "SV",
+        "name": "EL SALVADOR"
+      },
+      {
+        "iso": "SY",
+        "name": "SYRIAN ARAB REPUBLIC"
+      },
+      {
+        "iso": "SZ",
+        "name": "SWAZILAND"
+      },
+      {
+        "iso": "TC",
+        "name": "TURKS AND CAICOS ISLANDS"
+      },
+      {
+        "iso": "TD",
+        "name": "CHAD"
+      },
+      {
+        "iso": "TF",
+        "name": "FRENCH SOUTHERN TERRITORIES"
+      },
+      {
+        "iso": "TG",
+        "name": "TOGO"
+      },
+      {
+        "iso": "TH",
+        "name": "THAILAND"
+      },
+      {
+        "iso": "TJ",
+        "name": "TAJIKISTAN"
+      },
+      {
+        "iso": "TK",
+        "name": "TOKELAU"
+      },
+      {
+        "iso": "TL",
+        "name": "TIMOR-LESTE"
+      },
+      {
+        "iso": "TM",
+        "name": "TURKMENISTAN"
+      },
+      {
+        "iso": "TN",
+        "name": "TUNISIA"
+      },
+      {
+        "iso": "TO",
+        "name": "TONGA"
+      },
+      {
+        "iso": "TR",
+        "name": "TURKEY"
+      },
+      {
+        "iso": "TT",
+        "name": "TRINIDAD AND TOBAGO"
+      },
+      {
+        "iso": "TV",
+        "name": "TUVALU"
+      },
+      {
+        "iso": "TW",
+        "name": "TAIWAN, PROVINCE OF CHINA"
+      },
+      {
+        "iso": "TZ",
+        "name": "TANZANIA, UNITED REPUBLIC OF"
+      },
+      {
+        "iso": "UA",
+        "name": "UKRAINE"
+      },
+      {
+        "iso": "UG",
+        "name": "UGANDA"
+      },
+      {
+        "iso": "UM",
+        "name": "UNITED STATES MINOR OUTLYING ISLANDS"
+      },
+      {
+        "iso": "US",
+        "name": "UNITED STATES"
+      },
+      {
+        "iso": "UY",
+        "name": "URUGUAY"
+      },
+      {
+        "iso": "UZ",
+        "name": "UZBEKISTAN"
+      },
+      {
+        "iso": "VA",
+        "name": "HOLY SEE (VATICAN CITY STATE)"
+      },
+      {
+        "iso": "VC",
+        "name": "SAINT VINCENT AND THE GRENADINES"
+      },
+      {
+        "iso": "VE",
+        "name": "VENEZUELA"
+      },
+      {
+        "iso": "VG",
+        "name": "VIRGIN ISLANDS, BRITISH"
+      },
+      {
+        "iso": "VI",
+        "name": "VIRGIN ISLANDS, U.S."
+      },
+      {
+        "iso": "VN",
+        "name": "VIET NAM"
+      },
+      {
+        "iso": "VU",
+        "name": "VANUATU"
+      },
+      {
+        "iso": "WF",
+        "name": "WALLIS AND FUTUNA"
+      },
+      {
+        "iso": "WS",
+        "name": "SAMOA"
+      },
+      {
+        "iso": "YE",
+        "name": "YEMEN"
+      },
+      {
+        "iso": "YT",
+        "name": "MAYOTTE"
+      },
+      {
+        "iso": "ZA",
+        "name": "SOUTH AFRICA"
+      },
+      {
+        "iso": "ZM",
+        "name": "ZAMBIA"
+      },
+      {
+        "iso": "ZW",
+        "name": "ZIMBABWE"
+      }
+    ]
+  },
+  "states": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "statesList": [
+      {
+        "id": "66",
+        "name": "Andhra Pradesh",
+        "country_code": "IN"
+      },
+      {
+        "id": "67",
+        "name": "Arunachal Pradesh",
+        "country_code": "IN"
+      },
+      {
+        "id": "68",
+        "name": "Assam",
+        "country_code": "IN"
+      },
+      {
+        "id": "69",
+        "name": "Bihar",
+        "country_code": "IN"
+      },
+      {
+        "id": "70",
+        "name": "Chhattisgarh",
+        "country_code": "IN"
+      },
+      {
+        "id": "71",
+        "name": "Goa",
+        "country_code": "IN"
+      },
+      {
+        "id": "72",
+        "name": "Gujarat",
+        "country_code": "IN"
+      },
+      {
+        "id": "73",
+        "name": "Haryana",
+        "country_code": "IN"
+      },
+      {
+        "id": "74",
+        "name": "Himachal Pradesh",
+        "country_code": "IN"
+      },
+      {
+        "id": "75",
+        "name": "Jammu & Kashmir",
+        "country_code": "IN"
+      },
+      {
+        "id": "76",
+        "name": "Jharkhand",
+        "country_code": "IN"
+      },
+      {
+        "id": "77",
+        "name": "Karnataka",
+        "country_code": "IN"
+      },
+      {
+        "id": "78",
+        "name": "Kerala",
+        "country_code": "IN"
+      },
+      {
+        "id": "79",
+        "name": "Madhya Pradesh",
+        "country_code": "IN"
+      },
+      {
+        "id": "80",
+        "name": "Maharashtra",
+        "country_code": "IN"
+      },
+      {
+        "id": "81",
+        "name": "Manipur",
+        "country_code": "IN"
+      },
+      {
+        "id": "82",
+        "name": "Meghalaya",
+        "country_code": "IN"
+      },
+      {
+        "id": "83",
+        "name": "Mizoram",
+        "country_code": "IN"
+      },
+      {
+        "id": "84",
+        "name": "Nagaland",
+        "country_code": "IN"
+      },
+      {
+        "id": "85",
+        "name": "Orissa",
+        "country_code": "IN"
+      },
+      {
+        "id": "86",
+        "name": "Punjab",
+        "country_code": "IN"
+      },
+      {
+        "id": "87",
+        "name": "Rajasthan",
+        "country_code": "IN"
+      },
+      {
+        "id": "88",
+        "name": "Sikkim",
+        "country_code": "IN"
+      },
+      {
+        "id": "89",
+        "name": "Tamil Nadu",
+        "country_code": "IN"
+      },
+      {
+        "id": "90",
+        "name": "Tripura",
+        "country_code": "IN"
+      },
+      {
+        "id": "91",
+        "name": "Uttarakhand",
+        "country_code": "IN"
+      },
+      {
+        "id": "92",
+        "name": "Uttar Pradesh",
+        "country_code": "IN"
+      },
+      {
+        "id": "93",
+        "name": "West Bengal",
+        "country_code": "IN"
+      },
+      {
+        "id": "94",
+        "name": "Andaman & Nicobar",
+        "country_code": "IN"
+      },
+      {
+        "id": "95",
+        "name": "Chandigarh",
+        "country_code": "IN"
+      },
+      {
+        "id": "96",
+        "name": "Dadra and Nagar Haveli",
+        "country_code": "IN"
+      },
+      {
+        "id": "97",
+        "name": "Daman & Diu",
+        "country_code": "IN"
+      },
+      {
+        "id": "98",
+        "name": "Delhi",
+        "country_code": "IN"
+      },
+      {
+        "id": "99",
+        "name": "Lakshadweep",
+        "country_code": "IN"
+      },
+      {
+        "id": "100",
+        "name": "Pondicherry",
+        "country_code": "IN"
+      },
+      {
+        "id": "101",
+        "name": "Telangana",
+        "country_code": "IN"
+      }
+    ]
+  },
+  "districts": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "districtList": [
+      {
+        "district_id": "15",
+        "district_name": "Adilabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "852",
+        "district_name": "Bhadradri Kothagudem",
+        "state_id": "101"
+      },
+      {
+        "district_id": "20",
+        "district_name": "Hyderabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "853",
+        "district_name": "Jagtial",
+        "state_id": "101"
+      },
+      {
+        "district_id": "854",
+        "district_name": "Jangaon",
+        "state_id": "101"
+      },
+      {
+        "district_id": "855",
+        "district_name": "Jayashankar Bhoopalpally",
+        "state_id": "101"
+      },
+      {
+        "district_id": "856",
+        "district_name": "Jogulamba Gadwal",
+        "state_id": "101"
+      },
+      {
+        "district_id": "857",
+        "district_name": "Kamareddy",
+        "state_id": "101"
+      },
+      {
+        "district_id": "22",
+        "district_name": "Karimnagar",
+        "state_id": "101"
+      },
+      {
+        "district_id": "23",
+        "district_name": "Khammam",
+        "state_id": "101"
+      },
+      {
+        "district_id": "858",
+        "district_name": "Komaram Bheem Asifabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "859",
+        "district_name": "Mahabubabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "26",
+        "district_name": "Mahbubnagar",
+        "state_id": "101"
+      },
+      {
+        "district_id": "860",
+        "district_name": "Mancherial",
+        "state_id": "101"
+      },
+      {
+        "district_id": "27",
+        "district_name": "Medak",
+        "state_id": "101"
+      },
+      {
+        "district_id": "861",
+        "district_name": "Medchal",
+        "state_id": "101"
+      },
+      {
+        "district_id": "862",
+        "district_name": "Nagarkurnool",
+        "state_id": "101"
+      },
+      {
+        "district_id": "28",
+        "district_name": "Nalgonda",
+        "state_id": "101"
+      },
+      {
+        "district_id": "1014",
+        "district_name": "Narayanapeta",
+        "state_id": "101"
+      },
+      {
+        "district_id": "863",
+        "district_name": "Nirmal",
+        "state_id": "101"
+      },
+      {
+        "district_id": "30",
+        "district_name": "Nizamabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "864",
+        "district_name": "Peddapalli",
+        "state_id": "101"
+      },
+      {
+        "district_id": "865",
+        "district_name": "Rajanna Sircilla",
+        "state_id": "101"
+      },
+      {
+        "district_id": "32",
+        "district_name": "Rangareddy",
+        "state_id": "101"
+      },
+      {
+        "district_id": "866",
+        "district_name": "Sangareddy",
+        "state_id": "101"
+      },
+      {
+        "district_id": "867",
+        "district_name": "Siddipet",
+        "state_id": "101"
+      },
+      {
+        "district_id": "868",
+        "district_name": "Suryapet",
+        "state_id": "101"
+      },
+      {
+        "district_id": "869",
+        "district_name": "Vikarabad",
+        "state_id": "101"
+      },
+      {
+        "district_id": "870",
+        "district_name": "Wanaparthy",
+        "state_id": "101"
+      },
+      {
+        "district_id": "36",
+        "district_name": "Warangal",
+        "state_id": "101"
+      },
+      {
+        "district_id": "871",
+        "district_name": "Warangal (Rural)",
+        "state_id": "101"
+      },
+      {
+        "district_id": "872",
+        "district_name": "Yadadri Bhuvanagiri",
+        "state_id": "101"
+      }
+    ]
+  },
+  "cities": {
+    "status_code": 1,
+    "status_msg": "Box Number is  required."
+  },
+  "mandals": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "mandalList": [
+      {
+        "district_id": "20",
+        "mandal_id": "1",
+        "mandal_name": "Ameerpet"
+      }
+    ]
+  },
+  "customerTypes": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "customerTypeList": [
+      {
+        "customer_type_id": "4",
+        "customer_type": "Commercial",
+        "description": "Commercial",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "9",
+        "customer_type": "DIRECT POINT",
+        "description": "DIRECT POINT",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "8",
+        "customer_type": "Hospital",
+        "description": "Hospital",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "1",
+        "customer_type": "Hotel",
+        "description": "Hotel",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "5",
+        "customer_type": "Office",
+        "description": "Office",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "3",
+        "customer_type": "Others",
+        "description": "Others",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "6",
+        "customer_type": "Public Place",
+        "description": "Public Place",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "7",
+        "customer_type": "Rent House",
+        "description": "Rent House",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      },
+      {
+        "customer_type_id": "2",
+        "customer_type": "Residence",
+        "description": "Residence",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "1"
+      },
+      {
+        "customer_type_id": "10",
+        "customer_type": "TESTING",
+        "description": "TESTING",
+        "status": "1",
+        "is_commercial_multi_box": "0",
+        "enable_display": "0"
+      }
+    ]
+  },
+  "idTypes": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "idList": [
+      {
+        "id_type_id": "1",
+        "type": "PAN"
+      },
+      {
+        "id_type_id": "2",
+        "type": "VOTER ID"
+      },
+      {
+        "id_type_id": "3",
+        "type": "PASSPORT"
+      },
+      {
+        "id_type_id": "4",
+        "type": "DRIVING LICENSE"
+      },
+      {
+        "id_type_id": "5",
+        "type": "AADHAR CARD"
+      },
+      {
+        "id_type_id": "6",
+        "type": "BANK ACCOUNT NUMBER"
+      },
+      {
+        "id_type_id": "7",
+        "type": "ELECTRICITY BILL"
+      },
+      {
+        "id_type_id": "8",
+        "type": "RATION CARD"
+      },
+      {
+        "id_type_id": "9",
+        "type": "WATER BILL"
+      },
+      {
+        "id_type_id": "10",
+        "type": "OTHERS"
+      },
+      {
+        "id_type_id": "11",
+        "type": "AGREEMENT COPY"
+      },
+      {
+        "id_type_id": "12",
+        "type": "CITIZENSHIP"
+      }
+    ]
+  },
+  "groups": {
+    "status_code": 0,
+    "status_msg": "Undefined property: stdClass::$serialNumber"
+  },
+  "lcoEmployees": {
+    "status_code": 1,
+    "status_msg": "Please Enter LCO Id",
+    "lcoEmployeelist": []
+  },
+  "serviceEmployees": {
+    "status_code": 1,
+    "status_msg": "No Services Employees.",
+    "getServiceEmployeeList": []
+  },
+  "dailyReport": {
+    "status_code": 1,
+    "status_msg": "Date is  required."
+  },
+  "empCollection": {
+    "status_code": 0,
+    "status_msg": "Success",
+    "collectionList": [
+      {
+        "employee_id": null,
+        "name": null,
+        "Amt": null
+      }
+    ]
+  }
+}

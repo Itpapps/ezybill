@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EzyBill Dashboard API Test</title>
+<style>
+  :root { --bg:#f6f8fb; --card:#fff; --red:#e53935; --green:#00c853; --ink:#1a1d23; --ink60:#4a5060; --ink20:#b4bac8; --mono:'JetBrains Mono',monospace; --font:'Plus Jakarta Sans',sans-serif; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:var(--font); background:var(--bg); color:var(--ink); padding:20px; max-width:420px; margin:0 auto; }
+  .header { background:var(--card); border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+  .header h2 { font-size:16px; margin-bottom:4px; }
+  .header small { color:var(--ink60); font-size:11px; }
+  .section { font-size:10px; font-weight:700; color:var(--ink20); letter-spacing:0.08em; text-transform:uppercase; padding:8px 0 4px; }
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px; }
+  .stat { background:var(--card); border-radius:10px; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,0.04); }
+  .stat-val { font-size:20px; font-weight:800; font-family:var(--mono); }
+  .stat-lbl { font-size:10px; color:var(--ink60); margin-top:2px; }
+  .customer-list { margin-top:12px; }
+  .customer-card { background:var(--card); border-radius:14px; padding:12px; margin-bottom:8px; box-shadow:0 2px 8px rgba(0,0,0,0.04); display:flex; gap:10px; align-items:center; }
+  .avatar { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0; }
+  .cust-info { flex:1; min-width:0; }
+  .cust-name { font-size:13px; font-weight:700; }
+  .cust-meta { font-size:10px; color:var(--ink60); }
+  .cust-meta code { font-family:var(--mono); font-size:9px; background:#eef0f4; padding:1px 4px; border-radius:3px; }
+  .status-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .status-dot.yes { background:var(--green); }
+  .status-dot.no { background:var(--red); }
+  .tabs { display:flex; gap:4px; margin-bottom:8px; }
+  .tab { flex:1; text-align:center; padding:8px; border-radius:100px; font-size:12px; font-weight:600; cursor:pointer; border:none; background:#eef0f4; color:var(--ink60); }
+  .tab.active { background:#e6f9ee; color:#059669; font-weight:700; }
+  .tab .badge { font-size:9px; background:rgba(0,0,0,0.08); padding:1px 5px; border-radius:8px; margin-left:3px; }
+  .wallet { background:linear-gradient(135deg,#e53935,#c62828); color:white; border-radius:14px; padding:14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; }
+  .wallet-amt { font-size:20px; font-weight:800; font-family:var(--mono); }
+  .wallet-lbl { font-size:10px; opacity:0.8; }
+  .log { background:#1a1d23; color:#a0a8b8; border-radius:10px; padding:12px; font-family:var(--mono); font-size:10px; max-height:200px; overflow-y:auto; margin-top:12px; white-space:pre-wrap; }
+  .log .ok { color:#00c853; }
+  .log .err { color:#e53935; }
+  .loading { color:var(--ink20); text-align:center; padding:20px; }
+  #loginSection { margin-bottom:12px; }
+  #loginSection input { width:100%; padding:10px; border:1.5px solid #d8dce6; border-radius:10px; font-size:13px; margin-bottom:8px; font-family:var(--font); }
+  #loginSection button { width:100%; padding:12px; background:var(--red); color:white; border:none; border-radius:100px; font-size:14px; font-weight:700; cursor:pointer; font-family:var(--font); }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<div id="loginSection">
+  <div class="header">
+    <h2>EzyBill Dashboard Test</h2>
+    <small>Tests the same API flow as the Flutter app</small>
+  </div>
+  <input type="text" id="username" value="itptest" placeholder="Username">
+  <input type="password" id="password" value="1234" placeholder="Password">
+  <button onclick="doLogin()">Login & Load Dashboard</button>
+</div>
+
+<div id="dashboard" style="display:none">
+  <div class="header" id="userHeader"></div>
+  <div id="walletSection"></div>
+  <div class="section">DASHBOARD STATS</div>
+  <div class="stats" id="statsGrid"></div>
+  <div class="section">EXPIRING SERVICES</div>
+  <div id="expirySection"></div>
+  <div class="section">SUBSCRIBERS</div>
+  <div class="tabs" id="tabs"></div>
+  <div class="customer-list" id="customerList"></div>
+</div>
+
+<div class="log" id="log"></div>
+
+<script>
+const API_BASE = 'http://192.168.1.143/v2_release_aakshya/index.php';
+const REST_BASE = API_BASE + '/LcoRestServices';
+const PROXY = 'http://localhost:3199/proxy?url=';
+const USE_PROXY = true;
+
+let TOKEN = '';
+let SESSION = {};
+
+function log(msg, type='') {
+  const el = document.getElementById('log');
+  const cls = type === 'ok' ? 'ok' : type === 'err' ? 'err' : '';
+  el.innerHTML += `<span class="${cls}">${new Date().toLocaleTimeString()} ${msg}</span>\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Encryption (matches Flutter PayloadEncryption) ──
+function binToHex(str) { return Array.from(new TextEncoder().encode(str)).map(b => b.toString(16).padLeft(2, '0')).join(''); }
+String.prototype.padLeft = function(len, ch) { let s = this; while(s.length < len) s = ch + s; return s; };
+function encrypt(param) {
+  const first = binToHex(param);
+  let buf = '';
+  for (let i = 0; i < first.length; i++) buf += binToHex(first[i]);
+  const front = Math.floor(10000 + Math.random() * 90000);
+  const back = Math.floor(10000 + Math.random() * 90000);
+  return '' + front + buf + back;
+}
+function encryptPayload(data) {
+  const json = JSON.stringify(data);
+  const hash = binToHex(json);
+  const payload = encrypt(hash);
+  return { payload, hash };
+}
+function hexToStr(hex) {
+  let str = '';
+  for (let i = 0; i < hex.length; i += 2) str += String.fromCharCode(parseInt(hex.substr(i, 2), 16));
+  return str;
+}
+function decryptResponse(data) {
+  if (!data.hash || !data.payload) return data;
+  try { return JSON.parse(hexToStr(data.hash)); } catch(e) { return data; }
+}
+
+// ── API Call ──
+async function api(endpoint, data = {}, skipAuth = false) {
+  const encrypted = encryptPayload(data);
+  const body = `payload=${encodeURIComponent(encrypted.payload)}&hash=${encodeURIComponent(encrypted.hash)}`;
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (TOKEN && !skipAuth) headers['Authorization'] = `Bearer ${TOKEN}`;
+
+  const url = USE_PROXY ? `${PROXY}${encodeURIComponent(REST_BASE + endpoint)}` : REST_BASE + endpoint;
+  const t0 = performance.now();
+
+  try {
+    const res = await fetch(url, { method: 'POST', headers, body });
+    const ms = Math.round(performance.now() - t0);
+    const raw = await res.json();
+    const dec = decryptResponse(raw);
+    log(`✓ POST ${endpoint} → ${res.status} (${ms}ms)`, 'ok');
+    return dec;
+  } catch(e) {
+    log(`✗ POST ${endpoint} → ${e.message}`, 'err');
+    return null;
+  }
+}
+
+// ── Login Flow ──
+async function doLogin() {
+  const user = document.getElementById('username').value;
+  const pass = document.getElementById('password').value;
+
+  log('── Step 1: validateLogin ──');
+  const login = await api('/validateLogin', { UserName: user, PassWord: pass }, true);
+  if (!login || login.status_code !== 0) { log('Login failed: ' + (login?.status_msg || 'Unknown'), 'err'); return; }
+
+  TOKEN = login.token;
+  SESSION = login;
+  log(`Logged in as ${login.first_name} (${login.userType}), dealer=${login.dealerId}`, 'ok');
+
+  // Step 2: Access Control
+  log('── Step 2: getAccessControl ──');
+  const acl = await api('/getaccesscontrollRest', {
+    dealer_id: parseInt(login.dealerId) || 0,
+    userstype: login.userType,
+    employeeParentType: login.employeeParentType || '',
+    employeeParentId: login.employeeParentId || '0',
+  });
+  log(`ACL: bulk=${acl?.int_bulk_payment}, complaints=${acl?.access_for_complaints}, stb_act=${acl?.int_stb_activation}`, 'ok');
+
+  // Show dashboard
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  // Header
+  document.getElementById('userHeader').innerHTML = `
+    <h2>${login.first_name} ${login.last_name || ''}</h2>
+    <small>${login.business_name} · ${login.lcoCode} · ${login.userType}</small>
+  `;
+
+  // Step 3: Dashboard Details
+  log('── Step 3: dashBoardDetailsRest ──');
+  const dash = await api('/dashBoardDetailsRest', {
+    use_lco_deposits: login.use_lco_deposits || '0',
+    lco_billtype: login.lco_billtype || '0',
+  });
+
+  if (dash) {
+    document.getElementById('statsGrid').innerHTML = `
+      <div class="stat"><div class="stat-val">${dash.totalStbs || 0}</div><div class="stat-lbl">Total STBs</div></div>
+      <div class="stat"><div class="stat-val">${dash.totalAssignedStbs || 0}</div><div class="stat-lbl">Assigned</div></div>
+      <div class="stat"><div class="stat-val">${dash.totalUnAssignedStbs || 0}</div><div class="stat-lbl">Unassigned</div></div>
+      <div class="stat"><div class="stat-val">${dash.totalComplaints || 0}</div><div class="stat-lbl">Complaints</div></div>
+      <div class="stat"><div class="stat-val">${dash.totalActiveCustomers || 0}</div><div class="stat-lbl">Active Customers</div></div>
+      <div class="stat"><div class="stat-val">${dash.totalDeactiveCustomers || 0}</div><div class="stat-lbl">Inactive</div></div>
+      <div class="stat"><div class="stat-val">₹${parseFloat(dash.outStandingAmount || 0).toLocaleString('en-IN')}</div><div class="stat-lbl">Outstanding</div></div>
+      <div class="stat"><div class="stat-val">₹${parseFloat(dash.msoShare || 0).toLocaleString('en-IN')}</div><div class="stat-lbl">MSO Share</div></div>
+    `;
+  }
+
+  // Step 4: Wallet
+  log('── Step 4: lco_deposit_amountRest ──');
+  const wallet = await api('/lco_deposit_amountRest', {});
+  if (wallet) {
+    const amt = parseFloat(wallet.deposit_amount || 0);
+    document.getElementById('walletSection').innerHTML = `
+      <div class="wallet"><div><div class="wallet-amt">₹${amt.toLocaleString('en-IN', {minimumFractionDigits:2})}</div><div class="wallet-lbl">Wallet Balance</div></div></div>
+    `;
+  }
+
+  // Step 5: Expiry Services
+  log('── Step 5: getExpiryServicesDateWiseCount ──');
+  const expiry = await api('/getExpiryServicesDateWiseCount', {});
+  if (expiry?.getExpiryServicesList) {
+    document.getElementById('expirySection').innerHTML = expiry.getExpiryServicesList
+      .map(e => `<span style="display:inline-block;background:var(--card);border-radius:8px;padding:4px 8px;margin:2px;font-size:11px;box-shadow:0 1px 3px rgba(0,0,0,0.04)"><b>${e.stb_count}</b> on ${e.date}</span>`)
+      .join('');
+  }
+
+  // Step 6: Dashboard List (tabs)
+  log('── Step 6: getdashboardlist ──');
+  const tabs = [
+    { label: 'Active', from: 4 },
+    { label: 'Inactive', from: 5 },
+    { label: 'Assigned', from: 1 },
+    { label: 'Unassigned', from: 2 },
+    { label: 'All', from: 3 },
+  ];
+
+  let tabsHtml = '';
+  tabs.forEach((t, i) => {
+    tabsHtml += `<button class="tab ${i===0?'active':''}" onclick="loadTab(${t.from}, this)">${t.label} <span class="badge" id="badge-${t.from}">...</span></button>`;
+  });
+  document.getElementById('tabs').innerHTML = tabsHtml;
+
+  // Load first tab
+  loadTab(4);
+}
+
+async function loadTab(fromDashboard, btn) {
+  // Update active tab
+  if (btn) document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  document.getElementById('customerList').innerHTML = '<div class="loading">Loading...</div>';
+
+  const data = await api('/getdashboardlist', {
+    dealer_id: parseInt(SESSION.dealerId) || 0,
+    from_dashboard: fromDashboard,
+  });
+
+  if (!data || !data.getDashboardDataList) {
+    document.getElementById('customerList').innerHTML = '<div class="loading">No data (status: ' + (data?.status_code) + ' - ' + (data?.status_msg) + ')</div>';
+    document.getElementById(`badge-${fromDashboard}`).textContent = '0';
+    return;
+  }
+
+  const list = data.getDashboardDataList;
+  document.getElementById(`badge-${fromDashboard}`).textContent = list.length;
+  log(`Tab ${fromDashboard}: ${list.length} records`, 'ok');
+
+  const colors = ['#dbeafe','#d1fae5','#fef3c7','#fce7f3','#ede9fe','#f1f5f9'];
+  const textColors = ['#3b82f6','#059669','#d97706','#db2777','#7c3aed','#64748b'];
+
+  document.getElementById('customerList').innerHTML = list.map((c, i) => {
+    const name = (c.customer_name || '').trim();
+    const initials = name.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase();
+    const ci = i % colors.length;
+    const isActive = c.is_active === 'YES';
+    return `<div class="customer-card">
+      <div class="avatar" style="background:${colors[ci]};color:${textColors[ci]}">${initials}</div>
+      <div class="cust-info">
+        <div class="cust-name">${name}</div>
+        <div class="cust-meta">${c.mobile_no || ''} <code>${c.serial_number || ''}</code></div>
+      </div>
+      <div class="status-dot ${isActive ? 'yes' : 'no'}"></div>
+    </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

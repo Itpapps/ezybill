@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EzyBill API Test Console</title>
+<style>
+  :root { --bg: #0f1117; --surface: #1a1d27; --border: #2a2d3a; --accent: #6366f1; --accent-hover: #818cf8; --green: #22c55e; --red: #ef4444; --yellow: #eab308; --text: #e2e8f0; --text-dim: #94a3b8; --text-muted: #64748b; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header h1 { font-size: 20px; font-weight: 600; }
+  .header h1 span { color: var(--accent); }
+  .status-bar { display: flex; gap: 12px; align-items: center; font-size: 13px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); }
+  .status-dot.connected { background: var(--green); }
+  .container { display: flex; height: calc(100vh - 57px); }
+  .sidebar { width: 260px; background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; flex-shrink: 0; }
+  .sidebar-section { padding: 12px 0; }
+  .sidebar-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); padding: 0 16px; margin-bottom: 4px; }
+  .sidebar-item { padding: 8px 16px; cursor: pointer; font-size: 13px; color: var(--text-dim); transition: all 0.15s; display: flex; align-items: center; gap: 8px; }
+  .sidebar-item:hover { background: rgba(99, 102, 241, 0.1); color: var(--text); }
+  .sidebar-item.active { background: rgba(99, 102, 241, 0.15); color: var(--accent); border-right: 2px solid var(--accent); }
+  .sidebar-item .method { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: rgba(99, 102, 241, 0.2); color: var(--accent); }
+  .main { flex: 1; overflow-y: auto; padding: 24px; }
+  .api-panel { display: none; }
+  .api-panel.active { display: block; }
+  .panel-header { margin-bottom: 20px; }
+  .panel-header h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .panel-header .url { font-size: 12px; color: var(--text-muted); font-family: 'Consolas', monospace; background: rgba(0,0,0,0.3); padding: 6px 10px; border-radius: 6px; margin-top: 8px; word-break: break-all; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-group label { font-size: 12px; font-weight: 500; color: var(--text-dim); }
+  .form-group label .req { color: var(--red); }
+  .form-group input, .form-group select, .form-group textarea { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; transition: border-color 0.15s; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+  .form-group textarea { min-height: 60px; resize: vertical; }
+  .btn-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: var(--accent-hover); }
+  .btn-secondary { background: var(--border); color: var(--text-dim); }
+  .btn-secondary:hover { background: #3a3d4a; color: var(--text); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .result-area { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .result-tabs { display: flex; border-bottom: 1px solid var(--border); }
+  .result-tab { padding: 8px 16px; font-size: 12px; font-weight: 500; cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .result-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .result-content { padding: 12px; max-height: 400px; overflow: auto; }
+  .result-content pre { font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .result-content .success { color: var(--green); }
+  .result-content .error { color: var(--red); }
+  .result-content .info { color: var(--yellow); }
+  .token-section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+  .token-section h3 { font-size: 14px; margin-bottom: 8px; }
+  .token-input-row { display: flex; gap: 8px; }
+  .token-input-row input { flex: 1; }
+  .badge { font-size: 10px; padding: 2px 6px; border-radius: 3px; font-weight: 600; }
+  .badge-green { background: rgba(34,197,94,0.15); color: var(--green); }
+  .badge-red { background: rgba(239,68,68,0.15); color: var(--red); }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3d4a; }
+  .encryption-toggle { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); }
+  .encryption-toggle input[type=checkbox] { accent-color: var(--accent); }
+  .log-entry { padding: 4px 0; border-bottom: 1px solid rgba(42,45,58,0.5); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-time { color: var(--text-muted); font-size: 11px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><span>EzyBill</span> API Test Console</h1>
+  <div class="status-bar">
+    <div class="encryption-toggle">
+      <input type="checkbox" id="encryptionEnabled" checked>
+      <label for="encryptionEnabled">Payload Encryption</label>
+    </div>
+    <span style="color:var(--border)">|</span>
+    <div class="encryption-toggle">
+      <input type="checkbox" id="useProxy" checked>
+      <label for="useProxy">CORS Proxy (port 3199)</label>
+    </div>
+    <span style="color:var(--border)">|</span>
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText" style="color:var(--text-dim)">Not connected</span>
+  </div>
+</div>
+
+<div class="container">
+  <div class="sidebar">
+    <!-- Auth -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Authentication</div>
+      <div class="sidebar-item active" onclick="showPanel('login')"><span class="method">POST</span> validateLogin</div>
+      <div class="sidebar-item" onclick="showPanel('accessControl')"><span class="method">POST</span> getAccessControl</div>
+    </div>
+    <!-- Dashboard -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Dashboard</div>
+      <div class="sidebar-item" onclick="showPanel('dashboardDetails')"><span class="method">POST</span> dashBoardDetails</div>
+      <div class="sidebar-item" onclick="showPanel('lcoDeposit')"><span class="method">POST</span> lcoDepositAmount</div>
+      <div class="sidebar-item" onclick="showPanel('lcoWallet')"><span class="method">POST</span> getLcoWallet</div>
+      <div class="sidebar-item" onclick="showPanel('dashboardList')"><span class="method">POST</span> getDashboardList</div>
+      <div class="sidebar-item" onclick="showPanel('expiryCount')"><span class="method">POST</span> expiryServicesCount</div>
+    </div>
+    <!-- Customer -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Customer</div>
+      <div class="sidebar-item" onclick="showPanel('custCount')"><span class="method">POST</span> customerDetailsCount</div>
+      <div class="sidebar-item" onclick="showPanel('custDetails')"><span class="method">POST</span> customerDetails</div>
+      <div class="sidebar-item" onclick="showPanel('existingCust')"><span class="method">POST</span> existingCustomer</div>
+      <div class="sidebar-item" onclick="showPanel('saveCust')"><span class="method">POST</span> saveCustomer</div>
+      <div class="sidebar-item" onclick="showPanel('editCust')"><span class="method">POST</span> editCustomer</div>
+      <div class="sidebar-item" onclick="showPanel('updateLocation')"><span class="method">POST</span> updateCustLocation</div>
+    </div>
+    <!-- Payments -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Payments</div>
+      <div class="sidebar-item" onclick="showPanel('pendingAmount')"><span class="method">POST</span> getPendingAmount</div>
+      <div class="sidebar-item" onclick="showPanel('paymentModes')"><span class="method">POST</span> getPaymentModes</div>
+      <div class="sidebar-item" onclick="showPanel('makePayment')"><span class="method">POST</span> makePayment</div>
+      <div class="sidebar-item" onclick="showPanel('receiptRanges')"><span class="method">POST</span> getReceiptRanges</div>
+      <div class="sidebar-item" onclick="showPanel('billDetails')"><span class="method">POST</span> getBillDetails</div>
+      <div class="sidebar-item" onclick="showPanel('paymentHistory')"><span class="method">POST</span> paymentHistory</div>
+    </div>
+    <!-- Complaints -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Complaints</div>
+      <div class="sidebar-item" onclick="showPanel('complaintList')"><span class="method">POST</span> getComplaintList</div>
+      <div class="sidebar-item" onclick="showPanel('totalComplaints')"><span class="method">POST</span> totalComplaintsList</div>
+      <div class="sidebar-item" onclick="showPanel('custComplaints')"><span class="method">POST</span> customerComplaints</div>
+      <div class="sidebar-item" onclick="showPanel('complaintCats')"><span class="method">POST</span> complaintCategories</div>
+      <div class="sidebar-item" onclick="showPanel('complaintSubCats')"><span class="method">POST</span> complaintSubCategories</div>
+      <div class="sidebar-item" onclick="showPanel('complaintTypes')"><span class="method">POST</span> complaintTypes</div>
+      <div class="sidebar-item" onclick="showPanel('createComplaint')"><span class="method">POST</span> createComplaint</div>
+      <div class="sidebar-item" onclick="showPanel('closeComplaint')"><span class="method">POST</span> closeComplaint</div>
+    </div>
+    <!-- STB -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">STB / Box Operations</div>
+      <div class="sidebar-item" onclick="showPanel('boxDetails')"><span class="method">POST</span> customerBoxDetails</div>
+      <div class="sidebar-item" onclick="showPanel('particularBox')"><span class="method">POST</span> particularBoxDetails</div>
+      <div class="sidebar-item" onclick="showPanel('deactivateBox')"><span class="method">POST</span> deactivateBox</div>
+      <div class="sidebar-item" onclick="showPanel('reactivateBox')"><span class="method">POST</span> reactivateBox</div>
+      <div class="sidebar-item" onclick="showPanel('deactivationReasons')"><span class="method">POST</span> deactivationReasons</div>
+      <div class="sidebar-item" onclick="showPanel('tempActivation')"><span class="method">POST</span> temporaryActivation</div>
+      <div class="sidebar-item" onclick="showPanel('stbPair')"><span class="method">POST</span> stbPair</div>
+      <div class="sidebar-item" onclick="showPanel('stbUnpair')"><span class="method">POST</span> stbUnpair</div>
+      <div class="sidebar-item" onclick="showPanel('stbReplacement')"><span class="method">POST</span> stbReplacement</div>
+    </div>
+    <!-- Packages -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Packages / Services</div>
+      <div class="sidebar-item" onclick="showPanel('custPackages')"><span class="method">POST</span> customerPackages</div>
+      <div class="sidebar-item" onclick="showPanel('unassignedPkgs')"><span class="method">POST</span> unassignedPackages</div>
+      <div class="sidebar-item" onclick="showPanel('activateService')"><span class="method">POST</span> activateService</div>
+      <div class="sidebar-item" onclick="showPanel('deactivateService')"><span class="method">POST</span> deactivateService</div>
+      <div class="sidebar-item" onclick="showPanel('extendService')"><span class="method">POST</span> extendService</div>
+      <div class="sidebar-item" onclick="showPanel('casPackages')"><span class="method">POST</span> casPackages</div>
+      <div class="sidebar-item" onclick="showPanel('channelList')"><span class="method">POST</span> channelList</div>
+    </div>
+    <!-- Reports -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Reports</div>
+      <div class="sidebar-item" onclick="showPanel('dailyReport')"><span class="method">POST</span> dailyReport</div>
+      <div class="sidebar-item" onclick="showPanel('empCollection')"><span class="method">POST</span> empCollection</div>
+      <div class="sidebar-item" onclick="showPanel('empCustCollection')"><span class="method">POST</span> empCustCollection</div>
+      <div class="sidebar-item" onclick="showPanel('invoiceHistory')"><span class="method">POST</span> invoiceHistory</div>
+    </div>
+    <!-- Employees -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Employees</div>
+      <div class="sidebar-item" onclick="showPanel('lcoEmployees')"><span class="method">POST</span> lcoEmployeeList</div>
+      <div class="sidebar-item" onclick="showPanel('serviceEmployees')"><span class="method">POST</span> serviceEmployeeList</div>
+    </div>
+    <!-- Master Data -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Master Data</div>
+      <div class="sidebar-item" onclick="showPanel('countries')"><span class="method">POST</span> getCountries</div>
+      <div class="sidebar-item" onclick="showPanel('states')"><span class="method">POST</span> getStates</div>
+      <div class="sidebar-item" onclick="showPanel('districts')"><span class="method">POST</span> getDistricts</div>
+      <div class="sidebar-item" onclick="showPanel('cities')"><span class="method">POST</span> getCities</div>
+      <div class="sidebar-item" onclick="showPanel('mandals')"><span class="method">POST</span> getMandals</div>
+      <div class="sidebar-item" onclick="showPanel('locations')"><span class="method">POST</span> getLocations</div>
+      <div class="sidebar-item" onclick="showPanel('groups')"><span class="method">POST</span> getGroups</div>
+      <div class="sidebar-item" onclick="showPanel('customerTypes')"><span class="method">POST</span> getCustomerTypes</div>
+      <div class="sidebar-item" onclick="showPanel('custTypeTypes')"><span class="method">POST</span> customerTypeTypes</div>
+      <div class="sidebar-item" onclick="showPanel('idTypes')"><span class="method">POST</span> getIdTypes</div>
+      <div class="sidebar-item" onclick="showPanel('formValidations')"><span class="method">POST</span> formValidations</div>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Base URL Config -->
+    <div class="token-section" style="margin-bottom:12px;">
+      <h3>API Base URL</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Change the server URL here. All API calls use this base.</p>
+      <div class="token-input-row">
+        <input type="text" id="baseUrlInput" value="http://192.168.1.143/v2_release_aakshya/index.php" style="font-family:'Consolas',monospace;font-size:12px;">
+        <button class="btn btn-primary" onclick="updateBaseUrl()" style="white-space:nowrap;">Apply</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-family:'Consolas',monospace;" id="currentRestUrl">REST Base: http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices</div>
+    </div>
+
+    <!-- JWT Token Section (always visible) -->
+    <div class="token-section">
+      <h3>JWT Bearer Token</h3>
+      <p style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Login first to auto-fill, or paste a token manually. All authenticated requests use this.</p>
+      <div class="token-input-row">
+        <input type="text" id="jwtToken" placeholder="Bearer token will be set after login...">
+        <button class="btn btn-secondary" onclick="document.getElementById('jwtToken').value=''">Clear</button>
+      </div>
+    </div>
+
+    <!-- ==================== AUTH ==================== -->
+    <div class="api-panel active" id="panel-login">
+      <div class="panel-header">
+        <h2>Validate Login</h2>
+        <div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/validateLogin</div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>UserName <span class="req">*</span></label><input id="login-username" value="itptest" placeholder="Enter username"></div>
+        <div class="form-group"><label>PassWord <span class="req">*</span></label><input id="login-password" type="password" value="1234" placeholder="Enter password"></div>
+        <div class="form-group"><label>imei</label><input id="login-imei" placeholder="Device IMEI (optional)"></div>
+        <div class="form-group"><label>mobile_no</label><input id="login-mobile" placeholder="Mobile number (optional)"></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="callLogin()">Send Request</button>
+      </div>
+      <div class="result-area" id="result-login"></div>
+    </div>
+
+    <div class="api-panel" id="panel-accessControl">
+      <div class="panel-header">
+        <h2>Get Access Control</h2>
+        <div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getaccesscontrollRest</div>
+      </div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">Returns module-level access privileges (CRUD) and CAS access flags. Requires dealer_id + userstype from login.</p>
+      <div class="form-grid">
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="accessControl-dealerId" placeholder="e.g. 57016"></div>
+        <div class="form-group"><label>userstype <span class="req">*</span></label><input id="accessControl-userstype" placeholder="e.g. RESELLER"></div>
+        <div class="form-group"><label>employeeParentType</label><input id="accessControl-empParentType" placeholder="e.g. RESELLER"></div>
+        <div class="form-group"><label>employeeParentId</label><input id="accessControl-empParentId" placeholder="e.g. 0"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('accessControl','/getaccesscontrollRest',{dealer_id:parseInt(gv('accessControl-dealerId'))||0,userstype:gv('accessControl-userstype'),...optField('employeeParentType',gv('accessControl-empParentType')),...optFieldInt('employeeParentId',gv('accessControl-empParentId'))})">Send Request</button></div>
+      <div class="result-area" id="result-accessControl"></div>
+    </div>
+
+    <!-- ==================== DASHBOARD ==================== -->
+    <div class="api-panel" id="panel-dashboardDetails">
+      <div class="panel-header"><h2>Dashboard Details</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/dashBoardDetailsRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('dashboardDetails','/dashBoardDetailsRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-dashboardDetails"></div>
+    </div>
+
+    <div class="api-panel" id="panel-lcoDeposit">
+      <div class="panel-header"><h2>LCO Deposit Amount</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/lco_deposit_amountRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('lcoDeposit','/lco_deposit_amountRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-lcoDeposit"></div>
+    </div>
+
+    <div class="api-panel" id="panel-lcoWallet">
+      <div class="panel-header"><h2>LCO Wallet</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getlcowalletRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">Returns wallet transaction history. Requires date range and dealer_id.</p>
+      <div class="form-grid">
+        <div class="form-group"><label>start_date <span class="req">*</span></label><input id="lcoWallet-startDate" type="date"></div>
+        <div class="form-group"><label>end_date <span class="req">*</span></label><input id="lcoWallet-endDate" type="date"></div>
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="lcoWallet-dealerId" placeholder="e.g. 57016"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('lcoWallet','/getlcowalletRest',{start_date:gv('lcoWallet-startDate'),end_date:gv('lcoWallet-endDate'),dealer_id:parseInt(gv('lcoWallet-dealerId'))||0})">Send Request</button></div>
+      <div class="result-area" id="result-lcoWallet"></div>
+    </div>
+
+    <div class="api-panel" id="panel-dashboardList">
+      <div class="panel-header"><h2>Dashboard List</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getdashboardlist</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">Returns customer list filtered by dashboard type. 1=assigned, 2=unassigned, 3=all, 4=active, 5=inactive.</p>
+      <div class="form-grid">
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="dashboardList-dealerId" placeholder="e.g. 57016"></div>
+        <div class="form-group"><label>from_dashboard <span class="req">*</span></label><select id="dashboardList-fromDashboard"><option value="0">0 - Default/All</option><option value="1">1 - Assigned</option><option value="2">2 - Unassigned</option><option value="3">3 - Total</option><option value="4">4 - Active</option><option value="5">5 - Inactive</option></select></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('dashboardList','/getdashboardlist',{dealer_id:parseInt(gv('dashboardList-dealerId'))||0,from_dashboard:parseInt(gv('dashboardList-fromDashboard'))||0})">Send Request</button></div>
+      <div class="result-area" id="result-dashboardList"></div>
+    </div>
+
+    <div class="api-panel" id="panel-expiryCount">
+      <div class="panel-header"><h2>Expiry Services Count</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getExpiryServicesDateWiseCount</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('expiryCount','/getExpiryServicesDateWiseCount',{})">Send Request</button></div>
+      <div class="result-area" id="result-expiryCount"></div>
+    </div>
+
+    <!-- ==================== CUSTOMER ==================== -->
+    <div class="api-panel" id="panel-custCount">
+      <div class="panel-header"><h2>Customer Details Count</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerDetailsCountRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerNumber</label><input id="custCount-customerNumber" placeholder="Customer number"></div>
+        <div class="form-group"><label>customerName</label><input id="custCount-customerName" placeholder="Customer name"></div>
+        <div class="form-group"><label>mobileNumber</label><input id="custCount-mobileNumber" placeholder="Mobile number"></div>
+        <div class="form-group"><label>boxNumber</label><input id="custCount-boxNumber" placeholder="STB/VC number"></div>
+        <div class="form-group"><label>lcoCustomerId</label><input id="custCount-lcoCustomerId" placeholder="LCO Customer ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('custCount','/getCustomerDetailsCountRest',getFormData('custCount',['customerNumber','customerName','mobileNumber','boxNumber','lcoCustomerId']))">Send Request</button></div>
+      <div class="result-area" id="result-custCount"></div>
+    </div>
+
+    <div class="api-panel" id="panel-custDetails">
+      <div class="panel-header"><h2>Customer Details</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerDetailsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerNumber</label><input id="custDetails-customerNumber" placeholder="Customer number"></div>
+        <div class="form-group"><label>customerName</label><input id="custDetails-customerName" placeholder="Customer name"></div>
+        <div class="form-group"><label>mobileNumber</label><input id="custDetails-mobileNumber" placeholder="Mobile number"></div>
+        <div class="form-group"><label>boxNumber</label><input id="custDetails-boxNumber" placeholder="STB/VC number"></div>
+        <div class="form-group"><label>lcoCustomerId</label><input id="custDetails-lcoCustomerId" placeholder="LCO Customer ID"></div>
+        <div class="form-group"><label>cafNumber</label><input id="custDetails-cafNumber" placeholder="CAF number"></div>
+        <div class="form-group"><label>startValue</label><input id="custDetails-startValue" type="number" value="0"></div>
+        <div class="form-group"><label>endValue</label><input id="custDetails-endValue" type="number" value="20"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('custDetails','/getCustomerDetailsRest',{...getFormData('custDetails',['customerNumber','customerName','mobileNumber','boxNumber','lcoCustomerId','cafNumber']),startValue:parseInt(gv('custDetails-startValue'))||0,endValue:parseInt(gv('custDetails-endValue'))||20})">Send Request</button></div>
+      <div class="result-area" id="result-custDetails"></div>
+    </div>
+
+    <div class="api-panel" id="panel-existingCust">
+      <div class="panel-header"><h2>Existing Customer Check</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/existingCustomerRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>mobileNumber <span class="req">*</span></label><input id="existingCust-mobileNumber" placeholder="Mobile number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('existingCust','/existingCustomerRest',{mobileNumber:gv('existingCust-mobileNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-existingCust"></div>
+    </div>
+
+    <div class="api-panel" id="panel-saveCust">
+      <div class="panel-header"><h2>Save Customer</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/saveCustomerRest</div></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Customer Data (JSON) <span class="req">*</span></label><textarea id="saveCust-data" rows="6" placeholder='{"customerName":"John","mobileNumber":"9876543210","address":"123 Main St",...}'></textarea></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApiJson('saveCust','/saveCustomerRest','saveCust-data')">Send Request</button></div>
+      <div class="result-area" id="result-saveCust"></div>
+    </div>
+
+    <div class="api-panel" id="panel-editCust">
+      <div class="panel-header"><h2>Edit Customer</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/editCustomerRest</div></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Customer Data (JSON) <span class="req">*</span></label><textarea id="editCust-data" rows="6" placeholder='{"customerId":"123","customerName":"John Updated",...}'></textarea></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApiJson('editCust','/editCustomerRest','editCust-data')">Send Request</button></div>
+      <div class="result-area" id="result-editCust"></div>
+    </div>
+
+    <div class="api-panel" id="panel-updateLocation">
+      <div class="panel-header"><h2>Update Customer Location</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/updateCustomerLocation</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="updateLocation-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>latitude <span class="req">*</span></label><input id="updateLocation-latitude" placeholder="17.385044"></div>
+        <div class="form-group"><label>longitude <span class="req">*</span></label><input id="updateLocation-longitude" placeholder="78.486671"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('updateLocation','/updateCustomerLocation',{customerId:gv('updateLocation-customerId'),latitude:parseFloat(gv('updateLocation-latitude')),longitude:parseFloat(gv('updateLocation-longitude'))})">Send Request</button></div>
+      <div class="result-area" id="result-updateLocation"></div>
+    </div>
+
+    <!-- ==================== PAYMENTS ==================== -->
+    <div class="api-panel" id="panel-pendingAmount">
+      <div class="panel-header"><h2>Get Pending Amount</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getPendingAmountRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>altCustomerId <span class="req">*</span></label><input id="pendingAmount-altCustomerId" placeholder="Alt Customer ID"></div>
+        <div class="form-group"><label>serial_no</label><input id="pendingAmount-serialNo" placeholder="Serial number (optional)"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('pendingAmount','/getPendingAmountRest',{altCustomerId:gv('pendingAmount-altCustomerId'),...optField('serial_no',gv('pendingAmount-serialNo'))})">Send Request</button></div>
+      <div class="result-area" id="result-pendingAmount"></div>
+    </div>
+
+    <div class="api-panel" id="panel-paymentModes">
+      <div class="panel-header"><h2>Get Payment Modes</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getPaymentModesRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('paymentModes','/getPaymentModesRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-paymentModes"></div>
+    </div>
+
+    <div class="api-panel" id="panel-makePayment">
+      <div class="panel-header"><h2>Make Payment</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/makePaymentsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>altCustomerId <span class="req">*</span></label><input id="makePayment-altCustomerId" placeholder="Alt Customer ID"></div>
+        <div class="form-group"><label>amount <span class="req">*</span></label><input id="makePayment-amount" placeholder="Payment amount"></div>
+        <div class="form-group"><label>modeType <span class="req">*</span></label><input id="makePayment-modeType" placeholder="e.g. CASH, CHEQUE, ONLINE"></div>
+        <div class="form-group"><label>receipt_number</label><input id="makePayment-receiptNumber" placeholder="Receipt number"></div>
+        <div class="form-group"><label>altReceiptNumber</label><input id="makePayment-altReceiptNumber" placeholder="Alt receipt number"></div>
+        <div class="form-group"><label>billingId</label><input id="makePayment-billingId" placeholder="Billing ID"></div>
+        <div class="form-group"><label>remarks</label><input id="makePayment-remarks" placeholder="Remarks"></div>
+        <div class="form-group"><label>chequeNo</label><input id="makePayment-chequeNo" placeholder="Cheque number"></div>
+        <div class="form-group"><label>bank</label><input id="makePayment-bank" placeholder="Bank name"></div>
+        <div class="form-group"><label>branch</label><input id="makePayment-branch" placeholder="Branch name"></div>
+        <div class="form-group"><label>chequeDate</label><input id="makePayment-chequeDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>rrnNo</label><input id="makePayment-rrnNo" placeholder="RRN number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('makePayment','/makePaymentsRest',{altCustomerId:gv('makePayment-altCustomerId'),amount:gv('makePayment-amount'),modeType:gv('makePayment-modeType'),...optField('receipt_number',gv('makePayment-receiptNumber')),...optField('altReceiptNumber',gv('makePayment-altReceiptNumber')),...optField('billingId',gv('makePayment-billingId')),...optField('remarks',gv('makePayment-remarks')),...optField('chequeNo',gv('makePayment-chequeNo')),...optField('bank',gv('makePayment-bank')),...optField('branch',gv('makePayment-branch')),...optField('chequeDate',gv('makePayment-chequeDate')),...optField('rrnNo',gv('makePayment-rrnNo'))})">Send Request</button></div>
+      <div class="result-area" id="result-makePayment"></div>
+    </div>
+
+    <div class="api-panel" id="panel-receiptRanges">
+      <div class="panel-header"><h2>Get Receipt Ranges</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getReceiptRanges</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('receiptRanges','/getReceiptRanges',{})">Send Request</button></div>
+      <div class="result-area" id="result-receiptRanges"></div>
+    </div>
+
+    <div class="api-panel" id="panel-billDetails">
+      <div class="panel-header"><h2>Get Bill Details</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getbilldetailsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>serial_number <span class="req">*</span></label><input id="billDetails-serialNumber" placeholder="Serial number"></div>
+        <div class="form-group"><label>package_id <span class="req">*</span></label><input id="billDetails-packageId" placeholder="Package ID"></div>
+        <div class="form-group"><label>customer_id <span class="req">*</span></label><input id="billDetails-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>bill_type</label><input id="billDetails-billType" type="number" placeholder="Bill type (optional)"></div>
+        <div class="form-group"><label>employee_id</label><input id="billDetails-employeeId" type="number" placeholder="Employee ID (optional)"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('billDetails','/getbilldetailsRest',{serial_number:gv('billDetails-serialNumber'),package_id:gv('billDetails-packageId'),customer_id:gv('billDetails-customerId'),...optFieldInt('bill_type',gv('billDetails-billType')),...optFieldInt('employee_id',gv('billDetails-employeeId'))})">Send Request</button></div>
+      <div class="result-area" id="result-billDetails"></div>
+    </div>
+
+    <div class="api-panel" id="panel-paymentHistory">
+      <div class="panel-header"><h2>Payment History</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/PaymentServiceRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="paymentHistory-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>fromDate</label><input id="paymentHistory-fromDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>toDate</label><input id="paymentHistory-toDate" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('paymentHistory','/PaymentServiceRest',{customerId:gv('paymentHistory-customerId'),...optField('fromDate',gv('paymentHistory-fromDate')),...optField('toDate',gv('paymentHistory-toDate'))})">Send Request</button></div>
+      <div class="result-area" id="result-paymentHistory"></div>
+    </div>
+
+    <!-- ==================== COMPLAINTS ==================== -->
+    <div class="api-panel" id="panel-complaintList">
+      <div class="panel-header"><h2>Complaint List (Open)</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getComplaintList</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>serviceemployeeid</label><input id="complaintList-empId" type="number" value="0"></div>
+        <div class="form-group"><label>login_users_type</label><input id="complaintList-usersType" value="RESELLER"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('complaintList','/getComplaintList',{serviceemployeeid:parseInt(gv('complaintList-empId'))||0,login_users_type:gv('complaintList-usersType')})">Send Request</button></div>
+      <div class="result-area" id="result-complaintList"></div>
+    </div>
+
+    <div class="api-panel" id="panel-totalComplaints">
+      <div class="panel-header"><h2>Total Complaints List</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/gettotalcomplaintslist</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="totalComplaints-dealerId" placeholder="e.g. 57016"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('totalComplaints','/gettotalcomplaintslist',{dealer_id:parseInt(gv('totalComplaints-dealerId'))||0})">Send Request</button></div>
+      <div class="result-area" id="result-totalComplaints"></div>
+    </div>
+
+    <div class="api-panel" id="panel-custComplaints">
+      <div class="panel-header"><h2>Customer Complaints</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerComplaintListRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="custComplaints-customerId" placeholder="Customer ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('custComplaints','/getCustomerComplaintListRest',{customerId:gv('custComplaints-customerId')})">Send Request</button></div>
+      <div class="result-area" id="result-custComplaints"></div>
+    </div>
+
+    <div class="api-panel" id="panel-complaintCats">
+      <div class="panel-header"><h2>Complaint Categories</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/complaintCategoriesRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('complaintCats','/complaintCategoriesRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-complaintCats"></div>
+    </div>
+
+    <div class="api-panel" id="panel-complaintSubCats">
+      <div class="panel-header"><h2>Complaint Sub-Categories</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getComplaintsubCategory</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>categoryId <span class="req">*</span></label><input id="complaintSubCats-categoryId" placeholder="Category ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('complaintSubCats','/getComplaintsubCategory',{categoryId:gv('complaintSubCats-categoryId')})">Send Request</button></div>
+      <div class="result-area" id="result-complaintSubCats"></div>
+    </div>
+
+    <div class="api-panel" id="panel-complaintTypes">
+      <div class="panel-header"><h2>Complaint Types</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/complaintTypesRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('complaintTypes','/complaintTypesRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-complaintTypes"></div>
+    </div>
+
+    <div class="api-panel" id="panel-createComplaint">
+      <div class="panel-header"><h2>Create Complaint</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/createComplaintRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="createComplaint-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>category <span class="req">*</span></label><input id="createComplaint-category" type="number" placeholder="Category ID"></div>
+        <div class="form-group"><label>complaint <span class="req">*</span></label><input id="createComplaint-complaint" placeholder="Complaint description"></div>
+        <div class="form-group"><label>error</label><input id="createComplaint-error" placeholder="Error details (optional)"></div>
+        <div class="form-group"><label>assignedTo</label><input id="createComplaint-assignedTo" type="number" placeholder="Employee ID (optional)"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('createComplaint','/createComplaintRest',{customerId:gv('createComplaint-customerId'),complaint:gv('createComplaint-complaint'),category:parseInt(gv('createComplaint-category')),...optField('error',gv('createComplaint-error')),...optFieldInt('assignedTo',gv('createComplaint-assignedTo'))})">Send Request</button></div>
+      <div class="result-area" id="result-createComplaint"></div>
+    </div>
+
+    <div class="api-panel" id="panel-closeComplaint">
+      <div class="panel-header"><h2>Close Complaint</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/closeComplaintRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>complaintId <span class="req">*</span></label><input id="closeComplaint-complaintId" placeholder="Complaint ID"></div>
+        <div class="form-group"><label>remarks</label><input id="closeComplaint-remarks" placeholder="Closing remarks (optional)"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('closeComplaint','/closeComplaintRest',{complaintId:gv('closeComplaint-complaintId'),...optField('remarks',gv('closeComplaint-remarks'))})">Send Request</button></div>
+      <div class="result-area" id="result-closeComplaint"></div>
+    </div>
+
+    <!-- ==================== STB / BOX ==================== -->
+    <div class="api-panel" id="panel-boxDetails">
+      <div class="panel-header"><h2>Customer Box Details</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerBoxDetailsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="boxDetails-customerId" placeholder="Customer ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('boxDetails','/getCustomerBoxDetailsRest',{customerId:gv('boxDetails-customerId')})">Send Request</button></div>
+      <div class="result-area" id="result-boxDetails"></div>
+    </div>
+
+    <div class="api-panel" id="panel-particularBox">
+      <div class="panel-header"><h2>Particular Box Details</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerParticularBoxDetailsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="particularBox-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="particularBox-serialNumber" placeholder="Serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('particularBox','/getCustomerParticularBoxDetailsRest',{customerId:gv('particularBox-customerId'),serialNumber:gv('particularBox-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-particularBox"></div>
+    </div>
+
+    <div class="api-panel" id="panel-deactivateBox">
+      <div class="panel-header"><h2>Deactivate Box</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/deactivateBoxRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="deactivateBox-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="deactivateBox-serialNumber" placeholder="Serial number"></div>
+        <div class="form-group"><label>reasonId <span class="req">*</span></label><input id="deactivateBox-reasonId" placeholder="Deactivation reason ID"></div>
+        <div class="form-group"><label>remarks</label><input id="deactivateBox-remarks" placeholder="Remarks"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('deactivateBox','/deactivateBoxRest',{customerId:gv('deactivateBox-customerId'),serialNumber:gv('deactivateBox-serialNumber'),reasonId:gv('deactivateBox-reasonId'),...optField('remarks',gv('deactivateBox-remarks'))})">Send Request</button></div>
+      <div class="result-area" id="result-deactivateBox"></div>
+    </div>
+
+    <div class="api-panel" id="panel-reactivateBox">
+      <div class="panel-header"><h2>Reactivate Box</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/reactivateBoxRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="reactivateBox-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="reactivateBox-serialNumber" placeholder="Serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('reactivateBox','/reactivateBoxRest',{customerId:gv('reactivateBox-customerId'),serialNumber:gv('reactivateBox-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-reactivateBox"></div>
+    </div>
+
+    <div class="api-panel" id="panel-deactivationReasons">
+      <div class="panel-header"><h2>Deactivation Reasons</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getDeactiveReasonsRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('deactivationReasons','/getDeactiveReasonsRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-deactivationReasons"></div>
+    </div>
+
+    <div class="api-panel" id="panel-tempActivation">
+      <div class="panel-header"><h2>Temporary Activation</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/temporaryActivationRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="tempActivation-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="tempActivation-serialNumber" placeholder="Serial number"></div>
+        <div class="form-group"><label>days <span class="req">*</span></label><input id="tempActivation-days" type="number" placeholder="Number of days"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('tempActivation','/temporaryActivationRest',{customerId:gv('tempActivation-customerId'),serialNumber:gv('tempActivation-serialNumber'),days:parseInt(gv('tempActivation-days'))})">Send Request</button></div>
+      <div class="result-area" id="result-tempActivation"></div>
+    </div>
+
+    <div class="api-panel" id="panel-stbPair">
+      <div class="panel-header"><h2>STB Pair</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/stbPairRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="stbPair-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>stbNumber <span class="req">*</span></label><input id="stbPair-stbNumber" placeholder="STB number"></div>
+        <div class="form-group"><label>vcNumber <span class="req">*</span></label><input id="stbPair-vcNumber" placeholder="VC number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('stbPair','/stbPairRest',{customerId:gv('stbPair-customerId'),stbNumber:gv('stbPair-stbNumber'),vcNumber:gv('stbPair-vcNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-stbPair"></div>
+    </div>
+
+    <div class="api-panel" id="panel-stbUnpair">
+      <div class="panel-header"><h2>STB Unpair</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/stbUnpairRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="stbUnpair-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="stbUnpair-serialNumber" placeholder="Serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('stbUnpair','/stbUnpairRest',{customerId:gv('stbUnpair-customerId'),serialNumber:gv('stbUnpair-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-stbUnpair"></div>
+    </div>
+
+    <div class="api-panel" id="panel-stbReplacement">
+      <div class="panel-header"><h2>STB Replacement</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/stb_replacement</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="stbReplacement-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>oldSerialNumber <span class="req">*</span></label><input id="stbReplacement-oldSerial" placeholder="Old serial number"></div>
+        <div class="form-group"><label>newSerialNumber <span class="req">*</span></label><input id="stbReplacement-newSerial" placeholder="New serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('stbReplacement','/stb_replacement',{customerId:gv('stbReplacement-customerId'),oldSerialNumber:gv('stbReplacement-oldSerial'),newSerialNumber:gv('stbReplacement-newSerial')})">Send Request</button></div>
+      <div class="result-area" id="result-stbReplacement"></div>
+    </div>
+
+    <!-- ==================== PACKAGES ==================== -->
+    <div class="api-panel" id="panel-custPackages">
+      <div class="panel-header"><h2>Customer Packages</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerPackages_splitRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="custPackages-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="custPackages-serialNumber" placeholder="Serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('custPackages','/getCustomerPackages_splitRest',{customerId:gv('custPackages-customerId'),serialNumber:gv('custPackages-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-custPackages"></div>
+    </div>
+
+    <div class="api-panel" id="panel-unassignedPkgs">
+      <div class="panel-header"><h2>Unassigned Packages</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getUnassignedPackages_splitRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="unassignedPkgs-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="unassignedPkgs-serialNumber" placeholder="Serial number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('unassignedPkgs','/getUnassignedPackages_splitRest',{customerId:gv('unassignedPkgs-customerId'),serialNumber:gv('unassignedPkgs-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-unassignedPkgs"></div>
+    </div>
+
+    <div class="api-panel" id="panel-activateService">
+      <div class="panel-header"><h2>Activate Service</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/activateServiceRest</div></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Service Data (JSON) <span class="req">*</span></label><textarea id="activateService-data" rows="4" placeholder='{"customerId":"123","serialNumber":"ABC","packageId":"456"}'></textarea></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApiJson('activateService','/activateServiceRest','activateService-data')">Send Request</button></div>
+      <div class="result-area" id="result-activateService"></div>
+    </div>
+
+    <div class="api-panel" id="panel-deactivateService">
+      <div class="panel-header"><h2>Deactivate Service</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/deactivateServiceRest</div></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Service Data (JSON) <span class="req">*</span></label><textarea id="deactivateService-data" rows="4" placeholder='{"customerId":"123","serialNumber":"ABC","packageId":"456"}'></textarea></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApiJson('deactivateService','/deactivateServiceRest','deactivateService-data')">Send Request</button></div>
+      <div class="result-area" id="result-deactivateService"></div>
+    </div>
+
+    <div class="api-panel" id="panel-extendService">
+      <div class="panel-header"><h2>Extend Service</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/extendCustomerServices</div></div>
+      <div class="form-grid">
+        <div class="form-group full"><label>Service Data (JSON) <span class="req">*</span></label><textarea id="extendService-data" rows="4" placeholder='{"customerId":"123","serialNumber":"ABC","packageId":"456","months":1}'></textarea></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApiJson('extendService','/extendCustomerServices','extendService-data')">Send Request</button></div>
+      <div class="result-area" id="result-extendService"></div>
+    </div>
+
+    <div class="api-panel" id="panel-casPackages">
+      <div class="panel-header"><h2>CAS Packages</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCasPackagesRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>boxNumber <span class="req">*</span></label><input id="casPackages-boxNumber" placeholder="STB Serial Number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('casPackages','/getCasPackagesRest',{boxNumber:gv('casPackages-boxNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-casPackages"></div>
+    </div>
+
+    <div class="api-panel" id="panel-channelList">
+      <div class="panel-header"><h2>Channel List</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/channel_listRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="channelList-dealerId" placeholder="e.g. 57016"></div>
+        <div class="form-group"><label>product_id <span class="req">*</span></label><input id="channelList-productId" placeholder="Product ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('channelList','/channel_listRest',{dealer_id:parseInt(gv('channelList-dealerId'))||0,product_id:parseInt(gv('channelList-productId'))||0})">Send Request</button></div>
+      <div class="result-area" id="result-channelList"></div>
+    </div>
+
+    <!-- ==================== REPORTS ==================== -->
+    <div class="api-panel" id="panel-dailyReport">
+      <div class="panel-header"><h2>Daily Report</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/DailyreportRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>fromDate</label><input id="dailyReport-fromDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>toDate</label><input id="dailyReport-toDate" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('dailyReport','/DailyreportRest',{...optField('fromDate',gv('dailyReport-fromDate')),...optField('toDate',gv('dailyReport-toDate'))})">Send Request</button></div>
+      <div class="result-area" id="result-dailyReport"></div>
+    </div>
+
+    <div class="api-panel" id="panel-empCollection">
+      <div class="panel-header"><h2>Employee Collection</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/empCollectionRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>fromDate</label><input id="empCollection-fromDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>toDate</label><input id="empCollection-toDate" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('empCollection','/empCollectionRest',{...optField('fromDate',gv('empCollection-fromDate')),...optField('toDate',gv('empCollection-toDate'))})">Send Request</button></div>
+      <div class="result-area" id="result-empCollection"></div>
+    </div>
+
+    <div class="api-panel" id="panel-empCustCollection">
+      <div class="panel-header"><h2>Employee Customer Collection</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/empCustomerCollectionDetailsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>employeeId <span class="req">*</span></label><input id="empCustCollection-employeeId" placeholder="Employee ID"></div>
+        <div class="form-group"><label>fromDate</label><input id="empCustCollection-fromDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>toDate</label><input id="empCustCollection-toDate" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('empCustCollection','/empCustomerCollectionDetailsRest',{employeeId:gv('empCustCollection-employeeId'),...optField('fromDate',gv('empCustCollection-fromDate')),...optField('toDate',gv('empCustCollection-toDate'))})">Send Request</button></div>
+      <div class="result-area" id="result-empCustCollection"></div>
+    </div>
+
+    <div class="api-panel" id="panel-invoiceHistory">
+      <div class="panel-header"><h2>Invoice History</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/InvoiceServiceRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerId <span class="req">*</span></label><input id="invoiceHistory-customerId" placeholder="Customer ID"></div>
+        <div class="form-group"><label>fromDate</label><input id="invoiceHistory-fromDate" placeholder="YYYY-MM-DD"></div>
+        <div class="form-group"><label>toDate</label><input id="invoiceHistory-toDate" placeholder="YYYY-MM-DD"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('invoiceHistory','/InvoiceServiceRest',{customerId:gv('invoiceHistory-customerId'),...optField('fromDate',gv('invoiceHistory-fromDate')),...optField('toDate',gv('invoiceHistory-toDate'))})">Send Request</button></div>
+      <div class="result-area" id="result-invoiceHistory"></div>
+    </div>
+
+    <!-- ==================== EMPLOYEES ==================== -->
+    <div class="api-panel" id="panel-lcoEmployees">
+      <div class="panel-header"><h2>LCO Employee List</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getLcoEmployeeList</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('lcoEmployees','/getLcoEmployeeList',{})">Send Request</button></div>
+      <div class="result-area" id="result-lcoEmployees"></div>
+    </div>
+
+    <div class="api-panel" id="panel-serviceEmployees">
+      <div class="panel-header"><h2>Service Employee List</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getServiceEmployeeList</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>dealer_id <span class="req">*</span></label><input id="serviceEmployees-dealerId" placeholder="e.g. 57016"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('serviceEmployees','/getServiceEmployeeList',{dealer_id:parseInt(gv('serviceEmployees-dealerId'))||0})">Send Request</button></div>
+      <div class="result-area" id="result-serviceEmployees"></div>
+    </div>
+
+    <!-- ==================== MASTER DATA ==================== -->
+    <div class="api-panel" id="panel-countries">
+      <div class="panel-header"><h2>Get Countries</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCountriesRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('countries','/getCountriesRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-countries"></div>
+    </div>
+
+    <div class="api-panel" id="panel-states">
+      <div class="panel-header"><h2>Get States</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getStatesRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>countryCode <span class="req">*</span> <small style="color:var(--text-muted)">(string, e.g. "IN")</small></label><input id="states-countryCode" placeholder="e.g. IN"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('states','/getStatesRest',{countryCode:gv('states-countryCode')})">Send Request</button></div>
+      <div class="result-area" id="result-states"></div>
+    </div>
+
+    <div class="api-panel" id="panel-districts">
+      <div class="panel-header"><h2>Get Districts</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getdistrictsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>stateId <span class="req">*</span></label><input id="districts-stateId" placeholder="State ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('districts','/getdistrictsRest',{stateId:gv('districts-stateId')})">Send Request</button></div>
+      <div class="result-area" id="result-districts"></div>
+    </div>
+
+    <div class="api-panel" id="panel-cities">
+      <div class="panel-header"><h2>Get Cities</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCitiesRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>stateId <span class="req">*</span></label><input id="cities-stateId" placeholder="State ID"></div>
+        <div class="form-group"><label>boxNumber <span class="req">*</span></label><input id="cities-boxNumber" placeholder="Box/Serial Number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('cities','/getCitiesRest',{stateId:gv('cities-stateId'),boxNumber:gv('cities-boxNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-cities"></div>
+    </div>
+
+    <div class="api-panel" id="panel-mandals">
+      <div class="panel-header"><h2>Get Mandals</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getmandalsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>districtId <span class="req">*</span></label><input id="mandals-districtId" placeholder="District ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('mandals','/getmandalsRest',{districtId:gv('mandals-districtId')})">Send Request</button></div>
+      <div class="result-area" id="result-mandals"></div>
+    </div>
+
+    <div class="api-panel" id="panel-locations">
+      <div class="panel-header"><h2>Get Locations</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getLocationsOfDistrictRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>districtId <span class="req">*</span></label><input id="locations-districtId" placeholder="District ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('locations','/getLocationsOfDistrictRest',{districtId:gv('locations-districtId')})">Send Request</button></div>
+      <div class="result-area" id="result-locations"></div>
+    </div>
+
+    <div class="api-panel" id="panel-groups">
+      <div class="panel-header"><h2>Get Groups</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getGroupsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>serialNumber <span class="req">*</span></label><input id="groups-serialNumber" placeholder="STB Serial Number"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('groups','/getGroupsRest',{serialNumber:gv('groups-serialNumber')})">Send Request</button></div>
+      <div class="result-area" id="result-groups"></div>
+    </div>
+
+    <div class="api-panel" id="panel-customerTypes">
+      <div class="panel-header"><h2>Get Customer Types</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getCustomerTypesRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('customerTypes','/getCustomerTypesRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-customerTypes"></div>
+    </div>
+
+    <div class="api-panel" id="panel-custTypeTypes">
+      <div class="panel-header"><h2>Customer Type Types</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getcustomerTypeTypesRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>customerTypeId <span class="req">*</span></label><input id="custTypeTypes-customerTypeId" placeholder="Customer Type ID"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('custTypeTypes','/getcustomerTypeTypesRest',{customerTypeId:gv('custTypeTypes-customerTypeId')})">Send Request</button></div>
+      <div class="result-area" id="result-custTypeTypes"></div>
+    </div>
+
+    <div class="api-panel" id="panel-idTypes">
+      <div class="panel-header"><h2>Get ID Types</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/getIdsRest</div></div>
+      <p style="font-size:13px;color:var(--text-dim);margin-bottom:16px;">No additional params. Uses JWT token.</p>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('idTypes','/getIdsRest',{})">Send Request</button></div>
+      <div class="result-area" id="result-idTypes"></div>
+    </div>
+
+    <div class="api-panel" id="panel-formValidations">
+      <div class="panel-header"><h2>Dynamic Form Validations</h2><div class="url">POST http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices/dynamicformvalidationsRest</div></div>
+      <div class="form-grid">
+        <div class="form-group"><label>table_name <span class="req">*</span></label><input id="formValidations-tableName" placeholder="e.g. customers"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-primary" onclick="callApi('formValidations','/dynamicformvalidationsRest',{table_name:gv('formValidations-tableName')})">Send Request</button></div>
+      <div class="result-area" id="result-formValidations"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ============================================================
+// ENCRYPTION ENGINE (matches PHP Encryption_lib + Dart PayloadEncryption)
+// ============================================================
+const Encryption = {
+  // bin2hex: convert string to hex representation of its bytes
+  binToHex(str) {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str);
+    return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  },
+
+  // hex2bin: convert hex string back to original string
+  hexToBin(hex) {
+    const bytes = [];
+    for (let i = 0; i < hex.length; i += 2) {
+      bytes.push(parseInt(hex.substring(i, i + 2), 16));
+    }
+    return new TextDecoder().decode(new Uint8Array(bytes));
+  },
+
+  // Random n-digit number as string
+  randomDigits(n) {
+    const min = Math.pow(10, n - 1);
+    const max = Math.pow(10, n) - 1;
+    return String(Math.floor(Math.random() * (max - min + 1)) + min);
+  },
+
+  // Triple hex encode: bin2hex → bin2hex each char → bin2hex each char → pad
+  encrypt(parameter, frontAdd = 5, backAdd = 5) {
+    // Level 1: bin2hex the whole parameter string
+    const firstHex = this.binToHex(parameter);
+    // Level 2: bin2hex each individual character of level 1
+    let encrypted = '';
+    for (let i = 0; i < firstHex.length; i++) {
+      encrypted += this.binToHex(firstHex[i]);
+    }
+    // Add random digit padding
+    return this.randomDigits(frontAdd) + encrypted + this.randomDigits(backAdd);
+  },
+
+  // Encrypt payload: JSON → bin2hex (=hash) → encrypt(hash) (=payload)
+  encryptPayload(data) {
+    const jsonStr = JSON.stringify(data);
+    const hash = this.binToHex(jsonStr);
+    const payload = this.encrypt(hash);
+    return { payload, hash };
+  },
+
+  // Decrypt hash field: single hex2bin → JSON
+  decryptHash(hash) {
+    try {
+      const jsonStr = this.hexToBin(hash);
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // Decrypt full payload: strip padding → hex2bin → hex2bin → hash → decryptHash
+  decryptPayload(payload, frontStrip = 5, backStrip = 5) {
+    try {
+      const stripped = payload.substring(frontStrip, payload.length - backStrip);
+      // Reverse level 2
+      let first = '';
+      for (let i = 0; i < stripped.length; i += 2) {
+        first += String.fromCharCode(parseInt(stripped.substring(i, i + 2), 16));
+      }
+      // Reverse level 1
+      let second = '';
+      for (let i = 0; i < first.length; i += 2) {
+        second += String.fromCharCode(parseInt(first.substring(i, i + 2), 16));
+      }
+      // second is the hash; decode it
+      return this.decryptHash(second);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // Decrypt server response (uses hash field shortcut)
+  decryptResponse(responseData) {
+    if (responseData && typeof responseData === 'object') {
+      if (responseData.hash && typeof responseData.hash === 'string') {
+        return this.decryptHash(responseData.hash);
+      }
+      return responseData;
+    }
+    if (typeof responseData === 'string') {
+      try {
+        const parsed = JSON.parse(responseData);
+        return this.decryptResponse(parsed);
+      } catch (e) {}
+    }
+    return null;
+  }
+};
+
+// ============================================================
+// CONFIG — Change the base URL here to switch environments
+// ============================================================
+let API_BASE = 'http://192.168.1.143/v2_release_aakshya/index.php';
+let BASE_URL = API_BASE + '/LcoRestServices';
+
+function updateBaseUrl() {
+  const newBase = document.getElementById('baseUrlInput').value.trim().replace(/\/+$/, '');
+  if (!newBase) return;
+  API_BASE = newBase;
+  BASE_URL = API_BASE + '/LcoRestServices';
+  document.getElementById('currentRestUrl').textContent = 'REST Base: ' + BASE_URL;
+  // Update all static URL displays in panel headers
+  document.querySelectorAll('.panel-header .url').forEach(el => {
+    const text = el.textContent;
+    const match = text.match(/\/LcoRestServices\/.+$/);
+    if (match) {
+      el.textContent = 'POST ' + API_BASE + match[0];
+    }
+  });
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function gv(id) { return document.getElementById(id)?.value?.trim() || ''; }
+function optField(key, val) { return val ? { [key]: val } : {}; }
+function optFieldInt(key, val) { return val ? { [key]: parseInt(val) } : {}; }
+
+function getFormData(prefix, fields) {
+  const data = {};
+  fields.forEach(f => {
+    const v = gv(`${prefix}-${f}`);
+    if (v) data[f] = v;
+  });
+  return data;
+}
+
+function showPanel(id) {
+  document.querySelectorAll('.api-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(s => s.classList.remove('active'));
+  document.getElementById('panel-' + id)?.classList.add('active');
+  event.currentTarget?.classList.add('active');
+}
+
+function renderResult(containerId, data) {
+  const container = document.getElementById(containerId);
+  const { fullUrl, requestTime, requestPayload, rawResponse, decryptedResponse, error, httpStatus } = data;
+
+  const statusClass = error ? 'error' : 'success';
+  const statusText = error ? 'ERROR' : 'SUCCESS';
+  const urlDisplay = fullUrl || 'N/A';
+
+  container.innerHTML = `
+    <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:10px 14px;margin-bottom:0;font-family:'Consolas',monospace;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <span style="background:var(--accent);color:white;padding:2px 8px;border-radius:3px;font-weight:700;font-size:11px;">POST</span>
+      <span style="color:var(--text);word-break:break-all;">${urlDisplay}</span>
+      <span style="margin-left:auto;color:${error ? 'var(--red)' : 'var(--green)'};font-weight:600;font-size:11px;">${httpStatus ? 'HTTP ' + httpStatus : (error ? 'FAILED' : '')}</span>
+      <span style="color:var(--text-muted);font-size:11px;">${requestTime}ms</span>
+    </div>
+    <div class="result-tabs">
+      <div class="result-tab active" onclick="switchTab(this,'decrypted-${containerId}')">Decrypted Response</div>
+      <div class="result-tab" onclick="switchTab(this,'raw-${containerId}')">Raw Response</div>
+      <div class="result-tab" onclick="switchTab(this,'request-${containerId}')">Request Payload</div>
+      <div class="result-tab" onclick="switchTab(this,'meta-${containerId}')">Meta</div>
+    </div>
+    <div class="result-content" id="decrypted-${containerId}">
+      <pre class="${statusClass}">${JSON.stringify(decryptedResponse || error, null, 2)}</pre>
+    </div>
+    <div class="result-content" id="raw-${containerId}" style="display:none">
+      <pre>${JSON.stringify(rawResponse, null, 2)}</pre>
+    </div>
+    <div class="result-content" id="request-${containerId}" style="display:none">
+      <pre class="info">${JSON.stringify(requestPayload, null, 2)}</pre>
+    </div>
+    <div class="result-content" id="meta-${containerId}" style="display:none">
+      <pre>Full URL: ${urlDisplay}
+HTTP Status: ${httpStatus || 'N/A'}
+Time: ${requestTime}ms
+Encryption: ${document.getElementById('encryptionEnabled').checked ? 'ON' : 'OFF'}
+Timestamp: ${new Date().toISOString()}</pre>
+    </div>
+  `;
+}
+
+function switchTab(el, showId) {
+  const tabs = el.parentElement;
+  const contents = tabs.parentElement;
+  tabs.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  contents.querySelectorAll('.result-content').forEach(c => c.style.display = 'none');
+  document.getElementById(showId).style.display = 'block';
+}
+
+// ============================================================
+// API CALLER
+// ============================================================
+async function sendRequest(endpoint, data, skipAuth = false) {
+  const useEncryption = document.getElementById('encryptionEnabled').checked;
+  const token = document.getElementById('jwtToken').value.trim();
+
+  let body;
+  let requestPayload;
+
+  if (useEncryption && Object.keys(data).length > 0) {
+    const encrypted = Encryption.encryptPayload(data);
+    body = `payload=${encodeURIComponent(encrypted.payload)}&hash=${encodeURIComponent(encrypted.hash)}`;
+    requestPayload = { original: data, encrypted };
+  } else if (useEncryption && Object.keys(data).length === 0) {
+    // Even empty payloads need encryption for server's checkPayload
+    const encrypted = Encryption.encryptPayload({});
+    body = `payload=${encodeURIComponent(encrypted.payload)}&hash=${encodeURIComponent(encrypted.hash)}`;
+    requestPayload = { original: data, encrypted };
+  } else {
+    body = Object.entries(data).map(([k,v]) => `${encodeURIComponent(k)}=${encodeURIComponent(typeof v === 'object' ? JSON.stringify(v) : v)}`).join('&');
+    requestPayload = { original: data, encrypted: 'DISABLED' };
+  }
+
+  const headers = { 'Content-Type': 'application/x-www-form-urlencoded' };
+  if (token && !skipAuth) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const actualUrl = BASE_URL + endpoint;
+  const useProxy = document.getElementById('useProxy').checked;
+  const url = useProxy ? `http://localhost:3199/proxy?url=${encodeURIComponent(actualUrl)}` : actualUrl;
+  const start = performance.now();
+
+  try {
+    const response = await fetch(url, { method: 'POST', headers, body });
+    const elapsed = Math.round(performance.now() - start);
+    const text = await response.text();
+
+    let rawResponse;
+    try { rawResponse = JSON.parse(text); } catch { rawResponse = text; }
+
+    let decryptedResponse = null;
+    if (useEncryption && rawResponse && typeof rawResponse === 'object') {
+      decryptedResponse = Encryption.decryptResponse(rawResponse);
+    }
+    if (!decryptedResponse) decryptedResponse = rawResponse;
+
+    // Update connection status
+    document.getElementById('statusDot').classList.add('connected');
+    document.getElementById('statusText').textContent = `Connected (${elapsed}ms)`;
+
+    return { fullUrl: actualUrl, requestTime: elapsed, requestPayload, rawResponse, decryptedResponse, httpStatus: response.status };
+  } catch (err) {
+    const elapsed = Math.round(performance.now() - start);
+    document.getElementById('statusDot').classList.remove('connected');
+    document.getElementById('statusText').textContent = 'Connection failed';
+
+    let errorMsg = err.message;
+    if (err.message === 'Failed to fetch' || err.name === 'TypeError') {
+      errorMsg = useProxy
+        ? 'CORS Proxy not running! Start it with: node cors_proxy.js (from project folder)'
+        : 'CORS blocked by browser. Enable "CORS Proxy" checkbox and run: node cors_proxy.js';
+    }
+    return { fullUrl: actualUrl, requestTime: elapsed, requestPayload, rawResponse: null, decryptedResponse: null, error: errorMsg, httpStatus: null };
+  }
+}
+
+// Generic API call
+async function callApi(panelId, endpoint, data) {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  const result = await sendRequest(endpoint, data);
+  renderResult('result-' + panelId, result);
+
+  btn.disabled = false;
+  btn.textContent = 'Send Request';
+}
+
+// API call with JSON textarea input
+async function callApiJson(panelId, endpoint, textareaId) {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  let data;
+  try {
+    data = JSON.parse(document.getElementById(textareaId).value);
+  } catch (e) {
+    renderResult('result-' + panelId, { requestTime: 0, requestPayload: null, rawResponse: null, decryptedResponse: null, error: 'Invalid JSON: ' + e.message });
+    btn.disabled = false;
+    btn.textContent = 'Send Request';
+    return;
+  }
+
+  const result = await sendRequest(endpoint, data);
+  renderResult('result-' + panelId, result);
+
+  btn.disabled = false;
+  btn.textContent = 'Send Request';
+}
+
+// ============================================================
+// LOGIN (special handling - stores JWT token)
+// ============================================================
+async function callLogin() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Logging in...';
+
+  const data = {
+    UserName: gv('login-username'),
+    PassWord: gv('login-password'),
+  };
+  const imei = gv('login-imei');
+  const mobile = gv('login-mobile');
+  if (imei) data.imei = imei;
+  if (mobile) data.mobile_no = mobile;
+
+  const result = await sendRequest('/validateLogin', data, true);
+  renderResult('result-login', result);
+
+  // Try to extract JWT token and auto-fill fields from response
+  const resp = result.decryptedResponse;
+  if (resp) {
+    const token = resp.token || resp.jwt_token || resp.authToken || resp.auth_token;
+    if (token) {
+      document.getElementById('jwtToken').value = token;
+      document.getElementById('statusDot').classList.add('connected');
+      document.getElementById('statusText').textContent = 'Authenticated ✓';
+    }
+    // Auto-fill dealer_id, userstype, employeeParentType, employeeParentId across all forms
+    const dealerId = resp.dealer_id || resp.dealerId || '';
+    const usersType = resp.userstype || resp.users_type || resp.user_type || '';
+    const empParentType = resp.employeeParentType || resp.employee_parent_type || '';
+    const empParentId = resp.employeeParentId || resp.employee_parent_id || '';
+    // Fill all dealer_id fields
+    document.querySelectorAll('input[id$="-dealerId"]').forEach(el => { if (!el.value) el.value = dealerId; });
+    // Fill access control specific fields
+    const acUsersType = document.getElementById('accessControl-userstype');
+    if (acUsersType && !acUsersType.value) acUsersType.value = usersType;
+    const acEmpType = document.getElementById('accessControl-empParentType');
+    if (acEmpType && !acEmpType.value) acEmpType.value = empParentType;
+    const acEmpId = document.getElementById('accessControl-empParentId');
+    if (acEmpId && !acEmpId.value) acEmpId.value = empParentId;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Send Request';
+}
+</script>
+</body>
+</html>
