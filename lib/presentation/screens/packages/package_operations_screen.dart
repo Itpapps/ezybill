@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../../../application/providers/package_provider.dart';
+import '../../../application/providers/stb_provider.dart';
 import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/utils/parse_utils.dart';
 import '../../../data/models/package/package_model.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../router/route_names.dart';
@@ -84,21 +86,100 @@ class _PackageOperationsScreenState
   AppColors get _c =>
       Theme.of(context).extension<AppColors>() ?? AppColors.light;
 
+  bool _fetchingStb = false;
+
   @override
   void initState() {
     super.initState();
     _categoryTabController = TabController(length: 4, vsync: this);
 
-    if (widget.customerId != null && widget.stbNo != null) {
+    if (widget.customerId != null) {
       _activeCustomerId = widget.customerId;
-      _activeStbNo = widget.stbNo;
-      _activeDeviceId = widget.customerDeviceId;
-      _activeStockId = widget.customerStockId;
-      _activeResellerId = widget.resellerId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadData();
-      });
+      if (widget.stbNo != null) {
+        _activeStbNo = widget.stbNo;
+        _activeDeviceId = widget.customerDeviceId;
+        _activeStockId = widget.customerStockId;
+        _activeResellerId = widget.resellerId;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _loadData();
+        });
+      } else {
+        // No stbNo passed — fetch STB details first
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _fetchStbAndLoad();
+        });
+      }
     }
+  }
+
+  /// Fetch STB box details when stbNo wasn't passed (e.g. from customer profile).
+  Future<void> _fetchStbAndLoad() async {
+    if (_activeCustomerId == null || _fetchingStb) return;
+    setState(() => _fetchingStb = true);
+    try {
+      final stbDs = ref.read(stbRemoteDatasourceProvider);
+      final token = ref.read(appSessionProvider)?.token ?? '';
+      final rawResult = await stbDs.getCustomerBoxDetails(
+        authtoken: token,
+        customerId: _activeCustomerId!,
+      );
+      final boxList = parseMapList(rawResult['customerBoxList']);
+      if (!mounted) return;
+      if (boxList.isEmpty) {
+        setState(() => _fetchingStb = false);
+        return;
+      }
+      final boxes = boxList.cast<Map<String, dynamic>>();
+      if (boxes.length == 1) {
+        _applyStb(boxes.first);
+      } else {
+        // Multiple STBs — let user pick
+        _showStbPickerDialog(boxes);
+      }
+    } catch (e) {
+      debugPrint('[PackageOps] Failed to fetch STB: $e');
+      if (mounted) setState(() => _fetchingStb = false);
+    }
+  }
+
+  void _applyStb(Map<String, dynamic> stb) {
+    _activeStbNo = stb['serial_number']?.toString() ?? '';
+    _activeDeviceId = stb['device_id']?.toString();
+    _activeStockId = stb['stock_id']?.toString();
+    setState(() => _fetchingStb = false);
+    _loadData();
+  }
+
+  void _showStbPickerDialog(List<Map<String, dynamic>> boxes) {
+    setState(() => _fetchingStb = false);
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Select STB'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: boxes.length,
+              itemBuilder: (_, i) {
+                final stb = boxes[i];
+                final serial = stb['serial_number']?.toString() ?? 'Unknown';
+                final vc = stb['vc_number']?.toString() ?? '';
+                return ListTile(
+                  title: Text(serial),
+                  subtitle: vc.isNotEmpty ? Text('VC: $vc') : null,
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _applyStb(stb);
+                  },
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _loadData() {

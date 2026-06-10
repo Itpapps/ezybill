@@ -26,5 +26,5 @@ class AppConstants {
 
   // Timeouts
   static const int connectionTimeout = 30000; // 30 seconds
-  static const int receiveTimeout = 30000;
+  static const int receiveTimeout = 60000; // 60 seconds — report APIs can be slow
 }

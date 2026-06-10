@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -71,6 +71,7 @@ const String kAppDashboard = 'appDashboard';
 const String kAppLogoPath = 'appLogoPath';
 const String kDeviceUuid = 'device_uuid';
 const String kBmsUrl = 'bms_url';
+const String kBmsVersion = 'bms_version';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BMS Notifier
@@ -209,12 +210,29 @@ class BmsNotifier extends Notifier<BmsState> {
     await _prefs.setBool(kBmsAuth, true);
     await _prefs.setString(kDeviceUuid, deviceId);
 
+    // Store BMS version (V1 or V2) — determines SOAP vs REST routing
+    await _prefs.setString(kBmsVersion, response.version);
+    debugPrint('[BMS] Client version: ${response.version}');
+
     // Store REST API URL from BMS response
+    debugPrint('[BMS] Full response: $response');
+    debugPrint('[BMS] ipAddress="${response.ipAddress}" restBaseUrl="${response.restBaseUrl}"');
     if (response.ipAddress.isNotEmpty) {
-      final restUrl = response.restBaseUrl;
+      var restUrl = response.restBaseUrl;
+      // V2 clients use REST (LcoRestServices) — strip wsController so
+      // isWsController returns false and the app uses standard REST routing.
+      // V1 clients keep wsController for SOAP/hybrid routing.
+      if (response.version.toUpperCase() == 'V2' &&
+          restUrl.endsWith('/wsController')) {
+        restUrl = restUrl.replaceAll('/wsController', '');
+        debugPrint('[BMS] V2 client — stripped wsController: $restUrl');
+      }
+      debugPrint('[BMS] Setting baseUrl to: $restUrl');
       await _prefs.setString(kLoginUrl, restUrl);
       await _prefs.setString('api_base_url', restUrl);
       ApiConstants.setBaseUrl(restUrl);
+    } else {
+      debugPrint('[BMS] WARNING: ipAddress is empty — baseUrl will NOT be set');
     }
 
     // Store other BMS config

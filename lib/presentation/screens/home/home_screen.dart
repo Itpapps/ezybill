@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import '../../../core/utils/parse_utils.dart';
 
 import '../../../application/providers/auth_provider.dart';
 import '../../../application/providers/stb_provider.dart';
@@ -16,7 +17,7 @@ import '../../common/widgets/alphabet_sidebar.dart';
 import '../../common/widgets/app_toast.dart';
 import '../../common/widgets/app_search_bar.dart';
 import '../../common/widgets/pill_tab_bar.dart';
-import '../../common/widgets/section_label.dart';
+
 import '../../common/widgets/subscriber_card.dart';
 import '../../common/widgets/language_selector.dart';
 import '../../router/route_names.dart';
@@ -82,8 +83,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
       if (!mounted) return;
 
-      final boxList = rawResult['customerBoxList'];
-      if (boxList == null || boxList is! List || boxList.isEmpty) {
+      final boxList = parseMapList(rawResult['customerBoxList'] ?? rawResult['data']);
+      if (boxList.isEmpty) {
         setState(() => _loadingStb = false);
         AppToast.show(context,
             message: 'No STB found for this customer',
@@ -264,11 +265,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _searchController.clear();
       _overviewExpanded = false; // Collapse overview when tab tapped
     });
-    if (index < 3) {
-      ref
-          .read(dashboardCustomerListProvider.notifier)
-          .selectTab(_tabFromIndex(index));
-    }
+    ref
+        .read(dashboardCustomerListProvider.notifier)
+        .selectTab(_tabFromIndex(index));
   }
 
   // ── Filter ───────────────────────────────────────────────────────────────
@@ -363,21 +362,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Divider(height: 1, color: c.ink05),
             ),
 
-            // ── Loading state ────────────────────────────────────
+            // ── Overview Section (gated by dashboard loading) ────
             if (dashboard.isLoading)
               const SliverToBoxAdapter(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
+                  padding: EdgeInsets.symmetric(vertical: 20),
                   child: Center(
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                 ),
               )
-            else if (dashboard.errorMessage != null)
-              SliverToBoxAdapter(
-                child: _buildErrorState(dashboard.errorMessage!),
-              )
             else ...[
+              // Non-blocking warning when dashboard SOAP failed
+              if (dashboard.errorMessage != null)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: GestureDetector(
+                      onTap: () => ref.read(dashboardProvider.notifier).loadDashboard(),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: c.amber.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.alertTriangle, size: 14, color: c.amber),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Dashboard data may be incomplete. Tap to retry.',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: c.amber,
+                                ),
+                              ),
+                            ),
+                            Icon(LucideIcons.refreshCw, size: 12, color: c.amber),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               // ── OVERVIEW label + inline ticker when collapsed ────
               SliverToBoxAdapter(
                 child: GestureDetector(
@@ -415,10 +444,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               // ── Overview: Donut + Legend ────────────────────────
               if (_overviewExpanded) SliverToBoxAdapter(
                 child: Builder(builder: (context) {
-                  // Use customer list count as fallback when dashboard returns 0
-                  final activeCount = dashboard.totalActiveCustomers > 0
-                      ? dashboard.totalActiveCustomers
-                      : listState.totalCount;
+                  final activeCount = dashboard.totalActiveCustomers;
                   final inactiveCount = dashboard.totalDeactiveCustomers;
                   final freshCount = dashboard.freshCount;
 
@@ -482,85 +508,83 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   entries: dashboard.walletHistory,
                 ),
               ),
-
-              // ── Search Bar ─────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: AppSearchBar(
-                    controller: _searchController,
-                    placeholder: l.searchPlaceholder,
-                    onChanged: (v) => setState(() => _searchQuery = v),
-                    onSubmitted: (_) {
-                      // Trigger API search when user submits
-                      final query = _searchController.text.trim();
-                      if (query.isNotEmpty) {
-                        ref
-                            .read(dashboardCustomerListProvider.notifier)
-                            .searchByQuery(query);
-                      }
-                    },
-                  ),
-                ),
-              ),
-
-              // ── Pill Tabs ──────────────────────────────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                  child: PillTabBar(
-                    tabs: [
-                      PillTab(
-                        label: l.active,
-                        count: dashboard.totalActiveCustomers > 0
-                            ? dashboard.totalActiveCustomers
-                            : listState.totalCount,
-                        activeBg: const Color(0xFFE6F9EE),
-                        activeText: const Color(0xFF059669),
-                      ),
-                      PillTab(
-                        label: l.inactive,
-                        count: dashboard.totalDeactiveCustomers,
-                        activeBg: const Color(0xFFFEE2E2),
-                        activeText: const Color(0xFFDC2626),
-                      ),
-                      PillTab(
-                        label: l.fresh,
-                        count: dashboard.totalUnAssignedStbs,
-                        activeBg: const Color(0xFFD1FAE5),
-                        activeText: const Color(0xFF047857),
-                      ),
-                      PillTab(
-                        label: l.assigned,
-                        count: null,
-                        activeBg: const Color(0xFFFEF3C7),
-                        activeText: const Color(0xFFB45309),
-                      ),
-                    ],
-                    selectedIndex: _selectedTabIndex,
-                    onTabChanged: _selectTab,
-                  ),
-                ),
-              ),
-
-              // ── Sort + View toggle + result count ──────────────
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                  child: _buildSortBar(listState),
-                ),
-              ),
-
-              // ── Subscriber List with Alpha Sidebar ─────────────
-              SliverToBoxAdapter(
-                child: _buildSubscriberSection(listState, dashboard),
-              ),
-
-              // ── Bottom spacer ──────────────────────────────────
-              const SliverToBoxAdapter(
-                child: SizedBox(height: 80),
-              ),
             ],
+
+            // ── Search Bar (always visible, not gated by dashboard) ──
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: AppSearchBar(
+                  controller: _searchController,
+                  placeholder: l.searchPlaceholder,
+                  onChanged: (v) => setState(() => _searchQuery = v),
+                  onSubmitted: (_) {
+                    // Trigger API search when user submits
+                    final query = _searchController.text.trim();
+                    if (query.isNotEmpty) {
+                      ref
+                          .read(dashboardCustomerListProvider.notifier)
+                          .searchByQuery(query);
+                    }
+                  },
+                ),
+              ),
+            ),
+
+            // ── Pill Tabs (always visible) ──────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: PillTabBar(
+                  tabs: [
+                    PillTab(
+                      label: l.active,
+                      count: dashboard.totalActiveCustomers,
+                      activeBg: const Color(0xFFE6F9EE),
+                      activeText: const Color(0xFF059669),
+                    ),
+                    PillTab(
+                      label: l.inactive,
+                      count: dashboard.totalDeactiveCustomers,
+                      activeBg: const Color(0xFFFEE2E2),
+                      activeText: const Color(0xFFDC2626),
+                    ),
+                    PillTab(
+                      label: l.fresh,
+                      count: dashboard.totalUnAssignedStbs,
+                      activeBg: const Color(0xFFD1FAE5),
+                      activeText: const Color(0xFF047857),
+                    ),
+                    PillTab(
+                      label: l.assigned,
+                      count: dashboard.totalAssignedStbs,
+                      activeBg: const Color(0xFFFEF3C7),
+                      activeText: const Color(0xFFB45309),
+                    ),
+                  ],
+                  selectedIndex: _selectedTabIndex,
+                  onTabChanged: _selectTab,
+                ),
+              ),
+            ),
+
+            // ── Sort + View toggle + result count ──────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: _buildSortBar(listState),
+              ),
+            ),
+
+            // ── Subscriber List with Alpha Sidebar ─────────────
+            SliverToBoxAdapter(
+              child: _buildSubscriberSection(listState, dashboard),
+            ),
+
+            // ── Bottom spacer ──────────────────────────────────
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 80),
+            ),
           ],
         ),
       ),
@@ -571,9 +595,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildInlineTicker(DashboardState dashboard, DashboardCustomerListState listState) {
     final c = Theme.of(context).extension<AppColors>()!;
-    final activeCount = dashboard.totalActiveCustomers > 0
-        ? dashboard.totalActiveCustomers
-        : listState.totalCount;
+    final activeCount = dashboard.totalActiveCustomers;
 
     final ll = AppLocalizations.of(context)!;
     final items = <_TickerItem>[
@@ -718,10 +740,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     final c = Theme.of(context).extension<AppColors>()!;
 
-    // Misc tab — no list
-    if (_selectedTabIndex == 3) {
-      return _buildPlaceholderState('Misc', c);
-    }
+    // All tabs (0-3) now use the subscriber list from server
 
     // Loading
     if (listState.isLoading) {
@@ -756,8 +775,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     // Filtered list
     final allCustomers = listState.allCustomers;
-    final filtered = _filterCustomers(allCustomers);
-    final letters = _lettersWithItems(allCustomers);
+    final showPager = _searchQuery.isEmpty && _activeLetter == null;
+    final baseList = showPager ? listState.pageCustomers : allCustomers;
+    final filtered = _filterCustomers(baseList);
+    final letters = _lettersWithItems(baseList);
     final isActive = listState.selectedTab == CustomerFilterTab.active;
 
     return Padding(
@@ -827,42 +848,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                     )),
 
-                // Loading more
-                if (listState.isLoadingMore)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-
-                // Load more button
-                if (listState.hasMore && !listState.isLoadingMore)
-                  GestureDetector(
-                    onTap: () => ref
-                        .read(dashboardCustomerListProvider.notifier)
-                        .loadMore(),
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: c.card,
-                        borderRadius: AppRadius.smBR,
-                        border: Border.all(color: c.ink10),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'Load More',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: c.red,
-                          ),
-                        ),
-                      ),
+                if (showPager && listState.pageCount > 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8, bottom: 8),
+                    child: _PagerBar(
+                      pageCount: listState.pageCount,
+                      currentPage: listState.currentPage,
+                      onPage: (p) => ref
+                          .read(dashboardCustomerListProvider.notifier)
+                          .goToPage(p),
+                      colors: c,
                     ),
                   ),
               ],
@@ -898,7 +893,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final mobile = customer.mobileNumber ?? '';
     final stbCode = customer.serialNumber ?? '';
     final customerId = customer.customerId;
-    final status = isActive ? 'active' : 'deactivated';
+    // Derive status from the actual customer model data
+    final modelStatus = customer.status;
+    final String status;
+    if (modelStatus == '1' || modelStatus.toLowerCase() == 'active') {
+      status = 'active';
+    } else if (modelStatus.toLowerCase() == 'fresh' || modelStatus.toLowerCase() == 'new') {
+      status = 'fresh';
+    } else if (isActive) {
+      // Fallback to tab-based status
+      status = 'active';
+    } else {
+      status = 'deactivated';
+    }
 
     // Determine due text
     String? dueText;
@@ -912,6 +919,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         || ref.read(dashboardCustomerListProvider).selectedTab == CustomerFilterTab.fresh;
     final vcNumber = customer.vcNumber ?? '';
     final serialNumber = customer.serialNumber ?? stbCode;
+    // A fresh STB is only actionable when it has a valid VC number.
+    final freshHasVc = vcNumber.trim().isNotEmpty &&
+        vcNumber.trim().toLowerCase() != 'null' &&
+        vcNumber.trim().toLowerCase() != 'anytype{}' &&
+        vcNumber.trim() != '0';
 
     // For fresh boxes, get CAS type from the raw data
     final casType = customer.baid ?? ''; // baid field stores cas from dashboard list
@@ -921,9 +933,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       mobile: isFresh ? 'VC: $vcNumber' : (mobile.isNotEmpty ? mobile : '--'),
       stbCode: isFresh ? 'CAS: $casType' : (stbCode.isNotEmpty ? stbCode : '--'),
       status: isFresh ? 'fresh' : status,
-      dueText: isFresh ? 'Tap to assign' : dueText,
+      dueText: isFresh
+          ? (freshHasVc ? 'Tap to create customer' : 'No VC – cannot assign')
+          : dueText,
       onTap: () {
         if (isFresh) {
+          if (!freshHasVc) {
+            AppToast.show(context,
+                message: 'VC number missing. Cannot create customer for this STB.',
+                variant: ToastVariant.info);
+            return;
+          }
           // Navigate to new customer creation with STB pre-filled
           context.push(
             RouteNames.newCustomer,
@@ -936,29 +956,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         } else if (customerId.isNotEmpty) {
           context.push(
             '/customer/$customerId',
-            extra: {'customerId': customerId, 'customerName': name},
+            extra: {
+              'customerId': customerId,
+              'customerName': name,
+              'mobileNumber': mobile,
+              'accountNumber': customer.accountNumber ?? '',
+              'status': status,
+              'pendingAmount': customer.pendingAmount,
+              'billingAddress': customer.billingAddress ?? '',
+              'serialNumber': serialNumber,
+              'vcNumber': vcNumber,
+              'cafNumber': customer.cafNumber ?? '',
+            },
           );
         }
       },
       actions: isFresh
           ? SubscriberCardActions(
-              onActivate: () {
-                context.push(
-                  RouteNames.newCustomer,
-                  extra: {
-                    'serialNumber': serialNumber,
-                    'vcNumber': vcNumber,
-                    'stbCode': stbCode,
-                  },
-                );
-              },
+              onActivate: freshHasVc
+                  ? () {
+                      context.push(
+                        RouteNames.newCustomer,
+                        extra: {
+                          'serialNumber': serialNumber,
+                          'vcNumber': vcNumber,
+                          'stbCode': stbCode,
+                        },
+                      );
+                    }
+                  : null,
             )
           : SubscriberCardActions(
         onRecharge: () {
           if (customerId.isNotEmpty) {
             context.push(
               RouteNames.makePayment,
-              extra: {'customerId': customerId, 'customerName': name},
+              extra: {
+                'customerId': customerId,
+                'customerName': name,
+                'address': customer.billingAddress ?? customer.installationAddress ?? '',
+                'accountNumber': customer.accountNumber ?? '',
+              },
             );
           }
         },
@@ -1112,4 +1150,125 @@ class _TickerItem {
   final String value;
   final Color color;
   const _TickerItem(this.label, this.value, this.color);
+}
+
+class _PagerBar extends StatelessWidget {
+  final int pageCount;
+  final int currentPage;
+  final ValueChanged<int> onPage;
+  final AppColors colors;
+
+  const _PagerBar({
+    required this.pageCount,
+    required this.currentPage,
+    required this.onPage,
+    required this.colors,
+  });
+
+  List<int> _visiblePages() {
+    // Show up to 9 pages (like screenshot), centered on current.
+    const window = 9;
+    if (pageCount <= window) {
+      return List<int>.generate(pageCount, (i) => i + 1);
+    }
+    final half = window ~/ 2;
+    var start = currentPage - half;
+    var end = currentPage + half;
+    if (start < 1) {
+      start = 1;
+      end = window;
+    }
+    if (end > pageCount) {
+      end = pageCount;
+      start = pageCount - window + 1;
+    }
+    return [for (var p = start; p <= end; p++) p];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pages = _visiblePages();
+    return Row(
+      children: [
+        _navButton(
+          label: '‹',
+          enabled: currentPage > 1,
+          onTap: () => onPage(currentPage - 1),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final p in pages) ...[
+                  _pageChip(p),
+                  const SizedBox(width: 6),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _navButton(
+          label: '›',
+          enabled: currentPage < pageCount,
+          onTap: () => onPage(currentPage + 1),
+        ),
+      ],
+    );
+  }
+
+  Widget _pageChip(int page) {
+    final selected = page == currentPage;
+    return GestureDetector(
+      onTap: () => onPage(page),
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? colors.red : colors.card,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? colors.red : colors.ink10),
+        ),
+        child: Text(
+          '$page',
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: selected ? Colors.white : colors.ink60,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navButton({
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: enabled ? colors.card : colors.ink05,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: colors.ink10),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: enabled ? colors.ink60 : colors.ink20,
+          ),
+        ),
+      ),
+    );
+  }
 }

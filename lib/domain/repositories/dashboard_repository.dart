@@ -12,7 +12,7 @@ abstract class DashboardRepository {
   });
 
   /// Get LCO deposit/wallet amount.
-  Future<Result<WalletResponse>> getLcoDepositAmount();
+  Future<Result<WalletResponse>> getLcoDepositAmount({required int dealerId});
 
   /// Get LCO wallet history with optional date range.
   Future<Result<Map<String, dynamic>>> getLcoWallet({

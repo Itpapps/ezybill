@@ -3,18 +3,45 @@ import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 class ApiConstants {
   ApiConstants._();
 
-  /// BMS (Business Management System) SOAP server URL for device registration.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ENVIRONMENT TOGGLE — Comment/uncomment to switch between LIVE and LOCAL
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // LIVE:  _forceLocal = false. After BMS registration, server returns the
+  //        client IP which becomes baseUrl automatically. _apiBaseUrl is unused.
+  //
+  // LOCAL: _forceLocal = true + uncomment local _apiBaseUrl below.
+  //        Ignores SharedPreferences override — uses _apiBaseUrl directly.
+  //        (Same as Android Java app: just switch one flag, no need to clear data)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // LIVE
+  static const bool _forceLocal = false;
+  // LOCAL
+  // static const bool _forceLocal = true;
+
+  // ── BMS URL (device registration + version check) ─────────────────────────
+  // LIVE
   static const String bmsUrl =
-      'http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication';
+      'http://ezybms.itpworld.com/index.php/validateAuthentication';
+  // LOCAL
+  // static const String bmsUrl =
+  //     'http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication';
 
-  /// Direct API server URL (used by mobile apps & production web)
-  static const String _apiBaseUrl =
-      'http://192.168.1.143/v2_release_aakshya/index.php';
+  // ── Fallback API base URL (only used when _overrideBaseUrl is null) ────────
+  // In LIVE mode this is never reached because BMS sets _overrideBaseUrl.
+  // In LOCAL mode this is your dev server.
+  // LIVE (safe fallback — won't accidentally hit local server)
+  static const String _apiBaseUrl = 'http://0.0.0.0';
+  // LOCAL
+  // static const String _apiBaseUrl =
+  //     'http://192.168.1.143/v2_release_aakshya/index.php';
 
-  /// CORS proxy URL for Flutter Web development
-  /// Run: node cors_proxy.js (from project root)
-  static const String _proxyBaseUrl =
-      'http://localhost:3199/v2_release_aakshya/index.php';
+  // ── CORS proxy for Flutter Web development only ────────────────────────────
+  // LOCAL (web dev)
+  // static const String _proxyBaseUrl =
+  //     'http://localhost:3199/v2_release_aakshya/index.php';
+  static const String _proxyBaseUrl = 'http://0.0.0.0';
 
   /// Override base URL set at runtime from SharedPreferences
   static String? _overrideBaseUrl;
@@ -29,9 +56,17 @@ class ApiConstants {
     _overrideBaseUrl = null;
   }
 
-  /// Base URL - checks override first, then uses CORS proxy on web debug,
-  /// direct on mobile/production.
+  /// Whether the app is forced to use the local code-level URL.
+  /// Used by router to skip BMS registration in local dev mode.
+  static bool get forceLocal => _forceLocal;
+
+  /// Base URL - when _forceLocal is true, uses _apiBaseUrl directly
+  /// (ignores SharedPreferences). Otherwise checks override first.
   static String get baseUrl {
+    // In local mode, always use the code-level URL (like Android Java app)
+    if (_forceLocal) {
+      return (kIsWeb && kDebugMode) ? _proxyBaseUrl : _apiBaseUrl;
+    }
     if (_overrideBaseUrl != null && _overrideBaseUrl!.isNotEmpty) {
       return _overrideBaseUrl!;
     }
@@ -42,9 +77,28 @@ class ApiConstants {
   static String get defaultBaseUrl =>
       (kIsWeb && kDebugMode) ? _proxyBaseUrl : _apiBaseUrl;
 
-  static String get restBase => '$baseUrl/LcoRestServices';
-  static String get selfcareBase => '$baseUrl/selfcare_rest_mobileapp';
-  static String get paymentGatewayBase => '$baseUrl/paymentgateway';
+  /// Whether the current baseUrl points to a live wsController proxy server.
+  /// Live servers route through wsController; local servers use direct controllers.
+  static bool get isWsController => baseUrl.endsWith('/wsController');
+
+  /// REST base URL for LCO service calls (Dio-based, NOT login).
+  /// Login uses SOAP on live (bypasses Dio) and REST on local.
+  /// LOCAL:  baseUrl = .../index.php  → restBase = .../index.php/LcoRestServices
+  /// LIVE:   baseUrl = .../index.php/wsController → strip wsController
+  ///         → restBase = .../index.php/customerRestservices
+  ///         (Android app uses customerRestservices for all REST calls)
+  static String get restBase {
+    if (isWsController) {
+      return '$_strippedBase/customerRestservices';
+    }
+    return '$baseUrl/LcoRestServices';
+  }
+  /// Base URL without wsController suffix (for controllers that exist directly).
+  static String get _strippedBase =>
+      baseUrl.replaceAll('/wsController', '');
+
+  static String get selfcareBase => '$_strippedBase/selfcare_rest_mobileapp';
+  static String get paymentGatewayBase => '$_strippedBase/paymentgateway';
 
   // Auth
   static const String validateLogin = '/validateLogin';

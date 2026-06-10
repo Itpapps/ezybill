@@ -161,6 +161,7 @@ class PaymentRemoteDatasource {
   Future<Map<String, dynamic>> getPaymentHistory({
     required String authtoken,
     required String customerId,
+    required int dealerId,
     String? fromDate,
     String? toDate,
   }) async {
@@ -168,7 +169,8 @@ class PaymentRemoteDatasource {
       ApiConstants.paymentHistory,
       data: {
         'authtoken': authtoken,
-        'customerId': customerId,
+        'customer_id': customerId,
+        'dealer_id': dealerId,
         if (fromDate != null) 'fromDate': fromDate,
         if (toDate != null) 'toDate': toDate,
       },
@@ -181,12 +183,14 @@ class PaymentRemoteDatasource {
   Future<Map<String, dynamic>> getInvoiceHistory({
     required String authtoken,
     required String customerId,
+    required int dealerId,
   }) async {
     final response = await _dio.post(
       ApiConstants.invoiceHistory,
       data: {
         'authtoken': authtoken,
-        'customerId': customerId,
+        'customer_id': customerId,
+        'dealer_id': dealerId,
       },
     );
     return response.data as Map<String, dynamic>;

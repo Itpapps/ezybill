@@ -20,6 +20,23 @@ sealed class PaymentHistoryItem with _$PaymentHistoryItem {
 
   static Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
     final r = Map<String, dynamic>.from(json);
+    // Server may return snake_case keys — remap to camelCase for freezed.
+    const keyMap = {
+      'payment_id': 'paymentId',
+      'paid_on': 'paidOn',
+      'payment_date': 'paidOn',
+      'paid_amount': 'paidAmount',
+      'amount': 'paidAmount',
+      'receipt_no': 'receiptNo',
+      'receipt_number': 'receiptNo',
+      'payment_mode': 'paymentMode',
+      'employee_name': 'employeeName',
+    };
+    for (final entry in keyMap.entries) {
+      if (r.containsKey(entry.key) && !r.containsKey(entry.value)) {
+        r[entry.value] = r[entry.key];
+      }
+    }
     const doubleFields = ['paidAmount'];
     for (final key in doubleFields) {
       final v = r[key];

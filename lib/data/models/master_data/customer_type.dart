@@ -20,6 +20,13 @@ sealed class CustomerType with _$CustomerType {
 
 Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
   final r = Map<String, dynamic>.from(json);
+  // Server variants: snake_case vs camelCase
+  if (!r.containsKey('customer_type_id') && r['customerTypeId'] != null) {
+    r['customer_type_id'] = r['customerTypeId'];
+  }
+  if (!r.containsKey('customer_type') && r['name'] != null) {
+    r['customer_type'] = r['name'];
+  }
   const intFields = [
     'customer_type_id',
     'status',

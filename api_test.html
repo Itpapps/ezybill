@@ -93,6 +93,11 @@
 
 <div class="container">
   <div class="sidebar">
+    <!-- BMS Registration -->
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">BMS Registration</div>
+      <div class="sidebar-item" onclick="showPanel('bmsRegister')"><span class="method" style="background:rgba(234,179,8,0.2);color:var(--yellow);">SOAP</span> validateAuthentication</div>
+    </div>
     <!-- Auth -->
     <div class="sidebar-section">
       <div class="sidebar-section-title">Authentication</div>
@@ -194,7 +199,6 @@
       <div class="sidebar-item" onclick="showPanel('formValidations')"><span class="method">POST</span> formValidations</div>
     </div>
   </div>
-
   <div class="main">
     <!-- Base URL Config -->
     <div class="token-section" style="margin-bottom:12px;">
@@ -206,7 +210,6 @@
       </div>
       <div style="font-size:11px;color:var(--text-muted);margin-top:6px;font-family:'Consolas',monospace;" id="currentRestUrl">REST Base: http://192.168.1.143/v2_release_aakshya/index.php/LcoRestServices</div>
     </div>
-
     <!-- JWT Token Section (always visible) -->
     <div class="token-section">
       <h3>JWT Bearer Token</h3>
@@ -215,6 +218,67 @@
         <input type="text" id="jwtToken" placeholder="Bearer token will be set after login...">
         <button class="btn btn-secondary" onclick="document.getElementById('jwtToken').value=''">Clear</button>
       </div>
+    </div>
+
+    <!-- ==================== BMS REGISTRATION ==================== -->
+    <div class="api-panel" id="panel-bmsRegister">
+      <div class="panel-header">
+        <h2>BMS Device Registration <span class="badge badge-green" style="font-size:11px;vertical-align:middle;">SOAP</span></h2>
+        <div class="url" style="color:var(--yellow);">POST http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication</div>
+      </div>
+      <div style="background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.2);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;color:var(--text-dim);line-height:1.6;">
+        <strong style="color:var(--yellow);">⚠ This is a SOAP XML endpoint (not REST)</strong><br>
+        • This is the <strong>first call</strong> the app makes — registers the device with the BMS (Business Management System)<br>
+        • <strong>smsCode</strong> = MSO Key (first 4 chars) + Username concatenated<br>
+        • Example: MSO Key <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">h1i2</code> + Username <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">itptest</code> → smsCode = <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">h1i2itptest</code><br>
+        • <strong>appTypeId = 2</strong> for mobile/Flutter app<br>
+        • On <strong>success (statusCode=0)</strong>, the response contains <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">ipAddress</code> — this is the <strong>actual REST API base URL</strong> (ends with <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">/index.php/wsController</code>)<br>
+        • This returned URL is used as the base for <strong>validateLogin</strong> and all other REST endpoints<br>
+        • Empty smsCode + device IMEI = auto-login check (is this device already registered?)
+      </div>
+
+      <div style="background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.2);border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;color:var(--text-dim);line-height:1.6;">
+        <strong style="color:var(--accent);">Server-side flow (validateAuthentication.php)</strong><br>
+        <strong>1. First-time registration</strong> (smsCode + imei):<br>
+        &nbsp;&nbsp;→ Server extracts MSO Key = <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">substr(smsCode, 0, 4)</code>, Username = <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">substr(smsCode, 4)</code><br>
+        &nbsp;&nbsp;→ Looks up dealer info via MSO Key → gets parent_url (REST server)<br>
+        &nbsp;&nbsp;→ Validates employee on parent server → creates app registration → returns REST API URL in <code style="background:rgba(0,0,0,0.3);padding:2px 6px;border-radius:3px;">ipAddress</code><br>
+        <strong>2. Subsequent logins</strong> (empty smsCode + imei):<br>
+        &nbsp;&nbsp;→ Looks up employee by IMEI + appTypeId → returns stored REST API URL<br>
+        <strong>3. Response fields:</strong> statusCode, statusMessage, ipAddress, employeeId, appThemeColor, appDashboard, appLogoPath, registrationRequired, version
+      </div>
+
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>BMS Server URL</label>
+          <input id="bms-url" value="http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication" style="font-family:'Consolas',monospace;font-size:11px;">
+        </div>
+        <div class="form-group">
+          <label>MSO Key (4 chars)</label>
+          <input id="bms-msoKey" value="h1i2" placeholder="e.g. h1i2" maxlength="10">
+        </div>
+        <div class="form-group">
+          <label>Username</label>
+          <input id="bms-username" value="itptest" placeholder="e.g. itptest">
+        </div>
+        <div class="form-group">
+          <label>imei (Device ID) <span class="req">*</span></label>
+          <input id="bms-imei" placeholder="Device unique ID" value="test-device-001">
+        </div>
+        <div class="form-group">
+          <label>appTypeId</label>
+          <input id="bms-appTypeId" value="2" placeholder="2 = Mobile app">
+        </div>
+        <div class="form-group full">
+          <label>Computed smsCode <span style="color:var(--text-muted);">(auto-generated: MSO Key + Username)</span></label>
+          <input id="bms-smsCode" value="h1i2itptest" readonly style="background:rgba(99,102,241,0.1);font-family:'Consolas',monospace;">
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="callBmsRegister()">Register Device (SOAP)</button>
+        <button class="btn btn-secondary" onclick="callBmsCheck()">Check Registration (IMEI only)</button>
+      </div>
+      <div class="result-area" id="result-bmsRegister"></div>
     </div>
 
     <!-- ==================== AUTH ==================== -->
@@ -1168,6 +1232,185 @@ async function callLogin() {
 
   btn.disabled = false;
   btn.textContent = 'Send Request';
+}
+
+// ============================================================
+// BMS REGISTRATION (SOAP XML — different from REST APIs)
+// ============================================================
+function buildSoapXml(smsCode, imei, appTypeId) {
+  const bmsUrl = gv('bms-url');
+  const namespace = bmsUrl.replace('/validateAuthentication', '');
+  return `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+               xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+               xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <validateUserAuthentication xmlns="${namespace}">
+      <userInfo>
+        <smsCode>${smsCode}</smsCode>
+        <imei>${imei}</imei>
+        <appTypeId>${appTypeId}</appTypeId>
+        <imeiValidNumber>0</imeiValidNumber>
+      </userInfo>
+    </validateUserAuthentication>
+  </soap:Body>
+</soap:Envelope>`;
+}
+
+function parseSoapResponse(xml) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xml, 'text/xml');
+  const result = {};
+  const fields = ['statusCode','statusMessage','ipAddress','employeeId','appThemeColor','appDashboard','appLogoPath','registrationRequired','version'];
+  fields.forEach(tag => {
+    const el = doc.getElementsByTagName(tag)[0];
+    if (el) result[tag] = el.textContent || '';
+  });
+  return result;
+}
+
+async function sendBmsSoap(smsCode) {
+  const bmsUrl = gv('bms-url');
+  const imei = gv('bms-imei') || 'test-device-001';
+  const appTypeId = gv('bms-appTypeId') || '2';
+  const soapXml = buildSoapXml(smsCode, imei, appTypeId);
+
+  const useProxy = document.getElementById('useProxy').checked;
+  const url = useProxy
+    ? `http://localhost:3199/proxy?url=${encodeURIComponent(bmsUrl)}`
+    : bmsUrl;
+
+  const start = performance.now();
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': bmsUrl,
+      },
+      body: soapXml,
+    });
+    const elapsed = Math.round(performance.now() - start);
+    const text = await response.text();
+    const parsed = parseSoapResponse(text);
+
+    document.getElementById('statusDot').classList.add('connected');
+    document.getElementById('statusText').textContent = `BMS Connected (${elapsed}ms)`;
+
+    // If successful, show the REST API URL prominently
+    let extraInfo = '';
+    if (parsed.statusCode === '0' && parsed.ipAddress) {
+      const restUrl = parsed.ipAddress.replace('/wsController', '');
+      extraInfo = `\n\n━━━ IMPORTANT ━━━\nREST API Base URL returned by BMS:\n  ${parsed.ipAddress}\n\nUse this as the API Base URL for all REST calls:\n  ${restUrl}\n\nThis URL should be set in the "API Base URL" field above.`;
+
+      // Auto-update the API base URL
+      const baseInput = document.getElementById('baseUrlInput');
+      if (baseInput && restUrl) {
+        baseInput.value = restUrl;
+        updateBaseUrl();
+      }
+    }
+
+    return {
+      fullUrl: bmsUrl,
+      requestTime: elapsed,
+      requestPayload: { soapXml, params: { smsCode, imei, appTypeId } },
+      rawResponse: text,
+      decryptedResponse: parsed,
+      httpStatus: response.status,
+      extraInfo,
+    };
+  } catch (err) {
+    const elapsed = Math.round(performance.now() - start);
+    document.getElementById('statusDot').classList.remove('connected');
+    document.getElementById('statusText').textContent = 'BMS Connection failed';
+    return {
+      fullUrl: bmsUrl,
+      requestTime: elapsed,
+      requestPayload: { soapXml },
+      rawResponse: null,
+      decryptedResponse: null,
+      error: err.message,
+      httpStatus: null,
+    };
+  }
+}
+
+// Auto-compute smsCode when MSO Key or Username changes
+document.getElementById('bms-msoKey')?.addEventListener('input', updateSmsCode);
+document.getElementById('bms-username')?.addEventListener('input', updateSmsCode);
+function updateSmsCode() {
+  const msoKey = gv('bms-msoKey');
+  const username = gv('bms-username');
+  document.getElementById('bms-smsCode').value = msoKey + username;
+}
+
+async function callBmsRegister() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Sending SOAP...';
+
+  updateSmsCode();
+  const smsCode = gv('bms-smsCode');
+  if (!smsCode) {
+    renderBmsResult('result-bmsRegister', { error: 'MSO Key + Username are required.' });
+    btn.disabled = false;
+    btn.textContent = 'Register Device (SOAP)';
+    return;
+  }
+
+  const result = await sendBmsSoap(smsCode);
+  renderBmsResult('result-bmsRegister', result);
+
+  btn.disabled = false;
+  btn.textContent = 'Register Device (SOAP)';
+}
+
+async function callBmsCheck() {
+  const btn = event.currentTarget;
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
+  const result = await sendBmsSoap('');
+  renderBmsResult('result-bmsRegister', result);
+
+  btn.disabled = false;
+  btn.textContent = 'Check Registration (IMEI only)';
+}
+
+function renderBmsResult(containerId, data) {
+  const container = document.getElementById(containerId);
+  const { fullUrl, requestTime, requestPayload, rawResponse, decryptedResponse, error, httpStatus, extraInfo } = data;
+  const statusClass = error ? 'error' : (decryptedResponse?.statusCode === '0' ? 'success' : 'info');
+  const statusText = error ? 'ERROR' : (decryptedResponse?.statusCode === '0' ? 'SUCCESS (Registered)' : `Status: ${decryptedResponse?.statusCode || 'N/A'}`);
+
+  container.innerHTML = `
+    <div class="result-tabs">
+      <div class="result-tab active" onclick="showResultTab(this,'parsed')">Parsed Response</div>
+      <div class="result-tab" onclick="showResultTab(this,'raw')">Raw XML</div>
+      <div class="result-tab" onclick="showResultTab(this,'request')">SOAP Request</div>
+    </div>
+    <div class="result-content">
+      <div class="result-tab-content active" data-tab="parsed">
+        <pre><span class="${statusClass}">[${statusText}]</span> ${requestTime ? requestTime + 'ms' : ''} ${fullUrl || ''}
+${error ? '\n' + error : ''}
+${decryptedResponse ? JSON.stringify(decryptedResponse, null, 2) : ''}${extraInfo || ''}</pre>
+      </div>
+      <div class="result-tab-content" data-tab="raw" style="display:none">
+        <pre>${rawResponse ? rawResponse.replace(/</g,'&lt;').replace(/>/g,'&gt;') : 'No response'}</pre>
+      </div>
+      <div class="result-tab-content" data-tab="request" style="display:none">
+        <pre>${requestPayload?.soapXml ? requestPayload.soapXml.replace(/</g,'&lt;').replace(/>/g,'&gt;') : 'N/A'}</pre>
+      </div>
+    </div>`;
+}
+
+function showResultTab(tabEl, tabName) {
+  const container = tabEl.closest('.result-area');
+  container.querySelectorAll('.result-tab').forEach(t => t.classList.remove('active'));
+  container.querySelectorAll('.result-tab-content').forEach(c => c.style.display = 'none');
+  tabEl.classList.add('active');
+  container.querySelector(`[data-tab="${tabName}"]`).style.display = 'block';
 }
 </script>
 </body>

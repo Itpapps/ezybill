@@ -18,6 +18,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String password,
     String? mobileNo,
     String? imei,
+    String? employeeId,
   }) async {
     try {
       final data = await _remoteDatasource.login(
@@ -25,11 +26,12 @@ class AuthRepositoryImpl implements AuthRepository {
         password: password,
         mobileNo: mobileNo,
         imei: imei,
+        employeeId: employeeId,
       );
       final response = LoginResponse.fromJson(data);
 
-      // status_code == 1 means success for login
-      if (response.statusCode == 1 || response.token.isNotEmpty) {
+      // Per server docs: status_code == 0 means success for validateLogin.
+      if (response.statusCode == 0 && response.token.isNotEmpty) {
         // Persist session locally
         await _localDatasource.saveAuthToken(response.token);
         await _localDatasource.saveUserData(

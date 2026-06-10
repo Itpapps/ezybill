@@ -4,7 +4,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'application/providers/core_providers.dart';
 import 'application/providers/locale_provider.dart';
 import 'application/providers/theme_provider.dart';
@@ -36,13 +35,31 @@ Future<void> main() async {
 
   // Restore saved API base URL if any.
   // Priority: login_url from BMS > api_base_url manual override > default
-  final loginUrl = prefs.getString('login_url');
+  var loginUrl = prefs.getString('login_url');
   final savedUrl = prefs.getString('api_base_url');
+  debugPrint('[STARTUP] login_url="${loginUrl ?? "null"}" api_base_url="${savedUrl ?? "null"}"');
+
+  // Migration: BMS always returns URLs ending with /wsController for V1 clients.
+  // Old code stripped /wsController before storing. Fix stale values.
+  // V2 clients intentionally store WITHOUT /wsController (they use LcoRestServices).
+  final bmsVersion = prefs.getString('bms_version') ?? 'V1';
+  if (bmsVersion.toUpperCase() != 'V2' &&
+      loginUrl != null &&
+      loginUrl.isNotEmpty &&
+      loginUrl.endsWith('/index.php') &&
+      !loginUrl.endsWith('/wsController')) {
+    loginUrl = '$loginUrl/wsController';
+    debugPrint('[STARTUP] Migration (V1): re-appended /wsController → $loginUrl');
+    await prefs.setString('login_url', loginUrl);
+    await prefs.setString('api_base_url', loginUrl);
+  }
+
   if (loginUrl != null && loginUrl.isNotEmpty) {
     ApiConstants.setBaseUrl(loginUrl);
   } else if (savedUrl != null && savedUrl.isNotEmpty) {
     ApiConstants.setBaseUrl(savedUrl);
   }
+  debugPrint('[STARTUP] Final baseUrl="${ApiConstants.baseUrl}"');
 
   // Restore debug logging preference
   final debugEnabled = prefs.getBool('debug_logging_enabled') ?? false;

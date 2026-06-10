@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../core/utils/parse_utils.dart';
 import '../../data/datasources/remote/package_remote_datasource.dart';
 import '../../data/datasources/remote/stb_remote_datasource.dart';
 import '../../data/models/stb/deactivation_reason.dart';
@@ -153,6 +154,13 @@ class PackageNotifier extends Notifier<PackageState> {
     return code?.toString() == '0';
   }
 
+  int _deriveDateType(PackageModel pkg) {
+    final validity = pkg.validity.toLowerCase();
+    if (validity.contains('year')) return 2;
+    if (validity.contains('day')) return 3;
+    return 1; // month/default
+  }
+
   int _statusCode(Map<String, dynamic> resp) {
     final code = resp['status_code'] ?? resp['statusCode'];
     return int.tryParse(code?.toString() ?? '') ?? -1;
@@ -172,13 +180,8 @@ class PackageNotifier extends Notifier<PackageState> {
         .trim();
   }
 
-  List<PackageModel> _parsePackages(dynamic raw) {
-    if (raw == null) return [];
-    if (raw is! List) return [];
-    return raw
-        .map((e) => PackageModel.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
+  List<PackageModel> _parsePackages(dynamic raw) =>
+      parseList<PackageModel>(raw, PackageModel.fromJson);
 
   // ── Validity/Date Computation (Section 3.4) ─────────────────────────────
   //
@@ -383,12 +386,27 @@ class PackageNotifier extends Notifier<PackageState> {
     state = state.copyWith(
         isLoading: true, errorMessage: null, successMessage: null);
     try {
+      final selectedPkg = state.allAvailable
+          .where((p) => state.selectedIds.contains(p.packageId))
+          .firstOrNull;
+      final qty = 1;
+      final pricingType =
+          int.tryParse(selectedPkg?.pricingStructureType ?? '') ?? 1;
+      final validity = (selectedPkg?.validityDays ?? 0) > 0
+          ? selectedPkg!.validityDays
+          : 1;
+      final dateType = selectedPkg != null ? _deriveDateType(selectedPkg) : 1;
+
       final data = await _pkgDs.activateService(
         authtoken: _token,
         customerId: customerId,
         customerDeviceId: customerDeviceId,
         productId: productIds,
         stockId: stockId,
+        quantity: qty.toString(),
+        dateType: dateType.toString(),
+        pricingStructureType: pricingType.toString(),
+        validityDays: validity.toString(),
         dealerId: _dealerId.toString(),
         resellerId: resellerId ?? _employeeId.toString(),
         loginEmployeeId: _employeeId.toString(),
@@ -522,12 +540,10 @@ class PackageNotifier extends Notifier<PackageState> {
   Future<void> loadDeactivationReasons() async {
     try {
       final data = await _stbDs.getDeactivationReasons(authtoken: _token);
-      final rawList = data['reasonList'] as List? ??
-          (data['data'] as List?) ??
-          [];
-      final reasons = rawList
-          .map((e) => DeactivationReason.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final reasons = parseList<DeactivationReason>(
+        data['reasonList'] ?? data['data'],
+        DeactivationReason.fromJson,
+      );
       state = state.copyWith(deactivationReasons: reasons);
     } catch (e) {
       debugPrint('Failed to load deactivation reasons: $e');
@@ -552,12 +568,10 @@ class PackageNotifier extends Notifier<PackageState> {
       );
 
       if (_isSuccess(data)) {
-        final rawList = data['getRenewServices'] as List? ??
-            (data['data'] as List?) ??
-            [];
-        final services = rawList
-            .map((e) => PackageModel.fromJson(e as Map<String, dynamic>))
-            .toList();
+        final services = parseList<PackageModel>(
+          data['getRenewServices'] ?? data['data'],
+          PackageModel.fromJson,
+        );
         state = state.copyWith(isLoading: false, renewableServices: services);
       } else {
         state = state.copyWith(

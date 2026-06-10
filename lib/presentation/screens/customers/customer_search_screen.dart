@@ -72,6 +72,8 @@ class _CustomerSearchScreenState extends ConsumerState<CustomerSearchScreen> {
       'customerId': customer.customerId,
       'customerName': customer.customerName,
       'mobileNumber': customer.mobileNumber ?? '',
+      'address': customer.billingAddress ?? customer.installationAddress ?? '',
+      'accountNumber': customer.accountNumber ?? '',
     };
 
     switch (widget.origin) {

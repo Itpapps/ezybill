@@ -48,6 +48,7 @@ abstract class PaymentRepository {
   /// Get payment history for a customer.
   Future<Result<Map<String, dynamic>>> getPaymentHistory({
     required String customerId,
+    required int dealerId,
     String? fromDate,
     String? toDate,
   });

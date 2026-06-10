@@ -1,9 +1,11 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../application/providers/bms_provider.dart';
 import '../../../application/providers/core_providers.dart';
@@ -49,6 +51,13 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
     _fadeController.forward();
 
     _loadDeviceId();
+
+    // Request Bluetooth permissions early — only once, non-blocking
+    if (!kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _requestBluetoothPermissionsIfNeeded();
+      });
+    }
   }
 
   @override
@@ -97,29 +106,10 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
   /// Get Android ID using device_info_plus.
   Future<String?> _getAndroidId() async {
     try {
-      // ignore: depend_on_referenced_packages
-      final deviceInfo =
-          await _importDeviceInfo();
-      return deviceInfo;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Dynamic import for device_info_plus to avoid web build issues.
-  Future<String?> _importDeviceInfo() async {
-    try {
-      final plugin =
-          // ignore: depend_on_referenced_packages
-          (await Future.value(null)); // Placeholder - see note below
-      // NOTE: For production, use:
-      //   import 'package:device_info_plus/device_info_plus.dart';
-      //   final deviceInfo = DeviceInfoPlugin();
-      //   final androidInfo = await deviceInfo.androidInfo;
-      //   return androidInfo.id;
-      //
-      // For now we return null and fall back to UUID generation.
-      // The device_info_plus import should be added once the package is in pubspec.
+      final deviceInfo = DeviceInfoPlugin();
+      final androidInfo = await deviceInfo.androidInfo;
+      final id = androidInfo.id; // Android ID — stable across reinstalls
+      if (id.isNotEmpty) return id;
       return null;
     } catch (_) {
       return null;
@@ -134,7 +124,120 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
     return '$hash-$random-${now.toRadixString(16)}';
   }
 
+  // ── Bluetooth Permission Request (early, one-shot) ─────────────────────────
+
+  /// Request Bluetooth (and Location for BLE scan) permissions once at
+  /// first launch. This ensures system prompts appear early, before the user
+  /// tries to use the printer, providing a smooth UX.
+  ///
+  /// Uses SharedPreferences flag [_kBtPermRequested] so we only ask once.
+  static const String _kBtPermRequested = 'bt_permissions_requested';
+
+  Future<void> _requestBluetoothPermissionsIfNeeded() async {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      final alreadyRequested = prefs.getBool(_kBtPermRequested) ?? false;
+      if (alreadyRequested) return;
+
+      // Mark as requested immediately so we don't repeat on orientation change
+      await prefs.setBool(_kBtPermRequested, true);
+
+      // Wait a moment for the registration UI to fully render
+      await Future<void>.delayed(const Duration(milliseconds: 800));
+      if (!mounted) return;
+
+      // Request all Bluetooth-related permissions
+      final statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.locationWhenInUse,
+      ].request();
+
+      debugPrint('[BT Perm] Results: $statuses');
+      if (!mounted) return;
+
+      // Check if any are permanently denied — show a gentle info dialog
+      final permanentlyDenied = statuses.values
+          .any((s) => s == PermissionStatus.permanentlyDenied);
+
+      if (permanentlyDenied) {
+        _showBtPermInfoDialog();
+      }
+    } catch (e) {
+      // Never crash on permission failure — log and continue
+      debugPrint('[BT Perm] Error requesting permissions: $e');
+    }
+  }
+
+  /// Shows a gentle, dismissible dialog when Bluetooth permissions are
+  /// permanently denied. Does NOT block registration or app usage.
+  void _showBtPermInfoDialog() {
+    if (!mounted) return;
+    final colors = Theme.of(context).extension<AppColors>()!;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        backgroundColor: colors.card,
+        icon: Icon(LucideIcons.bluetooth, color: colors.red, size: 28),
+        title: Text(
+          'Bluetooth Permission',
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            color: colors.ink,
+          ),
+        ),
+        content: Text(
+          'To use the thermal printer for receipts, please allow Bluetooth '
+          'access via App Settings → Permissions → Bluetooth.',
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 14,
+            color: colors.ink60,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              'Later',
+              style: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                color: colors.ink40,
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.red,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: const Text(
+              'Open Settings',
+              style: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Connectivity Check ─────────────────────────────────────────────────────
+
 
   Future<bool> _isConnected() async {
     try {

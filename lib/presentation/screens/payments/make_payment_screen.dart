@@ -46,6 +46,10 @@ class _MakePaymentScreenState extends ConsumerState<MakePaymentScreen> {
   @override
   void initState() {
     super.initState();
+    if(widget.initialPendingAmount !=null &&
+    widget.initialPendingAmount! >0){
+      _amountController.text = widget.initialPendingAmount!.toStringAsFixed(2);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkPaymentBlocked();
       _initializeData();
@@ -742,11 +746,20 @@ class _MakePaymentScreenState extends ConsumerState<MakePaymentScreen> {
     final isAutoReceiptOn = session?.autoReceiptNumber != 0;
 
     // Pre-fill amount when useLcoDeposit == 1 and pending is loaded
-    if (isLcoDeposit &&
-        payState.pendingAmount != null &&
-        _amountController.text.isEmpty) {
-      _amountController.text =
+    if (payState.pendingAmount != null) {
+      final serverAmt =
           payState.pendingAmount!.pendingAmount.toStringAsFixed(2);
+          if(isLcoDeposit){
+            if(_amountController.text !=serverAmt){
+              _amountController.text = serverAmt;
+            }
+          }else{
+            final initialText = widget.initialPendingAmount?.toStringAsFixed(2) ?? '';
+            if(_amountController.text.isEmpty ||
+            _amountController.text == initialText){
+              _amountController.text = serverAmt;
+            }
+          }
     }
 
     // Listen for errors from provider

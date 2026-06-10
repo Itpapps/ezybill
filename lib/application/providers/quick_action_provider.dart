@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/parse_utils.dart';
 import '../../data/datasources/remote/customer_remote_datasource.dart';
 import '../../data/datasources/remote/package_remote_datasource.dart';
 import '../../data/datasources/remote/stb_remote_datasource.dart';
@@ -66,8 +67,10 @@ class QuickActionState {
   final String? actionResult;
   final bool actionSuccess;
 
-  // Whether we have a loaded result
-  bool get hasResult => customerId != null && customerId!.isNotEmpty;
+  // Whether we have a loaded result (customer found OR fresh STB detected)
+  bool get hasResult =>
+      (customerId != null && customerId!.isNotEmpty) ||
+      stbStatus == 'FRESH';
 
   const QuickActionState({
     this.isSearching = false,
@@ -244,9 +247,38 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
         endValue: 1,
       );
 
-      final customerList = (customerData['customerDetailsList'] ??
-              customerData['existCustomerDetails']) as List?;
-      if (customerList == null || customerList.isEmpty) {
+      // parseMapList handles REST array, PHP indexed Map {"0":{...}}, and
+      // SOAP bare Map {customer_id:1413,...} — all normalised to List<Map>.
+      final rawCustList = customerData['customerDetailsList'] ??
+          customerData['existCustomerDetails'];
+      final customerList = parseMapList(rawCustList);
+      if (customerList.isEmpty) {
+        // ── No customer found — check if this is a truly fresh (unregistered)
+        // box by calling validateBoxInfoRest. This covers the case where the
+        // STB exists in stock but has never had a customer assigned.
+        if (state.searchField == QuickSearchField.stbNo ||
+            state.searchField == QuickSearchField.vcNo) {
+          try {
+            final boxResult = await _stbDs.validateBoxInfo(
+              authtoken: _token,
+              boxNumber: trimmed,
+            );
+            final boxCode =
+                (boxResult['statusCode'] ?? boxResult['status_code'])?.toString();
+            if (boxCode == '0') {
+              // Box is valid and unassigned — show as FRESH
+              state = QuickActionState(
+                searchField: state.searchField,
+                serialNumber: trimmed,
+                vcNumber: trimmed,
+                stbStatus: 'FRESH',
+              );
+              return;
+            }
+          } catch (_) {
+            // validateBoxInfoRest failed — fall through to generic error
+          }
+        }
         state = QuickActionState(
           error: 'No customer found for "$trimmed"',
           searchField: state.searchField,
@@ -277,8 +309,8 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
         customerId: custId,
       );
 
-      final boxList = (boxData['customerBoxList'] ?? boxData['data']) as List?;
-      if (boxList == null || boxList.isEmpty) {
+      final boxList = parseMapList(boxData['customerBoxList'] ?? boxData['data']);
+      if (boxList.isEmpty) {
         // Customer exists but has no boxes (FRESH customer)
         state = QuickActionState(
           searchField: state.searchField,

@@ -287,42 +287,51 @@ class _CustomerFilterListState extends ConsumerState<CustomerFilterList> {
                         ),
                       )),
 
-                  // Loading more indicator
-                  if (listState.isLoadingMore)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-
-                  // Load more
-                  if (listState.hasMore && !listState.isLoadingMore)
-                    GestureDetector(
-                      onTap: () => ref
-                          .read(dashboardCustomerListProvider.notifier)
-                          .loadMore(),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.border),
-                        ),
-                        child: const Center(
-                          child: Text(
-                            'Load More',
-                            style: TextStyle(
-                              fontFamily: 'DM Sans',
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                  // Pager
+                  if (listState.pageCount > 1)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      child: Row(
+                        children: [
+                          _pagerNav(
+                            label: '‹',
+                            enabled: listState.currentPage > 1,
+                            onTap: () => ref
+                                .read(dashboardCustomerListProvider.notifier)
+                                .goToPage(listState.currentPage - 1),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  for (final p in _visiblePages(
+                                    listState.currentPage,
+                                    listState.pageCount,
+                                  )) ...[
+                                    _pageChip(
+                                      page: p,
+                                      selected: p == listState.currentPage,
+                                      onTap: () => ref
+                                          .read(dashboardCustomerListProvider.notifier)
+                                          .goToPage(p),
+                                    ),
+                                    const SizedBox(width: 6),
+                                  ],
+                                ],
+                              ),
                             ),
                           ),
-                        ),
+                          const SizedBox(width: 6),
+                          _pagerNav(
+                            label: '›',
+                            enabled: listState.currentPage < listState.pageCount,
+                            onTap: () => ref
+                                .read(dashboardCustomerListProvider.notifier)
+                                .goToPage(listState.currentPage + 1),
+                          ),
+                        ],
                       ),
                     ),
                 ],
@@ -398,6 +407,83 @@ class _CustomerFilterListState extends ConsumerState<CustomerFilterList> {
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
             borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static List<int> _visiblePages(int current, int pageCount) {
+    const window = 9;
+    if (pageCount <= window) {
+      return List<int>.generate(pageCount, (i) => i + 1);
+    }
+    final half = window ~/ 2;
+    var start = current - half;
+    var end = current + half;
+    if (start < 1) {
+      start = 1;
+      end = window;
+    }
+    if (end > pageCount) {
+      end = pageCount;
+      start = pageCount - window + 1;
+    }
+    return [for (var p = start; p <= end; p++) p];
+  }
+
+  static Widget _pageChip({
+    required int page,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? AppColors.primary : AppColors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? AppColors.primary : AppColors.border),
+        ),
+        child: Text(
+          '$page',
+          style: const TextStyle(
+            fontFamily: 'DM Sans',
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ).copyWith(color: selected ? Colors.white : AppColors.textMuted),
+        ),
+      ),
+    );
+  }
+
+  static Widget _pagerNav({
+    required String label,
+    required bool enabled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 34,
+        height: 34,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: enabled ? AppColors.white : AppColors.background,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'DM Sans',
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: enabled ? AppColors.textMuted : AppColors.border,
           ),
         ),
       ),
@@ -643,7 +729,12 @@ class _CompactCustomerCard extends StatelessWidget {
               bgColor: AppColors.primaryLight,
               onTap: () => context.push(
                 RouteNames.makePayment,
-                extra: {'customerId': customerId, 'customerName': name},
+                extra: {
+                  'customerId': customerId,
+                  'customerName': name,
+                  'address': customer.billingAddress ?? customer.installationAddress ?? '',
+                  'accountNumber': acct,
+                },
               ),
             ),
             const SizedBox(width: 6),

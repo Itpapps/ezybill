@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -34,9 +33,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   AppLocalizations get l => AppLocalizations.of(context)!;
 
   final _formKey = GlobalKey<FormState>();
-  // Pre-filled for testing — remove in production
-  final _usernameController = TextEditingController(text: 'itptest');
-  final _passwordController = TextEditingController(text: '1234');
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _usernameFocus = FocusNode();
   final _passwordFocus = FocusNode();
 
@@ -79,30 +77,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final prefs = ref.read(sharedPreferencesProvider);
     final remembered = prefs.getBool(_kRememberMeKey) ?? false;
     final savedUsername = prefs.getString(_kSavedUsernameKey) ?? '';
-    final savedPassword = prefs.getString('remember_me_password') ?? '';
 
     if (remembered && savedUsername.isNotEmpty) {
       setState(() {
         _rememberMe = true;
         _usernameController.text = savedUsername;
-        if (savedPassword.isNotEmpty) {
-          _passwordController.text = savedPassword;
-        }
       });
-
-      // On web, auto-login if both username and password are saved
-      // Call auth provider directly — bypass form validation which may
-      // not be ready yet
-      if (kIsWeb && savedPassword.isNotEmpty) {
-        Future.delayed(const Duration(milliseconds: 1000), () {
-          if (mounted) {
-            ref.read(authProvider.notifier).login(
-                  username: savedUsername,
-                  password: savedPassword,
-                );
-          }
-        });
-      }
     }
   }
 
@@ -112,11 +92,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       await prefs.setBool(_kRememberMeKey, true);
       await prefs.setString(
           _kSavedUsernameKey, _usernameController.text.trim());
-      // Save password too for web auto-login
-      if (kIsWeb) {
-        await prefs.setString(
-            'remember_me_password', _passwordController.text);
-      }
     } else {
       await prefs.remove(_kRememberMeKey);
       await prefs.remove(_kSavedUsernameKey);

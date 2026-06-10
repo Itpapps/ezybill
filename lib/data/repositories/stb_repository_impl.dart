@@ -147,14 +147,12 @@ class StbRepositoryImpl implements StbRepository {
 
   @override
   Future<Result<Map<String, dynamic>>> validateBoxInfo({
-    required String stbNo,
-    required String vcNo,
+    required String boxNumber,
   }) async {
     try {
       final data = await _remoteDatasource.validateBoxInfo(
         authtoken: _authtoken,
-        stbNo: stbNo,
-        vcNo: vcNo,
+        boxNumber: boxNumber,
       );
       return Success(data);
     } on ApiException catch (e) {

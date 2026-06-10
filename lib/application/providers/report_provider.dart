@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/parse_utils.dart';
 import '../../data/datasources/remote/report_remote_datasource.dart';
 import '../../data/models/report/emp_collection_detail.dart';
 import '../../data/models/report/emp_collection_summary.dart';
@@ -100,12 +101,10 @@ class ReportNotifier extends Notifier<ReportState> {
       );
       result.when(
         success: (data) {
-          final rawList =
-              (data['Dailyreport_details'] as List<dynamic>?) ?? [];
-          final rows = rawList
-              .map((e) =>
-                  MiniDayReportRow.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final rows = parseList<MiniDayReportRow>(
+            data['Dailyreport_details'],
+            MiniDayReportRow.fromJson,
+          );
           state = state.copyWith(isDailyLoading: false, miniDayReport: rows);
         },
         failure: (message, _) {
@@ -133,12 +132,10 @@ class ReportNotifier extends Notifier<ReportState> {
       );
       result.when(
         success: (data) {
-          final rawList =
-              (data['collectionList'] as List<dynamic>?) ?? (data['collResultList'] as List<dynamic>?) ?? [];
-          final summaries = rawList
-              .map((e) =>
-                  EmpCollectionSummary.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final summaries = parseList<EmpCollectionSummary>(
+            data['collectionList'] ?? data['collResultList'],
+            EmpCollectionSummary.fromJson,
+          );
           state = state.copyWith(
             isCollectionLoading: false,
             empCollectionSummary: summaries,
@@ -177,12 +174,10 @@ class ReportNotifier extends Notifier<ReportState> {
       );
       result.when(
         success: (data) {
-          final rawList =
-              (data['collectionList'] as List<dynamic>?) ?? (data['collResultList'] as List<dynamic>?) ?? [];
-          final details = rawList
-              .map((e) =>
-                  EmpCollectionDetail.fromJson(e as Map<String, dynamic>))
-              .toList();
+          final details = parseList<EmpCollectionDetail>(
+            data['collectionList'] ?? data['collResultList'],
+            EmpCollectionDetail.fromJson,
+          );
           state = state.copyWith(
             isDetailLoading: false,
             empCollectionDetails: details,

@@ -136,6 +136,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
   @override
   Future<Result<Map<String, dynamic>>> getPaymentHistory({
     required String customerId,
+    required int dealerId,
     String? fromDate,
     String? toDate,
   }) async {
@@ -143,6 +144,7 @@ class PaymentRepositoryImpl implements PaymentRepository {
       final data = await _remoteDatasource.getPaymentHistory(
         authtoken: _authtoken,
         customerId: customerId,
+        dealerId: dealerId,
         fromDate: fromDate,
         toDate: toDate,
       );

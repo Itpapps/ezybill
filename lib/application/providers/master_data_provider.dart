@@ -234,13 +234,53 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
     T Function(Map<String, dynamic>) fromJson,
     List<String> possibleKeys,
   ) {
+    List<T> parseRawList(List raw) {
+      final items = <T>[];
+      for (final item in raw) {
+        if (item is Map) {
+          items.add(
+            fromJson(
+              item.map((k, v) => MapEntry(k.toString(), v)),
+            ),
+          );
+        }
+      }
+      return items;
+    }
+
+    // Also handles PHP-style JSON object: {"0":{...},"1":{...}} from json_encode
+    List<T> parseMapAsList(Map raw) {
+      final values = raw.values.toList();
+      return parseRawList(values);
+    }
+
     for (final key in possibleKeys) {
       final raw = data[key];
       if (raw is List && raw.isNotEmpty) {
-        return raw
-            .whereType<Map<String, dynamic>>()
-            .map((e) => fromJson(e))
-            .toList();
+        final items = parseRawList(raw);
+        if (items.isNotEmpty) return items;
+      }
+      // PHP json_encode of non-sequential array → JSON object, not array
+      if (raw is Map && raw.isNotEmpty) {
+        final items = parseMapAsList(raw);
+        if (items.isNotEmpty) return items;
+      }
+    }
+
+    for (final value in data.values) {
+      if (value is Map<String, dynamic>) {
+        final nested = _parseList(value, fromJson, possibleKeys);
+        if (nested.isNotEmpty) return nested;
+      } else if (value is Map) {
+        final nested = _parseList(
+          value.map((k, v) => MapEntry(k.toString(), v)),
+          fromJson,
+          possibleKeys,
+        );
+        if (nested.isNotEmpty) return nested;
+      } else if (value is List && value.isNotEmpty) {
+        final items = parseRawList(value);
+        if (items.isNotEmpty) return items;
       }
     }
     return [];
@@ -336,7 +376,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
       final list = _parseList(
         data,
         District.fromJson,
-        ['districtsList', 'districts', 'data'],
+        ['districtList', 'districtsList', 'districts', 'data'],
       );
       state = state.copyWith(isLoadingDistricts: false, districts: list);
     } catch (e) {
@@ -356,33 +396,61 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
       mandals: const [],
     );
     if (district != null) {
-      // Load cities and mandals in parallel
-      loadCities(district.stateId.toString(), district.id.toString());
+      final stateId = state.selectedState?.id.toString() ?? '';
+      if (stateId.isNotEmpty) {
+        loadCities(stateId, district.id.toString());
+      }
       loadMandals(district.id.toString());
     }
   }
 
   // ── Cities ───────────────────────────────────────────────────────────────
 
-  Future<void> loadCities(String stateId, String districtId) async {
+  /// Loads LCO-mapped cities via getCitiesRest.
+  /// These IDs come from eb_location_lco_mapping → eb_location_locations
+  /// and are what the new_customer_validation workflow accepts.
+  Future<void> loadCities(
+    String stateId,
+    String districtId, {
+    String boxNumber = '',
+  }) async {
+    if (stateId.isEmpty || stateId == '0') {
+      print('[CITIES] No state — clearing');
+      state = state.copyWith(isLoadingCities: false, cities: const []);
+      return;
+    }
     state = state.copyWith(isLoadingCities: true, clearError: true);
     try {
+      final effectiveBox = boxNumber.isNotEmpty ? boxNumber : 'NONE';
+      print('[CITIES] getCitiesRest stateId=$stateId boxNumber=$effectiveBox');
       final data = await _remoteDs.getCities(
         authtoken: _token(),
         stateId: stateId,
         districtId: districtId,
+        boxNumber: effectiveBox,
       );
-      final list = _parseList(
-        data,
-        City.fromJson,
-        ['locationList', 'citiesList', 'cities', 'data'],
-      );
-      state = state.copyWith(isLoadingCities: false, cities: list);
+
+      // Log raw response to debug ID mapping
+      for (final key in ['citiesList', 'cities', 'data']) {
+        if (data.containsKey(key) && data[key] is List && (data[key] as List).isNotEmpty) {
+          final first = (data[key] as List).first;
+          print('[CITIES-RAW] key=$key, first item keys: ${first is Map ? first.keys.toList() : "not a map"}');
+          print('[CITIES-RAW] first item: $first');
+          break;
+        }
+      }
+
+      final cities = (data['status_code'] == 1 || data['status_code'] == '1')
+          ? <City>[]
+          : _parseList(data, City.fromJson, ['citiesList', 'cities', 'data'])
+              .where((c) => c.locationId > 0)
+              .toList();
+
+      print('[CITIES-LOADED] ${cities.length} LCO cities: ${cities.map((c) => '${c.locationId}/${c.locationName}').join(', ')}');
+      state = state.copyWith(isLoadingCities: false, cities: cities);
     } catch (e) {
-      state = state.copyWith(
-        isLoadingCities: false,
-        errorMessage: e.toString(),
-      );
+      print('[CITIES-ERROR] $e');
+      state = state.copyWith(isLoadingCities: false, errorMessage: e.toString());
     }
   }
 
@@ -392,18 +460,120 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
 
   // ── Mandals ──────────────────────────────────────────────────────────────
 
-  Future<void> loadMandals(String districtId) async {
+  Future<void> loadMandals(
+    String districtId, {
+    String stateId = '',
+    String boxNumber = '',
+    String serialNumber = '',
+  }) async {
     state = state.copyWith(isLoadingMandals: true, clearError: true);
     try {
       final data = await _remoteDs.getMandals(
         authtoken: _token(),
         districtId: districtId,
+        boxNumber: boxNumber,
+        serialNumber: serialNumber,
       );
-      final list = _parseList(
+      var list = _parseList(
         data,
         Mandal.fromJson,
-        ['mandalsList', 'mandals', 'data'],
+        ['mandalList', 'mandalsList', 'mandals', 'data', 'districtLocationsList'],
       );
+      // Some deployments return mandals only as part of locations-of-district.
+      if (list.isEmpty) {
+        final locData = await _remoteDs.getLocationsOfDistrict(
+          authtoken: _token(),
+          districtId: districtId,
+        );
+        list = _parseList(
+          locData,
+          Mandal.fromJson,
+          [
+            'districtLocationsList',
+            'districtlocationsList',
+            'district_locations_list',
+            'locationList',
+            'locationsList',
+            'mandalList',
+            'mandalsList',
+            'mandals',
+            'data',
+          ],
+        );
+        if (list.isEmpty) {
+          final raw = (locData['districtLocationsList'] as List?) ??
+              (locData['locationList'] as List?) ??
+              (locData['data'] as List?) ??
+              const [];
+          final seen = <int>{};
+          final derived = <Mandal>[];
+          for (final item in raw) {
+            if (item is! Map) continue;
+            final normalized = item.map((k, v) => MapEntry(k.toString(), v));
+            final idRaw =
+                normalized['mandal_id'] ??
+                normalized['mandalId'] ??
+                normalized['mandalid'] ??
+                normalized['location_id'] ??
+                normalized['locationId'];
+            final id = int.tryParse(idRaw?.toString() ?? '') ?? 0;
+            if (id <= 0 || seen.contains(id)) continue;
+            seen.add(id);
+            derived.add(
+              Mandal.fromJson({
+                'district_id': districtId,
+                'mandal_id': id,
+                'mandal_name':
+                    normalized['mandal_name'] ??
+                    normalized['mandalName'] ??
+                    normalized['mandal'] ??
+                    normalized['location_name'] ??
+                    normalized['locationName'] ??
+                    normalized['name'] ??
+                    '',
+              }),
+            );
+          }
+          if (derived.isNotEmpty) list = derived;
+        }
+      }
+      // Some deployments expose locality-style mandals only through city/location data.
+      if (list.isEmpty && stateId.trim().isNotEmpty) {
+        final cityData = await _remoteDs.getCities(
+          authtoken: _token(),
+          stateId: stateId,
+          districtId: districtId,
+          boxNumber: boxNumber,
+        );
+        final cities = _parseList(
+          cityData,
+          City.fromJson,
+          [
+            'districtLocationsList',
+            'districtlocationsList',
+            'district_locations_list',
+            'locationList',
+            'locationsList',
+            'citiesList',
+            'cities',
+            'data',
+          ],
+        );
+        if (cities.isNotEmpty) {
+          final seen = <int>{};
+          list = cities
+              .where((city) => city.locationId > 0 && city.locationName.trim().isNotEmpty)
+              .where((city) => seen.add(city.locationId))
+              .map(
+                (city) => Mandal(
+                  districtId: int.tryParse(districtId) ?? 0,
+                  mandalId: city.locationId,
+                  mandalName: city.locationName.trim(),
+                ),
+              )
+              .toList();
+        }
+      }
       state = state.copyWith(isLoadingMandals: false, mandals: list);
     } catch (e) {
       state = state.copyWith(
@@ -417,20 +587,89 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
     state = state.copyWith(selectedMandal: mandal);
   }
 
+  /// Loads cities filtered by mandal when one is selected.
+  /// - No mandal  → loadCities (getCitiesRest = LCO-mapped cities)
+  /// - Mandal set → getLocationsOfDistrictRest filtered by mandal_id (per Java app)
+  Future<void> loadCitiesForMandal({
+    required String districtId,
+    required String mandalId,
+    String boxNumber = '',
+  }) async {
+    final isMandalSelected = mandalId.isNotEmpty && mandalId != '0';
+    if (!isMandalSelected) {
+      final stateId = state.selectedState?.id.toString() ?? '';
+      print('[CITIES-MANDAL] No mandal → loadCities (LCO-mapped cities)');
+      await loadCities(stateId, districtId, boxNumber: boxNumber);
+      return;
+    }
+
+    print('[CITIES-MANDAL] mandal=$mandalId → getLocationsOfDistrictRest filtered');
+    state = state.copyWith(isLoadingCities: true, clearError: true);
+    try {
+      final data = await _remoteDs.getLocationsOfDistrict(
+        authtoken: _token(),
+        districtId: districtId,
+      );
+
+      // Extract raw list so we can filter by mandal_id before conversion.
+      List<dynamic> rawItems = [];
+      for (final key in ['districtLocationsList', 'locationsList', 'locationList', 'data']) {
+        if (!data.containsKey(key)) continue;
+        final v = data[key];
+        if (v is List) { rawItems = v; break; }
+        if (v is Map)  { rawItems = v.values.toList(); break; }
+      }
+      print('[CITIES-MANDAL] total district locations: ${rawItems.length}');
+
+      // Filter by mandal_id — also include mandal_id=0 (unassigned cities, per Java app logic)
+      final filtered = rawItems.where((item) {
+        if (item is! Map) return false;
+        final mid = (item['mandal_id'] ?? item['mandalId'] ?? item['mandalid'] ?? '').toString().trim();
+        return mid == mandalId || mid == '0';
+      }).toList();
+      print('[CITIES-MANDAL] after mandal_id=$mandalId (incl. 0) filter: ${filtered.length}');
+
+      City fromRaw(dynamic m) =>
+          City.fromJson((m as Map).map((k, v) => MapEntry(k.toString(), v)));
+
+      var cities = filtered.map(fromRaw).where((c) => c.locationId > 0).toList();
+      if (cities.isEmpty) {
+        print('[CITIES-MANDAL] ⚠️ mandal filter empty — showing all district cities');
+        cities = rawItems.map(fromRaw).where((c) => c.locationId > 0).toList();
+      }
+
+      print('[CITIES-MANDAL-LOADED] ${cities.length} cities');
+      state = state.copyWith(isLoadingCities: false, cities: cities);
+    } catch (e) {
+      print('[CITIES-MANDAL-ERROR] $e');
+      state = state.copyWith(isLoadingCities: false, errorMessage: e.toString());
+    }
+  }
+
   // ── Groups ───────────────────────────────────────────────────────────────
 
-  Future<void> loadGroups() async {
+  Future<void> loadGroups({String serialNumber = ''}) async {
     if (_groupsLoaded && state.groups.isNotEmpty) return;
     state = state.copyWith(isLoadingGroups: true, clearError: true);
     try {
-      final data = await _remoteDs.getGroups(authtoken: _token());
+      final data = await _remoteDs.getGroups(
+        authtoken: _token(),
+        serialNumber: serialNumber,
+      );
       final list = _parseList(
         data,
         GroupModel.fromJson,
-        ['groupsList', 'groups', 'data'],
+        ['groupsList', 'groupList', 'groups', 'data'],
       );
       _groupsLoaded = true;
-      state = state.copyWith(isLoadingGroups: false, groups: list);
+      // Old app behavior: many logins have exactly one group; auto-select it.
+      final shouldAutoSelect =
+          list.length == 1 && state.selectedGroup == null;
+      state = state.copyWith(
+        isLoadingGroups: false,
+        groups: list,
+        selectedGroup: shouldAutoSelect ? list.first : state.selectedGroup,
+      );
     } catch (e) {
       state = state.copyWith(
         isLoadingGroups: false,
@@ -453,7 +692,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
       final list = _parseList(
         data,
         CustomerType.fromJson,
-        ['customerTypesList', 'customerTypes', 'data'],
+        ['customerTypeList', 'customerTypesList', 'customerTypes', 'data'],
       );
       _customerTypesLoaded = true;
       state = state.copyWith(isLoadingCustomerTypes: false, customerTypes: list);
@@ -479,7 +718,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
       final list = _parseList(
         data,
         IdType.fromJson,
-        ['idTypesList', 'idTypes', 'ids', 'data'],
+        ['idList', 'idTypesList', 'idTypes', 'ids', 'data'],
       );
       _idTypesLoaded = true;
       state = state.copyWith(isLoadingIdTypes: false, idTypes: list);
@@ -574,14 +813,11 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
                 await Future.delayed(const Duration(milliseconds: 300));
                 await _waitForCities();
 
-                if (session.defaultCity != null && state.cities.isNotEmpty) {
-                  final cMatch = state.cities.where(
-                    (c) => c.locationId == session.defaultCity,
-                  );
-                  if (cMatch.isNotEmpty) {
-                    selectCity(cMatch.first);
-                  }
-                }
+                // City auto-selection is intentionally disabled.
+                // session.defaultCity comes from getLovValue('DEFAULT_CITY', dealerId)
+                // which is a dealer-level LOV default (often location_id=1) and is
+                // NOT the same as the employee's LCO-mapped city. Auto-selecting it
+                // causes 'Invalid City' from saveCustomerRest. User must pick manually.
               }
             }
           }

@@ -141,15 +141,13 @@ class StbRemoteDatasource {
   /// Validate box info (for pairing)
   Future<Map<String, dynamic>> validateBoxInfo({
     required String authtoken,
-    required String stbNo,
-    required String vcNo,
+    required String boxNumber,
   }) async {
     final response = await _dio.post(
       ApiConstants.validateBoxInfo,
       data: {
         'authtoken': authtoken,
-        'stb_no': stbNo,
-        'vc_no': vcNo,
+        'boxNumber': boxNumber,
       },
     );
     return response.data as Map<String, dynamic>;

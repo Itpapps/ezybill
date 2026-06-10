@@ -6,13 +6,18 @@ part 'pg_transaction.g.dart';
 @freezed
 sealed class PgTransaction with _$PgTransaction {
   const factory PgTransaction({
-    @JsonKey(name: 'transactionId') @Default('') String transactionId,
-    @JsonKey(name: 'customerId') @Default('') String customerId,
+    // Server key: 'transactionno' (both V1 customerRestservices and V2 LcoRestServices)
+    @JsonKey(name: 'transactionno') @Default('') String transactionId,
+    // Server key: 'code' (customer account code in the PG record)
+    @JsonKey(name: 'code') @Default('') String customerId,
     @JsonKey(name: 'amount') @Default(0.0) double amount,
     @JsonKey(name: 'status') @Default('') String status,
-    @JsonKey(name: 'gateway') @Default('') String gateway,
-    @JsonKey(name: 'orderId') @Default('') String orderId,
-    @JsonKey(name: 'transactionDate') @Default('') String transactionDate,
+    // Server key: 'displayname' (payment gateway display name, e.g. "Razorpay")
+    @JsonKey(name: 'displayname') @Default('') String gateway,
+    // Server key: 'transaction_id' (gateway-assigned external transaction ID)
+    @JsonKey(name: 'transaction_id') @Default('') String orderId,
+    // Server key: 'paydate' (payment date)
+    @JsonKey(name: 'paydate') @Default('') String transactionDate,
   }) = _PgTransaction;
 
   factory PgTransaction.fromJson(Map<String, dynamic> json) =>

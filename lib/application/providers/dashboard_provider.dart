@@ -28,6 +28,8 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
 // ── Dashboard State ──────────────────────────────────────────────────────────
 
 class DashboardState {
+  static const _noError = Object();
+
   final bool isLoading;
   final String? errorMessage;
   final DashboardResponse? dashboard;
@@ -46,9 +48,11 @@ class DashboardState {
     this.walletHistoryLoading = false,
   });
 
+  /// [errorMessage] uses a sentinel so callers that omit it preserve the
+  /// existing value.  Pass `null` explicitly to clear an error.
   DashboardState copyWith({
     bool? isLoading,
-    String? errorMessage,
+    Object? errorMessage = _noError,
     DashboardResponse? dashboard,
     WalletResponse? wallet,
     ExpiryServicesResponse? expiryServices,
@@ -57,7 +61,9 @@ class DashboardState {
   }) {
     return DashboardState(
       isLoading: isLoading ?? this.isLoading,
-      errorMessage: errorMessage,
+      errorMessage: identical(errorMessage, _noError)
+          ? this.errorMessage
+          : errorMessage as String?,
       dashboard: dashboard ?? this.dashboard,
       wallet: wallet ?? this.wallet,
       expiryServices: expiryServices ?? this.expiryServices,
@@ -179,7 +185,7 @@ class DashboardNotifier extends Notifier<DashboardState> {
 
     // Wallet — only when showWallet is true
     if (session.showWallet) {
-      futures.add(_loadWallet());
+      futures.add(_loadWallet(session.dealerId));
     }
 
     // Expiry services
@@ -188,14 +194,15 @@ class DashboardNotifier extends Notifier<DashboardState> {
     await Future.wait(futures);
   }
 
-  Future<void> _loadWallet() async {
-    final result = await _repo.getLcoDepositAmount();
+  Future<void> _loadWallet(int dealerId) async {
+    final result = await _repo.getLcoDepositAmount(dealerId: dealerId);
     switch (result) {
       case Success(:final data):
         state = state.copyWith(wallet: data);
         debugPrint('[DASHBOARD] Wallet balance: ${data.lcoDepositAmount}');
       case Failure(:final message):
         debugPrint('[DASHBOARD] Wallet error: $message');
+        // Preserve existing dashboard error
     }
   }
 
@@ -211,6 +218,7 @@ class DashboardNotifier extends Notifier<DashboardState> {
         );
       case Failure(:final message):
         debugPrint('[DASHBOARD] Expiry error: $message');
+        // Preserve existing dashboard error
     }
   }
 

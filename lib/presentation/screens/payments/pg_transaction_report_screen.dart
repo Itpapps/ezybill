@@ -8,6 +8,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
+import '../../../core/utils/parse_utils.dart';
 import '../../../data/models/payment/pg_transaction.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,10 +54,10 @@ class _PgTransactionNotifier extends Notifier<_PgTransactionState> {
         dealerId: session?.dealerId ?? 0,
         paymentStatus: paymentStatus,
       );
-      final list = (data['transactionList'] as List<dynamic>?)
-              ?.map((e) => PgTransaction.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final list = parseList<PgTransaction>(
+        data['paymentresult'],
+        PgTransaction.fromJson,
+      );
       state = state.copyWith(isLoading: false, items: list);
     } catch (e) {
       state = state.copyWith(

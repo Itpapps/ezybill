@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,7 +10,9 @@ import '../../../application/providers/master_data_provider.dart';
 import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/validators.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../data/datasources/remote/customer_remote_datasource.dart';
+import '../../../data/datasources/remote/master_data_remote_datasource.dart';
 import '../../../data/datasources/remote/package_remote_datasource.dart';
 import '../../../data/datasources/remote/stb_remote_datasource.dart';
 import '../../../data/models/master_data/city.dart';
@@ -60,6 +63,8 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   bool _stbVerifying = false;
   String? _stbError;
   Map<String, dynamic>? _stbInfo;
+  // resellerId from validateBoxInfoRest — sent in saveCustomerRest payload
+  String _stbResellerId = '';
 
   // ── Step 2: Customer Form ──────────────────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
@@ -90,10 +95,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   // CustomerTypeTypes sub-selection for useMandatoryForHotel
   String? _selectedCustTypeTypes;
   final List<String> _custTypeTypesList = [];
+  final Map<String, String> _custTypeTypesIdByName = {};
 
   // ── Step 3: Package ────────────────────────────────────────────────────────
   CasPackage? _selectedPackage;
-  int _cycle = 2; // 1=Year, 2=Month, 3=Day
+  int _cycle = 1; // Month=1, Year=2, Day=3
   int _quantity = 1;
   int _validityDays = 30;
 
@@ -116,6 +122,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     if (widget.prefilledSerial != null && widget.prefilledSerial!.isNotEmpty) {
       _stbController.text = widget.prefilledSerial!;
       _stbVerified = true; // Skip verification for pre-filled fresh boxes
+      // Resolve resellerId: use session.dealerId as default for pre-filled boxes
+      final session = ref.read(appSessionProvider);
+      _stbResellerId = (session?.dealerId ?? 0).toString();
     }
     if (widget.prefilledVc != null && widget.prefilledVc!.isNotEmpty) {
       _vcController.text = widget.prefilledVc!;
@@ -195,6 +204,70 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     if (_currentStep < 3) _goToStep(_currentStep + 1);
   }
 
+  bool get _hasVc => _vcController.text.trim().isNotEmpty;
+
+  int _dateTypeFromCycle(int cycle) {
+    // Android contract: Month=1, Year=2, Day=3
+    if (cycle == 2) return 2;
+    if (cycle == 3) return 3;
+    return 1;
+  }
+
+  Future<void> _loadCustomerTypeTypes(CustomerType? customerType) async {
+    if (customerType == null) {
+      setState(() {
+        _selectedCustTypeTypes = null;
+        _custTypeTypesList.clear();
+        _custTypeTypesIdByName.clear();
+      });
+      return;
+    }
+    try {
+      final session = ref.read(appSessionProvider);
+      final ds = MasterDataRemoteDatasource(dio: ref.read(dioClientProvider));
+      final data = await ds.getCustomerTypeTypes(
+        authtoken: session?.token ?? '',
+        customerTypeId: customerType.customerTypeId.toString(),
+      );
+      final raw = (data['customerTypeTypesInfoList'] as List?) ??
+          (data['customerTypeTypesList'] as List?) ??
+          (data['data'] as List?) ??
+          const [];
+
+      final parsed = raw
+          .whereType<Map<String, dynamic>>()
+          .map((e) {
+            final name = e['customer_type_name']?.toString() ??
+                e['customerTypeName']?.toString() ??
+                e['name']?.toString() ??
+                '';
+            final id = e['customer_type_id']?.toString() ??
+                e['customerTypeTypesId']?.toString() ??
+                e['id']?.toString() ??
+                '';
+            return {'name': name.trim(), 'id': id.trim()};
+          })
+          .where((it) => (it['name'] ?? '').isNotEmpty)
+          .toList();
+
+      setState(() {
+        _custTypeTypesList
+          ..clear()
+          ..addAll(parsed.map((e) => e['name']!));
+        _custTypeTypesIdByName
+          ..clear()
+          ..addEntries(parsed.map((e) => MapEntry(e['name']!, e['id']!)));
+        _selectedCustTypeTypes = null;
+      });
+    } catch (_) {
+      setState(() {
+        _custTypeTypesList.clear();
+        _custTypeTypesIdByName.clear();
+        _selectedCustTypeTypes = null;
+      });
+    }
+  }
+
   void _back() {
     if (_currentStep > 0) {
       _goToStep(_currentStep - 1);
@@ -207,13 +280,8 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
   Future<void> _verifyStb() async {
     final stbNo = _stbController.text.trim();
-    final vcNo = _vcController.text.trim();
     if (stbNo.isEmpty) {
       setState(() => _stbError = 'Please enter an STB serial number');
-      return;
-    }
-    if (vcNo.isEmpty) {
-      setState(() => _stbError = 'Please enter a VC number');
       return;
     }
 
@@ -227,8 +295,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       final ds = StbRemoteDatasource(dio: ref.read(dioClientProvider));
       final result = await ds.validateBoxInfo(
         authtoken: session?.token ?? '',
-        stbNo: stbNo,
-        vcNo: vcNo,
+        boxNumber: stbNo,
       );
 
       final statusCode = result['statusCode'] ?? result['status_code'];
@@ -237,6 +304,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
           _stbVerified = true;
           _stbVerifying = false;
           _stbInfo = result;
+          // Capture resellerId from STB — sent in saveCustomerRest payload (API doc 6.7 / 3.4)
+          _stbResellerId = result['resellerId']?.toString() ??
+              result['reseller_id']?.toString() ?? '';
         });
       } else {
         setState(() {
@@ -359,10 +429,18 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         _mobileCtrl.text.trim().length < 10) {
       return 'Mobile number should not be less than 10 digits';
     }
+    if (_mobileCtrl.text.trim().isEmpty) {
+      return 'Mobile number should not be empty';
+    }
+    if (_mobileCtrl.text.trim().length < 10) {
+      return 'Mobile number should not be less than 10 digits';
+    }
 
     // ── Rule 12: PIN code >= 6 digits (always) ────────────────────────────
-    if (_pinCodeCtrl.text.trim().isNotEmpty &&
-        _pinCodeCtrl.text.trim().length < 6) {
+    if (_pinCodeCtrl.text.trim().isEmpty) {
+      return 'Pincode should not be empty';
+    }
+    if (_pinCodeCtrl.text.trim().length < 6) {
       return 'Pincode should not be less than 6 digits';
     }
 
@@ -400,6 +478,14 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       return 'Please select mandal';
     }
 
+    // Country and State are mandatory per creation flow
+    if (md.selectedCountry == null) {
+      return 'Please select country';
+    }
+    if (md.selectedState == null) {
+      return 'Please select state';
+    }
+
     // ── Rule 19: City must be selected (always mandatory) ─────────────────
     if (md.selectedCity == null) {
       return 'Please select city';
@@ -413,8 +499,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     final formError = _validate();
     if (formError != null) return formError;
 
-    // Rule 14: Package must be selected
-    if (_selectedPackage == null) {
+    // Package should only be enforced when VC is available.
+    // Without VC, customer creation is allowed, but package/STB ops must be blocked.
+    final hasVc = _vcController.text.trim().isNotEmpty;
+    if (hasVc && _selectedPackage == null) {
       return 'Package should not be empty';
     }
 
@@ -438,15 +526,40 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
   void _showValidationError(String message) {
     final colors = Theme.of(context).extension<AppColors>()!;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(LucideIcons.alertTriangle, color: colors.red, size: 22),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text('Validation Error',
+                  style: TextStyle(
+                      fontFamily: 'Plus Jakarta Sans',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16)),
+            ),
+          ],
+        ),
         content: Text(
           message,
-          style: const TextStyle(fontFamily: 'Plus Jakarta Sans'),
+          style: const TextStyle(
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 14,
+              fontWeight: FontWeight.w500),
         ),
-        backgroundColor: colors.red,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('OK',
+                style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontWeight: FontWeight.w700,
+                    color: colors.red)),
+          ),
+        ],
       ),
     );
   }
@@ -543,83 +656,124 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       final md = ref.read(masterDataProvider);
       final ds = CustomerRemoteDatasource(dio: ref.read(dioClientProvider));
 
+      final hasVc = _hasVc;
+
+      // IMPORTANT: map to server keys exactly (saveCustomerRest_post).
+      // Keep this payload minimal & correct to avoid backend mismatch.
       final customerData = <String, dynamic>{
-        'firstName': _firstNameCtrl.text.trim(),
-        if (_lastNameCtrl.text.trim().isNotEmpty)
-          'lastName': _lastNameCtrl.text.trim(),
-        'mobileNumber': _mobileCtrl.text.trim(),
-        if (_emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
-        if (_fatherNameCtrl.text.trim().isNotEmpty)
-          'fatherName': _fatherNameCtrl.text.trim(),
-        if (md.selectedGender != null) 'gender': md.selectedGender!.name,
-        if (_dob != null)
-          'dob':
-              '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}',
+        // Required-ish
         if (md.selectedCustomerType != null)
           'customerTypeId': md.selectedCustomerType!.customerTypeId.toString(),
-        if (_selectedCustTypeTypes != null &&
-            _selectedCustTypeTypes!.isNotEmpty &&
-            _selectedCustTypeTypes != 'Select')
-          'customerTypeTypes': _selectedCustTypeTypes,
-        if (md.selectedIdType != null)
-          'idType': md.selectedIdType!.id.toString(),
-        if (_idNumberCtrl.text.trim().isNotEmpty)
-          'idNumber': _idNumberCtrl.text.trim(),
-        if (_businessNameCtrl.text.trim().isNotEmpty)
-          'businessName': _businessNameCtrl.text.trim(),
-        if (_accountNumberCtrl.text.trim().isNotEmpty)
-          'accountNumber': _accountNumberCtrl.text.trim(),
-        'billingAddress1': _address1Ctrl.text.trim(),
-        if (_address2Ctrl.text.trim().isNotEmpty)
-          'billingAddress2': _address2Ctrl.text.trim(),
-        if (_pinCodeCtrl.text.trim().isNotEmpty)
-          'pinCode': _pinCodeCtrl.text.trim(),
-        if (md.selectedCountry != null) 'countryCode': md.selectedCountry!.iso,
-        if (md.selectedState != null)
-          'stateId': md.selectedState!.id.toString(),
-        if (md.selectedDistrict != null)
-          'districtId': md.selectedDistrict!.id.toString(),
-        if (md.selectedCity != null)
-          'cityId': md.selectedCity!.locationId.toString(),
-        if (md.selectedMandal != null)
-          'mandalId': md.selectedMandal!.mandalId.toString(),
-        'installationAddress1': _sameAsBilling
+        'firstName': _firstNameCtrl.text.trim(),
+        if (_lastNameCtrl.text.trim().isNotEmpty) 'lastName': _lastNameCtrl.text.trim(),
+        'mobile': _mobileCtrl.text.trim(),
+        'mobileNumber': _mobileCtrl.text.trim(), // alias for server compatibility
+        if (_emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
+        if (_fatherNameCtrl.text.trim().isNotEmpty) 'fatherName': _fatherNameCtrl.text.trim(),
+        if (md.selectedGender != null) 'gender': md.selectedGender!.id.toString(),
+        if (_dob != null)
+          'dateofbirth':
+              '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}',
+        // Identity / misc
+        if (md.selectedIdType != null) 'idType': md.selectedIdType!.id.toString(),
+        if (_idNumberCtrl.text.trim().isNotEmpty) 'idNumber': _idNumberCtrl.text.trim(),
+        if (_businessNameCtrl.text.trim().isNotEmpty) 'businessName': _businessNameCtrl.text.trim(),
+        if (_accountNumberCtrl.text.trim().isNotEmpty) 'accountNumber': _accountNumberCtrl.text.trim(),
+        // Addresses
+        'address': _address1Ctrl.text.trim(),
+        if (_address2Ctrl.text.trim().isNotEmpty) 'address2': _address2Ctrl.text.trim(),
+        'pin': _pinCodeCtrl.text.trim(),
+        'country': md.selectedCountry?.iso ?? '',
+        'countryCode': md.selectedCountry?.iso ?? '',
+        'state': md.selectedState?.id.toString() ?? '',
+        'stateId': md.selectedState?.id.toString() ?? '',
+        'district': md.selectedDistrict?.id.toString() ?? '',
+        'districtId': md.selectedDistrict?.id.toString() ?? '',
+        // TODO: TEMP TEST — hardcoded city=2 to verify real location_id works
+        'city': '2', // md.selectedCity?.locationId.toString() ?? '',
+        'cityId': '2', // md.selectedCity?.locationId.toString() ?? '',
+        'mandal': md.selectedMandal?.mandalId.toString() ?? '',
+        'mandalId': md.selectedMandal?.mandalId.toString() ?? '',
+        // Installation
+        'installationAddress': _sameAsBilling
             ? _address1Ctrl.text.trim()
             : _instAddress1Ctrl.text.trim(),
-        if (_sameAsBilling
-            ? _address2Ctrl.text.trim().isNotEmpty
-            : _instAddress2Ctrl.text.trim().isNotEmpty)
-          'installationAddress2': _sameAsBilling
-              ? _address2Ctrl.text.trim()
-              : _instAddress2Ctrl.text.trim(),
-        if (md.selectedGroup != null)
-          'groupId': md.selectedGroup!.groupId.toString(),
-        if (_cafNumberCtrl.text.trim().isNotEmpty)
-          'cafNumber': _cafNumberCtrl.text.trim(),
-        if (_lcoCustomerIdCtrl.text.trim().isNotEmpty)
-          'lcoCustomerId': _lcoCustomerIdCtrl.text.trim(),
-        if (_remarksCtrl.text.trim().isNotEmpty)
-          'remarks': _remarksCtrl.text.trim(),
-        if (_latCtrl.text.trim().isNotEmpty)
-          'latitude': double.tryParse(_latCtrl.text.trim()),
-        if (_lonCtrl.text.trim().isNotEmpty)
-          'longitude': double.tryParse(_lonCtrl.text.trim()),
-        'stbSerialNumber': _stbController.text.trim(),
-        'stbVcNumber': _vcController.text.trim(),
-        'billType': _billType,
-        if (_discountCtrl.text.trim().isNotEmpty)
-          'discount': int.tryParse(_discountCtrl.text.trim()) ?? 0,
-        if (_selectedPackage != null) ...{
-          'packageId': _selectedPackage!.productId,
-          'packageName': _selectedPackage!.productName,
-          'pricingStructureType': _selectedPackage!.pricingStructureType,
-          'cycle': _cycle,
-          'quantity': _quantity,
-          if (_cycle == 3) 'validityDays': _validityDays,
-        },
-        'dealerId': session?.dealerId ?? 0,
-        'employeeId': session?.employeeId ?? 0,
+        'installation_address': _sameAsBilling
+            ? _address1Ctrl.text.trim()
+            : _instAddress1Ctrl.text.trim(),
+        // Group / billing
+        if (md.selectedGroup != null) 'group': md.selectedGroup!.groupId.toString(),
+        if (md.selectedGroup != null) 'groupId': md.selectedGroup!.groupId.toString(),
+        'billType': _billType.toString(),
+        if (_cafNumberCtrl.text.trim().isNotEmpty) 'cafNumber': _cafNumberCtrl.text.trim(),
+        if (_lcoCustomerIdCtrl.text.trim().isNotEmpty) 'lcoCustomerId': _lcoCustomerIdCtrl.text.trim(),
+        if (_remarksCtrl.text.trim().isNotEmpty) 'remarks': _remarksCtrl.text.trim(),
+        if (_discountCtrl.text.trim().isNotEmpty) 'discount': _discountCtrl.text.trim(),
+        if (_latCtrl.text.trim().isNotEmpty) 'latitude': _latCtrl.text.trim(),
+        if (_lonCtrl.text.trim().isNotEmpty) 'longitude': _lonCtrl.text.trim(),
+        if (_selectedCustTypeTypes != null &&
+            _selectedCustTypeTypes!.trim().isNotEmpty &&
+            (_custTypeTypesIdByName[_selectedCustTypeTypes!] ?? '').isNotEmpty)
+          'customerTypeTypesId': _custTypeTypesIdByName[_selectedCustTypeTypes!],
+
+        // STB
+        'boxNumber': _stbController.text.trim(),
+        // VC number — required for STB-linked customer creation.
+        // Was previously missing from payload causing server rejection.
+        if (_vcController.text.trim().isNotEmpty)
+          'vcNumber': _vcController.text.trim(),
+        // reseller_id — required by the server to verify dealer→customer chain.
+        // Use STB's resellerId from validateBoxInfoRest, fall back to dealer.
+        'reseller_id': (_stbResellerId.isNotEmpty
+            ? _stbResellerId
+            : (session?.dealerId ?? 0).toString()),
+        // Dealer / Employee IDs — server extracts these from JWT but also
+        // validates them in the request body for saveCustomerRest.
+        if ((session?.dealerId ?? 0) > 0)
+          'dealer_id': session!.dealerId.toString(),
+        if ((session?.employeeId ?? 0) > 0)
+          'employee_id': session!.employeeId.toString(),
       };
+
+      // Package selection should only be sent when VC exists and package selected.
+      if (hasVc && _selectedPackage != null) {
+        customerData.addAll({
+          'packageId': _selectedPackage!.productId,
+          'pricingStructureType': _selectedPackage!.pricingStructureType,
+          'dateType': _dateTypeFromCycle(_cycle).toString(),
+          'quantity': _quantity.toString(),
+          if (_cycle == 3) 'validityDays': _validityDays.toString(),
+        });
+      }
+
+      // ── CRITICAL PAYLOAD DUMP (uses print() — cannot be filtered) ────
+      print('========== NEW_CUSTOMER PAYLOAD ==========');
+      print('  country   = ${customerData["country"]}');
+      print('  state     = ${customerData["state"]}');
+      print('  district  = ${customerData["district"]}');
+      print('  mandal    = ${customerData["mandal"]}');
+      print('  city      = ${customerData["city"]}');
+      print('  cityId    = ${customerData["cityId"]}');
+      print('  pin       = ${customerData["pin"]}');
+      print('  address   = ${customerData["address"]}');
+      print('  installationAddress = ${customerData["installationAddress"]}');
+      print('  boxNumber = ${customerData["boxNumber"]}');
+      print('  selectedCity   = ${md.selectedCity?.locationId}/${md.selectedCity?.locationName}');
+      print('  selectedMandal = ${md.selectedMandal?.mandalId}/${md.selectedMandal?.mandalName}');
+      print('  ALL KEYS: ${customerData.keys.toList()}');
+      print('==========================================');
+
+      if (kDebugMode) {
+        debugPrint('[NEW_CUSTOMER] ── Payload ──────────────────────────────');
+        debugPrint('[NEW_CUSTOMER] DealerId  : ${session?.dealerId}');
+        debugPrint('[NEW_CUSTOMER] EmployeeId: ${session?.employeeId}');
+        debugPrint('[NEW_CUSTOMER] UserType  : ${session?.userType}');
+        debugPrint('[NEW_CUSTOMER] boxNumber : ${customerData['boxNumber']}');
+        debugPrint('[NEW_CUSTOMER] city      : ${customerData['city']}');
+        debugPrint('[NEW_CUSTOMER] mandal    : ${customerData['mandal']}');
+        debugPrint('[NEW_CUSTOMER] Keys      : ${customerData.keys.toList()}');
+        debugPrint('[NEW_CUSTOMER] ─────────────────────────────────────────');
+      }
 
       final result = await ds.saveCustomer(
         authtoken: session?.token ?? '',
@@ -691,13 +845,73 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            e.toString().replaceAll('ApiException: ', ''),
-          ),
-          backgroundColor: Theme.of(context).extension<AppColors>()!.red,
-        ),
+
+      // ── Diagnostic error dialog (shows full server response) ─────────────
+      final errMsg = e.toString().replaceAll('ApiException: ', '');
+      String serverRaw = '';
+      if (e is ApiException && e.data != null) {
+        serverRaw = e.data.toString();
+      }
+
+      showDialog(
+        context: context,
+        builder: (ctx) {
+          final c = Theme.of(ctx).extension<AppColors>()!;
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Row(
+              children: [
+                Icon(LucideIcons.alertTriangle, color: c.red, size: 22),
+                const SizedBox(width: 8),
+                const Text('Customer Creation Failed',
+                    style: TextStyle(fontFamily: 'Plus Jakarta Sans',
+                        fontWeight: FontWeight.w700, fontSize: 16)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(errMsg,
+                      style: const TextStyle(
+                          fontFamily: 'Plus Jakarta Sans', fontSize: 14,
+                          fontWeight: FontWeight.w600)),
+                  if (serverRaw.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    const Text('Server Response:',
+                        style: TextStyle(fontFamily: 'Plus Jakarta Sans',
+                            fontWeight: FontWeight.w700, fontSize: 12)),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: c.bg,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: c.red.withOpacity(0.3)),
+                      ),
+                      child: Text(serverRaw,
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 10)),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  const Text('📋 Screenshot this dialog and share with developer.',
+                      style: TextStyle(fontFamily: 'Plus Jakarta Sans',
+                          fontSize: 11, fontStyle: FontStyle.italic)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text('Close',
+                    style: TextStyle(
+                        fontFamily: 'Plus Jakarta Sans', color: c.red)),
+              ),
+            ],
+          );
+        },
       );
     }
   }
@@ -753,6 +967,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   _buildStep2Form(colors, session),
                   NewCustomerPackageScreen(
                     stbNumber: _stbController.text.trim(),
+                    packageRequired: _hasVc,
                     selectedPackage: _selectedPackage,
                     cycle: _cycle,
                     quantity: _quantity,
@@ -789,6 +1004,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                     instAddress2: _sameAsBilling
                         ? _address2Ctrl.text.trim()
                         : _instAddress2Ctrl.text.trim(),
+                    instPinCode: _sameAsBilling
+                        ? _pinCodeCtrl.text.trim()
+                        : _instPinCodeCtrl.text.trim(),
+                    billType: _billType,
                     cafNumber: _cafNumberCtrl.text.trim(),
                     lcoCustomerId: _lcoCustomerIdCtrl.text.trim(),
                     remarks: _remarksCtrl.text.trim(),
@@ -1116,9 +1335,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   items: md.customerTypes,
                   isLoading: md.isLoadingCustomerTypes,
                   displayName: (ct) => ct.customerType,
-                  onChanged: (ct) => ref
-                      .read(masterDataProvider.notifier)
-                      .selectCustomerType(ct),
+                  onChanged: (ct) {
+                    ref.read(masterDataProvider.notifier).selectCustomerType(ct);
+                    _loadCustomerTypeTypes(ct);
+                  },
                   prefixIcon: LucideIcons.tag,
                 ),
                 if (hotelMode) ...[
@@ -1255,9 +1475,9 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               children: [
                 _WizardTextField(
                   controller: _mobileCtrl,
-                  label: isMobileMandatory ? 'Mobile Number *' : 'Mobile Number',
+                  label: 'Mobile Number',
                   colors: colors,
-                  required: isMobileMandatory,
+                  required: true,
                   prefixIcon: LucideIcons.phone,
                   keyboardType: TextInputType.phone,
                   inputFormatters: [
@@ -1371,7 +1591,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
               children: [
                 _WizardTextField(
                   controller: _address1Ctrl,
-                  label: 'Address Line 1 *',
+                  label: 'Address Line 1',
                   colors: colors,
                   required: true,
                   prefixIcon: LucideIcons.mapPin,
@@ -1389,6 +1609,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   controller: _pinCodeCtrl,
                   label: 'PIN Code',
                   colors: colors,
+                  required: true,
                   prefixIcon: LucideIcons.mapPin,
                   keyboardType: TextInputType.number,
                   inputFormatters: [
@@ -1407,72 +1628,94 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 const SizedBox(height: 12),
 
                 // Country
-                _WizardDropdown<Country>(
-                  label: 'Country',
+                _WizardDialogSelector<Country>(
+                  label: 'Country *',
                   colors: colors,
                   value: md.selectedCountry,
                   items: md.countries,
                   isLoading: md.isLoadingCountries,
                   displayName: (c) => c.name,
-                  onChanged: (c) =>
-                      ref.read(masterDataProvider.notifier).selectCountry(c),
+                  onChanged: (c) {
+                    if (c != null) ref.read(masterDataProvider.notifier).selectCountry(c);
+                  },
                   prefixIcon: LucideIcons.globe,
                 ),
                 const SizedBox(height: 12),
 
                 // State
-                _WizardDropdown<StateModel>(
-                  label: 'State',
+                _WizardDialogSelector<StateModel>(
+                  label: 'State *',
                   colors: colors,
                   value: md.selectedState,
                   items: md.states,
                   isLoading: md.isLoadingStates,
                   displayName: (s) => s.name,
-                  onChanged: (s) =>
-                      ref.read(masterDataProvider.notifier).selectState(s),
+                  onChanged: (s) {
+                    if (s != null) ref.read(masterDataProvider.notifier).selectState(s);
+                  },
+                  emptyMessage: 'Please select a Country first',
                   prefixIcon: LucideIcons.map,
                 ),
                 const SizedBox(height: 12),
 
                 // District
-                _WizardDropdown<District>(
-                  label: 'District',
+                _WizardDialogSelector<District>(
+                  label: 'District *',
                   colors: colors,
                   value: md.selectedDistrict,
                   items: md.districts,
                   isLoading: md.isLoadingDistricts,
                   displayName: (d) => d.name,
-                  onChanged: (d) =>
-                      ref.read(masterDataProvider.notifier).selectDistrict(d),
+                  onChanged: (d) {
+                    if (d != null) ref.read(masterDataProvider.notifier).selectDistrict(d);
+                  },
+                  emptyMessage: 'Please select a State first',
                   prefixIcon: LucideIcons.mapPin,
                 ),
                 const SizedBox(height: 12),
 
-                // City (always mandatory per rule 19)
-                _WizardDropdown<City>(
-                  label: 'City *',
-                  colors: colors,
-                  value: md.selectedCity,
-                  items: md.cities,
-                  isLoading: md.isLoadingCities,
-                  displayName: (c) => c.locationName,
-                  onChanged: (c) =>
-                      ref.read(masterDataProvider.notifier).selectCity(c),
-                  prefixIcon: LucideIcons.building,
-                ),
-                const SizedBox(height: 12),
-
-                // Mandal
-                _WizardDropdown<Mandal>(
+                // Mandal (before City — selecting mandal filters city list)
+                _WizardDialogSelector<Mandal>(
                   label: isMandalMandatory ? 'Mandal *' : 'Mandal',
                   colors: colors,
                   value: md.selectedMandal,
                   items: md.mandals,
                   isLoading: md.isLoadingMandals,
                   displayName: (m) => m.mandalName,
-                  onChanged: (m) =>
-                      ref.read(masterDataProvider.notifier).selectMandal(m),
+                  allowDeselect: true,
+                  onChanged: (m) {
+                    ref.read(masterDataProvider.notifier).selectMandal(m);
+                    ref.read(masterDataProvider.notifier).selectCity(null);
+                    if (md.selectedDistrict != null) {
+                      // m==null means user deselected mandal → reload all district cities
+                      ref.read(masterDataProvider.notifier).loadCitiesForMandal(
+                        districtId: md.selectedDistrict!.id.toString(),
+                        mandalId: m?.mandalId.toString() ?? '0',
+                        boxNumber: _stbController.text.trim(),
+                      );
+                    }
+                  },
+                  emptyMessage: 'Please select a District first',
                   prefixIcon: LucideIcons.landmark,
+                ),
+                const SizedBox(height: 12),
+
+                // City (always mandatory per rule 19)
+                _WizardDialogSelector<City>(
+                  label: 'City *',
+                  colors: colors,
+                  value: md.selectedCity,
+                  items: md.cities,
+                  isLoading: md.isLoadingCities,
+                  displayName: (c) => c.locationName,
+                  onChanged: (c) {
+                    print('[CITY-SELECTED] locationId=${c?.locationId} name=${c?.locationName}');
+                    ref.read(masterDataProvider.notifier).selectCity(c);
+                  },
+                  emptyMessage: md.selectedDistrict == null
+                      ? 'Please select a District first'
+                      : 'No cities configured for this LCO.\nAsk admin to map cities in EB location settings.',
+                  prefixIcon: LucideIcons.building,
                 ),
               ],
             ),
@@ -1863,54 +2106,85 @@ class _WizardTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextFormField(
-      controller: controller,
-      enabled: enabled,
-      keyboardType: keyboardType,
-      inputFormatters: inputFormatters,
-      maxLines: maxLines,
-      style: TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 14,
-        color: colors.ink,
-      ),
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: required ? '$label *' : label,
-        labelStyle: TextStyle(
-          fontFamily: 'Plus Jakarta Sans',
-          fontSize: 14,
-          color: colors.ink40,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: label,
+                style: TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: 14,
+                  color: colors.ink40,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (required)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 14,
+                    color: colors.red,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
         ),
-        prefixIcon: prefixIcon != null
-            ? Icon(prefixIcon, size: 18, color: colors.ink40)
-            : null,
-        suffixIcon: suffixIcon,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.ink10),
+        const SizedBox(height: 6),
+        TextFormField(
+          controller: controller,
+          enabled: enabled,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          maxLines: maxLines,
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 14,
+            color: colors.ink,
+          ),
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: label,
+            hintStyle: TextStyle(
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 13,
+              color: colors.ink20,
+            ),
+            prefixIcon: prefixIcon != null
+                ? Icon(prefixIcon, size: 18, color: colors.ink40)
+                : null,
+            suffixIcon: suffixIcon,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.ink10),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.ink10),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.red),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.red),
+            ),
+            disabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.ink05),
+            ),
+            filled: true,
+            fillColor: enabled ? colors.card : colors.ink05,
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.ink10),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.red),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.red),
-        ),
-        disabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.ink05),
-        ),
-        filled: true,
-        fillColor: enabled ? colors.card : colors.ink05,
-      ),
+      ],
     );
   }
 }
@@ -1998,6 +2272,368 @@ class _WizardDropdown<T> extends StatelessWidget {
           .toList(),
       onChanged: onChanged,
     );
+  }
+}
+
+// ── Sentinel wrapper so we can distinguish cancel vs deselect ────────────────
+class _Selected<T> {
+  final T? item;
+  const _Selected(this.item);
+}
+
+// ── Dialog-based selector (replaces DropdownButtonFormField for address) ──────
+
+class _WizardDialogSelector<T> extends StatelessWidget {
+  final String label;
+  final AppColors colors;
+  final T? value;
+  final List<T> items;
+  final bool isLoading;
+  final String Function(T) displayName;
+  final ValueChanged<T?> onChanged;
+  final IconData? prefixIcon;
+  final String? emptyMessage;
+  final bool allowDeselect;
+
+  const _WizardDialogSelector({
+    required this.label,
+    required this.colors,
+    required this.value,
+    required this.items,
+    required this.displayName,
+    required this.onChanged,
+    this.isLoading = false,
+    this.prefixIcon,
+    this.emptyMessage,
+    this.allowDeselect = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isLoading
+          ? null
+          : () async {
+              if (items.isEmpty) {
+                showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    title: Row(
+                      children: [
+                        Icon(LucideIcons.info, color: colors.blue, size: 22),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            label,
+                            style: const TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    content: Text(
+                      emptyMessage ?? 'No $label data available.',
+                      style: const TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 14,
+                      ),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(
+                          'OK',
+                          style: TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontWeight: FontWeight.w700,
+                            color: colors.red,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+                return;
+              }
+              final result = await _openSelectorDialog<T>(
+                context: context,
+                title: label,
+                items: items,
+                displayName: displayName,
+                colors: colors,
+                current: value,
+                prefixIcon: prefixIcon,
+                allowDeselect: allowDeselect,
+              );
+              if (result != null) {
+                onChanged(result.item);
+              }
+            },
+      borderRadius: BorderRadius.circular(10),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 14,
+            color: colors.ink40,
+          ),
+          prefixIcon: isLoading
+              ? Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: colors.ink40,
+                    ),
+                  ),
+                )
+              : prefixIcon != null
+                  ? Icon(prefixIcon, size: 18, color: colors.ink40)
+                  : null,
+          suffixIcon:
+              Icon(LucideIcons.chevronDown, size: 18, color: colors.ink40),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: colors.ink10),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: colors.ink10),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: colors.red),
+          ),
+          filled: true,
+          fillColor: colors.card,
+        ),
+        child: Text(
+          isLoading
+              ? 'Loading...'
+              : value != null
+                  ? displayName(value as T)
+                  : '',
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 14,
+            color: value != null ? colors.ink : colors.ink20,
+          ),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+}
+
+Future<_Selected<T>?> _openSelectorDialog<T>({
+  required BuildContext context,
+  required String title,
+  required List<T> items,
+  required String Function(T) displayName,
+  required AppColors colors,
+  T? current,
+  IconData? prefixIcon,
+  bool allowDeselect = false,
+}) async {
+  final searchCtrl = TextEditingController();
+  try {
+    return await showDialog<_Selected<T>>(
+      context: context,
+      builder: (ctx) {
+        var filtered = List<T>.from(items);
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              titlePadding: EdgeInsets.zero,
+              contentPadding: EdgeInsets.zero,
+              title: Container(
+                padding:
+                    const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: colors.blueSoft,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Row(
+                  children: [
+                    if (prefixIcon != null) ...[
+                      Icon(prefixIcon, size: 18, color: colors.blue),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        'Select $title',
+                        style: TextStyle(
+                          fontFamily: 'Plus Jakarta Sans',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: colors.ink,
+                        ),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.of(ctx).pop(),
+                      child:
+                          Icon(LucideIcons.x, size: 20, color: colors.ink40),
+                    ),
+                  ],
+                ),
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                height: MediaQuery.of(context).size.height * 0.5,
+                child: Column(
+                  children: [
+                    if (items.length > 5)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        child: TextField(
+                          controller: searchCtrl,
+                          autofocus: true,
+                          style: const TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Search $title...',
+                            hintStyle: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 13,
+                              color: colors.ink20,
+                            ),
+                            prefixIcon: Icon(LucideIcons.search,
+                                size: 18, color: colors.ink40),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: colors.ink10),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: colors.ink10),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(10),
+                              borderSide: BorderSide(color: colors.red),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 10),
+                            filled: true,
+                            fillColor: colors.card,
+                          ),
+                          onChanged: (q) {
+                            final s = q.trim().toLowerCase();
+                            setLocalState(() {
+                              filtered = items
+                                  .where((item) => displayName(item)
+                                      .toLowerCase()
+                                      .contains(s))
+                                  .toList();
+                            });
+                          },
+                        ),
+                      ),
+                    const SizedBox(height: 4),
+                    Expanded(
+                      child: filtered.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No results found',
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 14,
+                                  color: colors.ink40,
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: EdgeInsets.zero,
+                              itemCount: filtered.length + (allowDeselect ? 1 : 0),
+                              itemBuilder: (_, i) {
+                                if (allowDeselect && i == 0) {
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      ListTile(
+                                        dense: true,
+                                        contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 16, vertical: 2),
+                                        title: Text(
+                                          '— None —',
+                                          style: TextStyle(
+                                            fontFamily: 'Plus Jakarta Sans',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                            color: colors.ink40,
+                                          ),
+                                        ),
+                                        onTap: () => Navigator.of(ctx)
+                                            .pop(_Selected<T>(null)),
+                                      ),
+                                      Divider(height: 1, color: colors.ink05),
+                                    ],
+                                  );
+                                }
+                                final item = filtered[i - (allowDeselect ? 1 : 0)];
+                                final isSelected = current != null &&
+                                    displayName(item) == displayName(current as T);
+                                return Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ListTile(
+                                      dense: true,
+                                      selected: isSelected,
+                                      selectedTileColor: colors.blueSoft,
+                                      contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 2),
+                                      title: Text(
+                                        displayName(item),
+                                        style: TextStyle(
+                                          fontFamily: 'Plus Jakarta Sans',
+                                          fontSize: 14,
+                                          fontWeight: isSelected
+                                              ? FontWeight.w700
+                                              : FontWeight.w500,
+                                          color: colors.ink,
+                                        ),
+                                      ),
+                                      trailing: isSelected
+                                          ? Icon(LucideIcons.check,
+                                              size: 16, color: colors.blue)
+                                          : null,
+                                      onTap: () => Navigator.of(ctx)
+                                          .pop(_Selected(item)),
+                                    ),
+                                    if (i < filtered.length - 1 + (allowDeselect ? 1 : 0))
+                                      Divider(height: 1, color: colors.ink05),
+                                  ],
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  } finally {
+    searchCtrl.dispose();
   }
 }
 

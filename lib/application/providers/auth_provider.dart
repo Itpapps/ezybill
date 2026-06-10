@@ -110,10 +110,17 @@ class AuthNotifier extends Notifier<AuthState> {
   }) async {
     state = state.copyWith(status: AuthStatus.loading, errorMessage: null);
 
+    // Read BMS data for SOAP login (live servers need employeeId + imei).
+    final prefs = ref.read(sharedPreferencesProvider);
+    final bmsEmployeeId = prefs.getString('bms_emp_id') ?? '';
+    final deviceImei = prefs.getString('device_uuid') ?? '';
+
     // Step 1: Call validateLogin via repository.
     final loginResult = await _authRepository.login(
       username: username,
       password: password,
+      imei: deviceImei,
+      employeeId: bmsEmployeeId,
     );
 
     switch (loginResult) {

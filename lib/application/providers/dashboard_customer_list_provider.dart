@@ -5,7 +5,6 @@ import '../../core/network/dio_client.dart';
 import '../../core/utils/result.dart';
 import '../../data/datasources/remote/dashboard_remote_datasource.dart';
 import '../../data/models/customer/customer_model.dart';
-import '../../data/models/customer/customer_search_response.dart';
 import '../../domain/repositories/customer_repository.dart';
 import 'core_providers.dart';
 import 'customer_provider.dart';
@@ -46,8 +45,8 @@ class DashboardCustomerListState {
   final CustomerFilterTab selectedTab;
   final List<CustomerModel> customers;
   final int totalCount;
+  /// 1-based page index for UI pagination.
   final int currentPage;
-  final bool hasMore;
 
   const DashboardCustomerListState({
     this.isLoading = false,
@@ -56,8 +55,7 @@ class DashboardCustomerListState {
     this.selectedTab = CustomerFilterTab.active,
     this.customers = const [],
     this.totalCount = 0,
-    this.currentPage = 0,
-    this.hasMore = false,
+    this.currentPage = 1,
   });
 
   /// Alias used by the widget layer.
@@ -65,6 +63,23 @@ class DashboardCustomerListState {
 
   /// Visible customers for display.
   List<CustomerModel> get visibleCustomers => customers;
+
+  int get pageSize => _pageSize;
+
+  int get pageCount {
+    if (totalCount <= 0) return 1;
+    final pages = (totalCount / pageSize).ceil();
+    return pages <= 0 ? 1 : pages;
+  }
+
+  List<CustomerModel> get pageCustomers {
+    if (customers.isEmpty) return const [];
+    final safePage = currentPage.clamp(1, pageCount);
+    final start = (safePage - 1) * pageSize;
+    final end = (start + pageSize).clamp(0, customers.length);
+    if (start >= customers.length) return const [];
+    return customers.sublist(start, end);
+  }
 
   DashboardCustomerListState copyWith({
     bool? isLoading,
@@ -74,7 +89,6 @@ class DashboardCustomerListState {
     List<CustomerModel>? customers,
     int? totalCount,
     int? currentPage,
-    bool? hasMore,
   }) {
     return DashboardCustomerListState(
       isLoading: isLoading ?? this.isLoading,
@@ -84,7 +98,6 @@ class DashboardCustomerListState {
       customers: customers ?? this.customers,
       totalCount: totalCount ?? this.totalCount,
       currentPage: currentPage ?? this.currentPage,
-      hasMore: hasMore ?? this.hasMore,
     );
   }
 }
@@ -93,8 +106,8 @@ class DashboardCustomerListState {
 // Constants
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Dashboard tab page size — show first 50 records per tab.
-const int _serverPageSize = 50;
+/// Dashboard list pagination size — match Android list (15 rows per page).
+const int _pageSize = 15;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Notifier
@@ -122,8 +135,7 @@ class DashboardCustomerListNotifier
       isLoading: true,
       customers: [],
       totalCount: 0,
-      currentPage: 0,
-      hasMore: false,
+      currentPage: 1,
       errorMessage: null,
     );
 
@@ -135,7 +147,7 @@ class DashboardCustomerListNotifier
         customerName: isNumeric ? null : query,
         mobileNumber: isNumeric ? query : null,
         startValue: 0,
-        endValue: _serverPageSize,
+        endValue: _pageSize,
       );
 
       switch (searchResult) {
@@ -144,7 +156,7 @@ class DashboardCustomerListNotifier
             isLoading: false,
             customers: data.existCustomerDetails,
             totalCount: data.customerCount,
-            hasMore: data.existCustomerDetails.length < data.customerCount,
+            currentPage: 1,
           );
         case Failure(:final message):
           state = state.copyWith(isLoading: false, errorMessage: message);
@@ -162,15 +174,13 @@ class DashboardCustomerListNotifier
       selectedTab: tab,
       customers: [],
       totalCount: 0,
-      currentPage: 0,
-      hasMore: false,
+      currentPage: 1,
       errorMessage: null,
     );
 
     // All tabs use getdashboardlist with the appropriate from_dashboard value
     await _loadFromDashboardList(
       fromDashboard: tab.fromDashboard,
-      page: 0,
     );
   }
 
@@ -190,24 +200,15 @@ class DashboardCustomerListNotifier
     return [];
   }
 
-  /// Active tab: uses getdashboardlist with from_dashboard=4.
-  Future<void> _loadActiveCustomers({required int page}) async {
-    await _loadFromDashboardList(
-      fromDashboard: 4, // 4 = active customers
-      page: page,
-    );
-  }
 
   /// Generic loader using getdashboardlist endpoint.
   /// from_dashboard: 1=assigned, 2=unassigned, 3=all, 4=active, 5=inactive
   Future<void> _loadFromDashboardList({
     required int fromDashboard,
-    required int page,
   }) async {
-    final isFirstPage = page == 0;
     state = state.copyWith(
-      isLoading: isFirstPage,
-      isLoadingMore: !isFirstPage,
+      isLoading: true,
+      isLoadingMore: false,
       errorMessage: null,
     );
 
@@ -231,16 +232,29 @@ class DashboardCustomerListNotifier
       final allRecords = rawList.map((m) {
         try {
           // Map getdashboardlist fields to CustomerModel fields
+          // Server returns: serial_number, mac_address, stock_id, box_number,
+          // vc_number, dealer_id, reseller_id, is_assigned, assigned_date,
+          // customer_name, account_number, mobile_no, customer_id, cas,
+          // is_active, activate_date, installation_address, service_enddate,
+          // pending_amount (if available)
+          final isActive = m['is_active'];
+          final statusVal = (isActive == 'YES' || isActive == '1' || isActive == 1)
+              ? '1'
+              : '0';
+          // Read pending_amount from server if available, otherwise default
+          final pendingAmt = m['pending_amount']?.toString() ?? '0.00';
           final normalized = <String, dynamic>{
             'customer_id': m['customer_id']?.toString() ?? '',
             'customerName': m['customer_name']?.toString() ?? '',
             'mobile_no': m['mobile_no']?.toString() ?? '',
             'installation_address': m['installation_address']?.toString() ?? '',
+            'billing_address': m['billing_address']?.toString() ??
+                m['installation_address']?.toString() ?? '',
             'account_number': m['account_number']?.toString() ?? '',
-            'status': m['is_active'] == 'YES' ? '1' : '0',
+            'status': statusVal,
             'caf_no': m['account_number']?.toString() ?? '',
             'stb_count': '1',
-            'pending_amount': '0',
+            'pending_amount': pendingAmt,
             'reseller_id': m['reseller_id']?.toString() ?? '',
             'is_direct_lco': '0',
             'latitude': '0.0',
@@ -258,24 +272,12 @@ class DashboardCustomerListNotifier
         }
       }).whereType<CustomerModel>().toList();
 
-      // Client-side pagination
-      final startIndex = page * _serverPageSize;
-      final endIndex = (startIndex + _serverPageSize).clamp(0, allRecords.length);
-      final pageRecords = startIndex < allRecords.length
-          ? allRecords.sublist(startIndex, endIndex)
-          : <CustomerModel>[];
-
-      final allCustomers = isFirstPage
-          ? pageRecords
-          : [...state.customers, ...pageRecords];
-
       state = state.copyWith(
         isLoading: false,
         isLoadingMore: false,
-        customers: allCustomers,
+        customers: allRecords,
         totalCount: allRecords.length,
-        currentPage: page,
-        hasMore: allCustomers.length < allRecords.length,
+        currentPage: 1,
       );
     } catch (e) {
       debugPrint('[CUST-LIST] Error: $e');
@@ -287,21 +289,12 @@ class DashboardCustomerListNotifier
     }
   }
 
-  /// Inactive tab: uses getdashboardlist with from_dashboard=5.
-  Future<void> _loadInactiveCustomers() async {
-    await _loadFromDashboardList(
-      fromDashboard: 5, // 5 = inactive customers
-      page: 0,
-    );
-  }
 
-  /// Load next page (Active tab only -- server-side pagination).
-  Future<void> loadMore() async {
-    if (!state.hasMore || state.isLoadingMore) return;
-
-    if (state.selectedTab == CustomerFilterTab.active) {
-      await _loadActiveCustomers(page: state.currentPage + 1);
-    }
+  void goToPage(int page) {
+    if (state.customers.isEmpty) return;
+    final safe = page.clamp(1, state.pageCount);
+    if (safe == state.currentPage) return;
+    state = state.copyWith(currentPage: safe);
   }
 
   /// Refresh current tab.
@@ -310,25 +303,12 @@ class DashboardCustomerListNotifier
     state = state.copyWith(
       customers: [],
       totalCount: 0,
-      currentPage: 0,
-      hasMore: false,
+      currentPage: 1,
     );
-    // Force reload even if same tab.
-    switch (tab) {
-      case CustomerFilterTab.active:
-        await _loadActiveCustomers(page: 0);
-      case CustomerFilterTab.inactive:
-        await _loadInactiveCustomers();
-      default:
-        break;
-    }
+    // Force reload — works for all tabs (active, inactive, fresh, assigned).
+    await _loadFromDashboardList(fromDashboard: tab.fromDashboard);
   }
 
-  int _parseInt(dynamic value) {
-    if (value is int) return value;
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

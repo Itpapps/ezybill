@@ -43,10 +43,11 @@ class DashboardRepositoryImpl implements DashboardRepository {
   }
 
   @override
-  Future<Result<WalletResponse>> getLcoDepositAmount() async {
+  Future<Result<WalletResponse>> getLcoDepositAmount({required int dealerId}) async {
     try {
       final data = await _remoteDatasource.getLcoDepositAmount(
         authtoken: _authToken,
+        dealerId: dealerId,
       );
       final response = WalletResponse.fromJson(data);
       return Success(response);

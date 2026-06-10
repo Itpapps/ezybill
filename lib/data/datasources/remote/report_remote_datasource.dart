@@ -1,3 +1,5 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/dio_client.dart';
 
@@ -18,6 +20,7 @@ class ReportRemoteDatasource {
         'date': reportDate,
         'dealer_id': dealerId,
       },
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     return response.data as Map<String, dynamic>;
   }
@@ -36,6 +39,7 @@ class ReportRemoteDatasource {
         'toDate': toDate,
         'dealer_id': dealerId,
       },
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     return response.data as Map<String, dynamic>;
   }
@@ -55,6 +59,7 @@ class ReportRemoteDatasource {
         'toDate': toDate,
         'dealer_id': dealerId,
       },
+      options: Options(receiveTimeout: const Duration(seconds: 60)),
     );
     return response.data as Map<String, dynamic>;
   }

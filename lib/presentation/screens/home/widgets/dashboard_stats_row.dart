@@ -92,6 +92,8 @@ class _MiniPill extends StatelessWidget {
           children: [
             Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontFamily: 'DM Sans',
                 fontSize: 14,

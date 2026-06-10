@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Safe parsing utilities for dynamic JSON values.
 ///
 /// These replace the many ad-hoc `_parseInt` / `_parseDouble` helpers
@@ -50,32 +52,77 @@ bool parseBool(dynamic value, {bool defaultValue = false}) {
   return defaultValue;
 }
 
-/// Safely parses a JSON array into a typed [List<T>].
+/// Safely parses a JSON array or single object into a typed [List<T>].
 ///
-/// [value] is expected to be a `List<dynamic>` (from `json['someArray']`).
-/// Each element is cast to `Map<String, dynamic>` and passed through
-/// [fromJson]. Elements that fail to parse are silently skipped.
-///
-/// Example:
-/// ```dart
-/// final customers = parseList(json['customers'], Customer.fromJson);
-/// ```
+/// This handles several malformed server shapes that occur in this project:
+/// - `List<Map<String, dynamic>>` (normal case)
+/// - `Map<String, dynamic>` representing a single object
+/// - `Map<String, dynamic>` with numeric string keys produced by PHP's
+///   `json_encode` for singleton or indexed arrays.
 List<T> parseList<T>(
   dynamic value,
   T Function(Map<String, dynamic>) fromJson,
 ) {
-  if (value == null || value is! List) return <T>[];
+  final items = _normalizeToListOfMaps(value);
   final results = <T>[];
-  for (final item in value) {
-    if (item is Map<String, dynamic>) {
-      try {
-        results.add(fromJson(item));
-      } catch (_) {
-        // Skip malformed entries rather than crashing the whole list.
-      }
+  for (final item in items) {
+    try {
+      results.add(fromJson(item));
+    } catch (_) {
+      // Skip malformed entries rather than crashing the whole list.
     }
   }
   return results;
+}
+
+/// Safely normalises dynamic JSON data into a list of maps.
+///
+/// Supports:
+/// - actual `List` values
+/// - singleton objects represented as a `Map`
+/// - PHP-style numeric key maps like `{ "0": {...}, "1": {...} }`.
+List<Map<String, dynamic>> parseMapList(dynamic value) {
+  return _normalizeToListOfMaps(value);
+}
+
+List<Map<String, dynamic>> _normalizeToListOfMaps(dynamic value) {
+  if (value is List) {
+    return value
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList();
+  }
+
+  if (value is Map) {
+    final map = value.map((key, val) => MapEntry(key.toString(), val));
+
+    final numericKeys = map.keys.where((k) => int.tryParse(k) != null).toList();
+    if (numericKeys.length == map.length && numericKeys.isNotEmpty) {
+      numericKeys.sort((a, b) => int.parse(a).compareTo(int.parse(b)));
+      return numericKeys
+          .map((key) => map[key])
+          .whereType<Map>()
+          .map((item) => item.cast<String, dynamic>())
+          .toList();
+    }
+
+    return [map.cast<String, dynamic>()];
+  }
+
+  // PHP/legacy servers sometimes double-encode arrays as JSON strings
+  // e.g. paymentresult = "[{...},{...}]" instead of a native JSON array.
+  // Android handles this via getString() + new JSONArray(string).
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return [];
+    try {
+      return _normalizeToListOfMaps(jsonDecode(trimmed));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  return <Map<String, dynamic>>[];
 }
 
 /// Safely extracts a nested map from a dynamic value.

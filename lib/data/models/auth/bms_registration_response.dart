@@ -76,8 +76,10 @@ class BmsRegistrationResponse {
     );
   }
 
-  /// The REST API base URL — `ipAddress` with `/wsController` stripped.
-  String get restBaseUrl => ipAddress.replaceAll('/wsController', '');
+  /// The REST API base URL — store ipAddress as-is from BMS.
+  /// The interceptor handles URL construction for both live (wsController)
+  /// and local (direct LcoRestServices) environments.
+  String get restBaseUrl => ipAddress;
 
   /// Whether the registration/check was successful.
   bool get isSuccess => statusCode == 0;

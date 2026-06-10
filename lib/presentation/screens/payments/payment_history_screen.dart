@@ -8,6 +8,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
+import '../../../core/utils/parse_utils.dart';
 import '../../../data/models/payment/payment_history_item.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -56,14 +57,14 @@ class _PaymentHistoryNotifier extends ChangeNotifier {
       final data = await ds.getPaymentHistory(
         authtoken: session?.token ?? '',
         customerId: customerId,
+        dealerId: session?.dealerId ?? 0,
         fromDate: fromDate,
         toDate: toDate,
       );
-      final list = (data['paymentList'] as List<dynamic>?)
-              ?.map((e) =>
-                  PaymentHistoryItem.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final list = parseList<PaymentHistoryItem>(
+        data['payment_details'],
+        PaymentHistoryItem.fromJson,
+      );
       _state = _state.copyWith(isLoading: false, items: list);
       notifyListeners();
     } catch (e) {

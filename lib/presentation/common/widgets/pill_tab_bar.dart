@@ -68,43 +68,50 @@ class PillTabBar extends StatelessWidget {
                   borderRadius: AppRadius.pillBR,
                 ),
                 alignment: Alignment.center,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      tab.label,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: selected ? tab.activeText : c.ink40,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        tab.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: selected ? tab.activeText : c.ink40,
+                        ),
                       ),
-                    ),
-                    if (tab.count != null) ...[
-                      const SizedBox(width: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
-                        ),
-                        constraints: const BoxConstraints(minWidth: 18),
-                        decoration: BoxDecoration(
-                          color: selected
-                              ? tab.activeText.withValues(alpha: 0.15)
-                              : c.ink20.withValues(alpha: 0.2),
-                          borderRadius: AppRadius.pillBR,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          '${tab.count}',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w700,
-                            color: selected ? tab.activeText : c.ink40,
+                      if (tab.count != null) ...[
+                        const SizedBox(width: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 1,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 18),
+                          decoration: BoxDecoration(
+                            color: selected
+                                ? tab.activeText.withValues(alpha: 0.15)
+                                : c.ink20.withValues(alpha: 0.2),
+                            borderRadius: AppRadius.pillBR,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${tab.count}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w700,
+                              color: selected ? tab.activeText : c.ink40,
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
               ),
             ),

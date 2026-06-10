@@ -1,0 +1,416 @@
+# EzyBill Flutter — Customer Creation Flow: Analysis & Fix Plan
+
+> **Document Author:** AI Agent (Antigravity)
+> **Conversation ID:** `0a2d2edb-a8d4-41f5-9d8a-58932181aab8`
+> **Date:** 2026-04-28
+> **Status:** Analysis Complete — Ready for Implementation
+
+---
+
+## 1. Problem Statement (User Report)
+
+> *"I go to Fresh STB, there are a few STBs present which have a VC number pair. After that I filled all mandatory fields in Edit Customer, then when I click Update it says: **Dealer or Employee does not exist (statusCode: 1)**. It should show a review page with all details, then if I click Confirm it would create a new customer."*
+
+### Expected Flow
+```
+Fresh STB List  →  Select STB (has VC pair)  →  Fill Customer Details
+→  Review Page (all details shown)  →  Click "Confirm"  →  Customer Created in DB  →  Success
+```
+
+### Actual Flow (Broken)
+```
+Fresh STB List  →  Select STB  →  EditCustomerScreen (WRONG SCREEN)
+→  Fill fields  →  Click "Update"  →  API: editCustomerRest  →  statusCode:1 ERROR
+```
+
+---
+
+## 2. Root Cause Analysis
+
+### Root Cause #1 — WRONG SCREEN: EditCustomerScreen used for new customer creation
+
+**Where it breaks:** `customer_profile_screen.dart` lines 602–628 (Edit button) or any entry point that navigates a Fresh STB to `EditCustomerScreen`.
+
+**Why it fails:** `EditCustomerScreen._submit()` calls `editCustomerRest` (endpoint: `POST /LcoRestServices/editCustomerRest`). This endpoint requires an **existing** `customerId`. A Fresh STB has NO customer yet — so the server cannot find a dealer/employee linked to that customer, returning:
+```json
+{ "status_code": 1, "status_msg": "Dealer or Employee does not exist" }
+```
+
+**Correct screen:** `NewCustomerScreen` — calls `saveCustomerRest` (endpoint: `POST /LcoRestServices/saveCustomerRest`), which creates a NEW customer.
+
+---
+
+### Root Cause #2 — TODO STUB: `onNewCustomer` in `quick_action_sheet.dart` does nothing
+
+**File:** `lib/presentation/screens/quick_action/quick_action_sheet.dart`
+**Lines:** 176–179
+
+```dart
+onNewCustomer: () {
+  Navigator.of(context).pop();
+  // TODO: Navigate to new customer screen  ← BUG: does nothing
+},
+```
+
+When the Quick Action sheet finds a FRESH STB (status == `"FRESH"`) and the user taps **"New Customer"**, the sheet closes but navigates nowhere.
+
+**Fix:** Navigate to `RouteNames.newCustomer` with the STB data pre-filled from `quickActionProvider` state.
+
+---
+
+### Root Cause #3 — MISSING FIELDS: `saveCustomer` payload may miss `dealerId`/`employeeId`
+
+**File:** `lib/presentation/screens/customers/new_customer_screen.dart`
+**Lines:** 628–691 (`_saveCustomer` method)
+
+The `customerData` map built in `_saveCustomer()` does **not** explicitly include `dealerId` or `employeeId`. The server's `saveCustomerRest_post()` extracts these from the JWT token via `WsModel->isValidPassToken()`. However:
+- If the JWT token is expired or malformed, this extraction fails
+- If `boxNumber` is empty (not sent), server may fail to validate the STB-dealer link
+
+**Current payload keys sent:**
+```dart
+customerTypeId, firstName, lastName, mobile, email, fatherName, gender,
+dateofbirth, idType, idNumber, businessName, accountNumber, address,
+address2, pin, country, state, district, city, mandal, installationAddress,
+group, billType, cafNumber, lcoCustomerId, remarks, discount, latitude,
+longitude, customerTypeTypesId, boxNumber,
+[packageId, pricingStructureType, dateType, quantity, validityDays — when VC exists]
+```
+
+**Key issue:** `mobileNumber` is sent as `'mobile'` in the payload (line 634), but the API doc lists the field as `mobileNumber`. This **key mismatch** may cause silent failures.
+
+---
+
+### Root Cause #4 — `hasResult` gate in `QuickActionState` blocks Fresh STBs
+
+**File:** `lib/application/providers/quick_action_provider.dart`
+**Line:** 70
+
+```dart
+bool get hasResult => customerId != null && customerId!.isNotEmpty;
+```
+
+When a Fresh STB is searched by **serial number or VC number** (not by customer name/mobile/account), the search path calls `getCustomerDetailsRest`. If no customer exists for that STB (true fresh box), the response will return an empty list, causing `hasResult = false` and no action buttons to appear. **The user may not be able to reach the New Customer button at all** via Quick Action serial search.
+
+---
+
+## 3. Complete Architecture Map
+
+### 3.1 Key Files
+
+| File | Purpose | Status |
+|------|---------|--------|
+| `lib/presentation/screens/customers/new_customer_screen.dart` | 4-step wizard: STB → Form → Package → Confirm | ✅ Exists, needs payload fix |
+| `lib/presentation/screens/customers/new_customer_confirm_screen.dart` | Step 4: Review page with "Create Customer" button | ✅ Fully implemented |
+| `lib/presentation/screens/customers/new_customer_package_screen.dart` | Step 3: Package selection | ✅ Exists |
+| `lib/presentation/screens/customers/edit_customer_screen.dart` | Edit EXISTING customer (editCustomerRest) | ✅ Correct for existing customers only |
+| `lib/presentation/screens/quick_action/quick_action_sheet.dart` | Quick STB search + action buttons | ❌ `onNewCustomer` is a TODO stub |
+| `lib/application/providers/quick_action_provider.dart` | State + API chain for Quick Action | ✅ Has STB data: serial, vc, stockId, deviceId |
+| `lib/data/datasources/remote/customer_remote_datasource.dart` | `saveCustomer()` and `editCustomer()` API calls | ✅ Implemented |
+| `lib/presentation/router/app_router.dart` | Route definitions | ✅ `newCustomer` route accepts `prefilledSerial`, `prefilledVc`, `prefilledStbCode` |
+| `lib/core/config/app_session.dart` | Session object with `dealerId`, `employeeId`, `token` | ✅ Fully populated after login |
+
+### 3.2 NewCustomerScreen — 4-Step Wizard
+
+```
+Step 0 (index 0): STB Entry (_buildStep1Stb)
+    ↓ _stbVerified = true (auto-skip if prefilledSerial is set)
+Step 1 (index 1): Customer Form (_buildStep2Form) — 20-rule validation
+    ↓ _validateForm() passes
+Step 2 (index 2): Package Selection (NewCustomerPackageScreen)
+    ↓ _selectedPackage set
+Step 3 (index 3): Review & Confirm (NewCustomerConfirmScreen)
+    ↓ onConfirm → _saveCustomer() → saveCustomerRest API
+    ↓ Success → dialog → Navigator.pop()
+```
+
+### 3.3 Route: `newCustomer`
+
+```dart
+// app_router.dart line 467–479
+GoRoute(
+  path: RouteNames.newCustomer,           // '/customer/new'
+  name: RouteNames.newCustomerName,       // 'new-customer'
+  parentNavigatorKey: _rootNavigatorKey,  // Full-screen, no bottom nav
+  builder: (context, state) {
+    final extra = state.extra as Map<String, dynamic>?;
+    return NewCustomerScreen(
+      prefilledSerial: extra?['serialNumber']?.toString(),
+      prefilledVc:     extra?['vcNumber']?.toString(),
+      prefilledStbCode: extra?['stbCode']?.toString(),
+    );
+  },
+),
+```
+
+When `prefilledSerial` is non-empty, `_applyRouteParams()` sets `_stbVerified = true` automatically — the user skips STB verification and lands on the customer form directly.
+
+### 3.4 QuickActionState — Fields Available for Fresh STB
+
+```dart
+state.serialNumber   // STB serial number
+state.vcNumber       // VC number
+state.boxNumber      // Box number
+state.stockId        // Stock ID (for deactivation/activation)
+state.deviceId       // Device ID
+state.backendSetupId // Back-end setup ID
+state.stbStatus      // "FRESH"
+state.customerId     // null or empty for truly fresh boxes
+```
+
+---
+
+## 4. API Reference (From REST_API_V2_SERVICE_DOCUMENT.md)
+
+### 4.1 `saveCustomerRest` — CREATE New Customer
+
+```
+POST /LcoRestServices/saveCustomerRest
+```
+
+**Auth:** JWT token in `Authorization: Bearer <token>` header + `authtoken` in body.
+
+**Server extracts** `dealerId` and `employeeId` from the JWT token via `WsModel->isValidPassToken()`. If token is valid, `statusCode:1` ("Dealer or Employee does not exist") means the server could not match the decoded token to a dealer or employee record.
+
+**Payload fields the Flutter app MUST send:**
+
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| `authtoken` | String | `session.token` | **Required** — added by `CustomerRemoteDatasource.saveCustomer()` |
+| `customerTypeId` | int | `md.selectedCustomerType.customerTypeId` | Required |
+| `firstName` | String | form field | Required |
+| `mobile` | String | form field | **Key must be `mobile` not `mobileNumber`** — verify against server |
+| `address` | String | form field | Required |
+| `boxNumber` | String | `_stbController.text` | STB serial — Required for fresh STB flow |
+| `billType` | String | `_billType.toString()` | `"1"` or `"2"` |
+| `packageId` | String | `_selectedPackage.productId` | When VC exists |
+| `pricingStructureType` | String | `_selectedPackage.pricingStructureType` | When VC exists |
+| `dateType` | String | from cycle | `"1"` month, `"2"` year, `"3"` day |
+| `quantity` | String | `_quantity.toString()` | When VC exists |
+
+> **⚠️ CRITICAL:** The server returns `statusCode: 1` with "Dealer or Employee does not exist" when it cannot extract valid dealerId/employeeId from the JWT. This means the token in `session.token` must be valid and non-expired. If login session has expired, re-login is required.
+
+### 4.2 `editCustomerRest` — EDIT Existing Customer
+
+```
+POST /LcoRestServices/editCustomerRest
+```
+
+**This endpoint requires an existing customer.** It is ONLY for `EditCustomerScreen`. **Never call this for a Fresh STB.**
+
+### 4.3 `validateBoxInfoRest` — Validate STB Before Registration
+
+```
+POST /LcoRestServices/validateBoxInfoRest
+Payload: { boxNumber: String }
+Response: { status_code: 0=success/1=fail, resellerId: ... }
+```
+
+Used in `NewCustomerScreen._verifyStb()`. Returns success (0) if STB is in the system and is a fresh/unassigned box. Already implemented correctly.
+
+---
+
+## 5. What Has Been Done (Investigation)
+
+1. ✅ Read complete `REST_API_V2_SERVICE_DOCUMENT.md` (all 70 endpoints)
+2. ✅ Read `quick_action_sheet.dart` (all 1512 lines) — identified `onNewCustomer` TODO stub
+3. ✅ Read `quick_action_provider.dart` (all 586 lines) — confirmed Fresh STB state fields
+4. ✅ Read `new_customer_screen.dart` (lines 1–850) — confirmed 4-step wizard, `_saveCustomer` payload
+5. ✅ Read `new_customer_confirm_screen.dart` (all 556 lines) — confirmed review page is fully built
+6. ✅ Read `customer_profile_screen.dart` (all 786 lines) — confirmed Edit button uses `editCustomerRest`
+7. ✅ Read `app_router.dart` (all 541 lines) — confirmed route definitions and params
+8. ✅ Read `customer_remote_datasource.dart` (all 207 lines) — confirmed `saveCustomer` and `editCustomer`
+9. ✅ Read `app_session.dart` (all 534 lines) — confirmed `dealerId`, `employeeId`, `token` available
+10. ✅ Read `route_names.dart` — confirmed all route constants
+
+---
+
+## 6. What Needs to Be Done (Implementation Plan)
+
+### Fix #1 — Wire `onNewCustomer` in `quick_action_sheet.dart` (CRITICAL)
+
+**File:** `lib/presentation/screens/quick_action/quick_action_sheet.dart`
+**Lines to change:** 176–179
+
+Replace the TODO stub with actual navigation:
+
+```dart
+onNewCustomer: () {
+  final s = ref.read(quickActionProvider);
+  Navigator.of(context).pop(); // close bottom sheet
+  context.push(
+    RouteNames.newCustomer,
+    extra: {
+      'serialNumber': s.serialNumber ?? '',
+      'vcNumber':     s.vcNumber ?? '',
+    },
+  );
+},
+```
+
+**Note:** `RouteNames.newCustomer` is `/customer/new`. Since this is pushed from the Quick Action bottom sheet (which can appear on any tab), and `newCustomer` is a root-level route in `app_router.dart` using `_rootNavigatorKey`, this will work correctly from any screen.
+
+---
+
+### Fix #2 — Fix payload key `mobile` → verify correct key name
+
+**File:** `lib/presentation/screens/customers/new_customer_screen.dart`
+**Line:** 634
+
+```dart
+// CURRENT (may be wrong):
+'mobile': _mobileCtrl.text.trim(),
+
+// CORRECT — verify against server API doc. The API doc lists it as:
+'mobileNumber': _mobileCtrl.text.trim(),
+// OR keep 'mobile' if the server accepts both (check PHP source)
+```
+
+**Action:** Check `LcoRestServices.php` around line 5517 (`saveCustomerRest_post`) to confirm the exact parameter name. The API doc table only shows a subset of fields; the actual PHP code may use `mobile` or `mobileNumber`.
+
+---
+
+### Fix #3 — Ensure the search-by-VC/Serial path shows Fresh STBs in Quick Action
+
+**File:** `lib/application/providers/quick_action_provider.dart`
+**Lines:** 248–295
+
+Currently, when a serial/VC search returns **no customer** (empty list), the provider shows an error: `"No customer found for '...'"`.
+
+A truly fresh STB (never had a customer) won't appear in `getCustomerDetailsRest` — it only exists in the STB stock table. The current flow assumes all searches go through the customer table first.
+
+**Two options:**
+1. **Option A (Recommended):** When `getCustomerDetailsRest` returns empty for a `stbNo` or `vcNo` search, follow up with a `validateBoxInfoRest` call. If that returns `status_code: 0`, show a "FRESH STB" card with the "New Customer" button.
+2. **Option B:** Direct the user to use the `NewCustomerScreen` directly from a dedicated "Fresh STB" list/menu item (if one exists).
+
+---
+
+### Fix #4 — Prevent `EditCustomerScreen` from being reached for Fresh STBs
+
+**Problem:** If the user somehow navigates to `CustomerProfileScreen` for a fresh/placeholder customer and taps Edit, they land on `EditCustomerScreen`, which calls `editCustomerRest` and fails.
+
+**Where to fix:** `customer_profile_screen.dart` lines 602–628 (the Edit `CircleAction`).
+
+```dart
+// Before pushing to edit, check if this is a fresh customer with no STB
+// (status == 'Fresh' from _statusString getter)
+onTap: () async {
+  if (_statusString == 'Fresh') {
+    // Navigate to NewCustomerScreen instead
+    context.push(RouteNames.newCustomer, extra: {
+      'serialNumber': _f('serial_number', _f('serialNumber', '')),
+      'vcNumber': _f('vc_number', _f('vcNumber', '')),
+    });
+    return;
+  }
+  // ... existing edit navigation code ...
+},
+```
+
+---
+
+### Fix #5 — Add `mobileNumber` key alias for robustness
+
+**File:** `lib/presentation/screens/customers/new_customer_screen.dart`
+**Line:** 634
+
+Send **both** `mobile` and `mobileNumber` to handle any server-side key variation:
+
+```dart
+'mobile': _mobileCtrl.text.trim(),
+'mobileNumber': _mobileCtrl.text.trim(), // alias for server compatibility
+```
+
+---
+
+### Fix #6 — Add debug logging to `_saveCustomer` for production tracing
+
+**File:** `lib/presentation/screens/customers/new_customer_screen.dart`
+**After line 690 (before `ds.saveCustomer` call):**
+
+```dart
+if (kDebugMode) {
+  debugPrint('[NEW_CUSTOMER] Token: ${session?.token?.substring(0, 20)}...');
+  debugPrint('[NEW_CUSTOMER] DealerId: ${session?.dealerId}');
+  debugPrint('[NEW_CUSTOMER] EmployeeId: ${session?.employeeId}');
+  debugPrint('[NEW_CUSTOMER] Payload keys: ${customerData.keys.toList()}');
+  debugPrint('[NEW_CUSTOMER] boxNumber: ${customerData['boxNumber']}');
+}
+```
+
+This allows fast diagnosis if `statusCode:1` still occurs after fixes.
+
+---
+
+## 7. Implementation Priority Order
+
+| Priority | Fix | File | Lines | Risk |
+|----------|-----|------|-------|------|
+| 🔴 P0 | Wire `onNewCustomer` in quick_action_sheet | `quick_action_sheet.dart` | 176–179 | Low |
+| 🔴 P0 | Verify payload key: `mobile` vs `mobileNumber` | `new_customer_screen.dart` | 634 | Medium |
+| 🟠 P1 | Guard fresh STB from EditCustomerScreen | `customer_profile_screen.dart` | 602–628 | Low |
+| 🟠 P1 | Add debug logging to `_saveCustomer` | `new_customer_screen.dart` | ~688 | Zero |
+| 🟡 P2 | Quick Action: handle truly fresh STBs (no customer) | `quick_action_provider.dart` | 248–295 | Medium |
+
+---
+
+## 8. Verification Plan
+
+### 8.1 Happy Path Test
+1. Open Quick Action sheet → search an STB serial that is FRESH (has VC pair)
+2. Verify FRESH status card shows with "New Customer" button
+3. Tap "New Customer" → verify navigates to `NewCustomerScreen` with serial pre-filled
+4. Verify Step 0 (STB) is auto-skipped (because `prefilledSerial` is set)
+5. Fill all mandatory fields in Step 1 (form)
+6. Select package in Step 2
+7. Verify Step 3 (Review) shows all data correctly
+8. Tap "Create Customer" → verify API call goes to `saveCustomerRest` (NOT `editCustomerRest`)
+9. Verify `status_code: 0` response (success)
+10. Verify success dialog → tap OK → navigate back
+
+### 8.2 Error Path Test
+1. Try to access a fresh STB profile and tap Edit → verify redirect to NewCustomerScreen
+2. Clear session token → try save → verify correct error message (not a crash)
+3. Leave mandatory field empty → verify correct validation error (not a crash)
+
+### 8.3 Logs to Check (Debug Build)
+```
+[NEW_CUSTOMER] Token: ...
+[NEW_CUSTOMER] DealerId: <non-zero for LCO>
+[NEW_CUSTOMER] EmployeeId: <non-zero for employee>
+[NEW_CUSTOMER] Payload keys: [...]
+[SAVE_CUSTOMER] Failed response: {...}  // only on failure
+```
+
+---
+
+## 9. Known Constraints & Important Notes
+
+1. **JWT Auth is server-side:** The server extracts `dealerId`/`employeeId` from the JWT token. The Flutter app does NOT need to send `dealerId` explicitly in the `saveCustomerRest` payload. If the error persists after fixing the screen navigation, the JWT token itself may be invalid/expired.
+
+2. **`useCAF == 'MANUAL'` validation:** Rule 4 in `_validate()` makes `lcoCustomerId` mandatory when `useCAF == 'MANUAL'`. This will block many customers from being created unless they fill this field. This is by design per the Android business logic.
+
+3. **`useAccountNumber == 0` is counter-intuitive:** When `useAccountNumber == 0` (session flag), the account number field IS shown and IS mandatory. When `> 0`, it's hidden. This matches the Android behavior.
+
+4. **No fresh STB list screen found:** There is no dedicated "Fresh STB List" screen in the codebase. The user likely accesses fresh STBs via:
+   - Quick Action sheet search by serial/VC
+   - STB Operations screen (if it lists unassigned STBs)
+   Need to confirm entry point with user.
+
+5. **`NewCustomerConfirmScreen` (review page) is FULLY BUILT:** It already shows all details: STB, personal info, contact, identity, address, package — with a "Create Customer" button. The bug is NOT in this screen. The bug is that users never reach it because they're going to `EditCustomerScreen` instead.
+
+6. **`status_code` convention:** Most endpoints use `1 = success, 0 = error`. **Exception:** `getaccesscontrollRest` uses the reverse. Do NOT confuse the two.
+
+---
+
+## 10. Files NOT to Touch
+
+- `new_customer_confirm_screen.dart` — fully correct, do not modify
+- `new_customer_package_screen.dart` — correct, do not modify  
+- `customer_remote_datasource.dart` — correct, only add logs if needed
+- `app_session.dart` — correct, do not modify
+- `app_router.dart` — correct route definitions, do not modify
+
+---
+
+*End of Document*

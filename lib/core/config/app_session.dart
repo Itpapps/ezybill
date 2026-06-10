@@ -191,16 +191,16 @@ class AppSession {
   /// safe defaults so the app never crashes on a partial response.
   factory AppSession.fromLoginResponse(Map<String, dynamic> json) {
     return AppSession(
-      token: _str(json['authToken']),
+      token: _str(json['authToken'] ?? json['token']),
       dealerId: _int(json['dealerId']),
       employeeId: _int(json['employeeId']),
       userType: _str(json['userType']),
-      firstName: _str(json['firstName']),
-      lastName: _str(json['lastName']),
+      firstName: _str(json['firstName'] ?? json['first_name']),
+      lastName: _str(json['lastName'] ?? json['last_name']),
       email: _str(json['emailId'] ?? json['email']),
-      phone: _str(json['phone'] ?? json['mobileNo']),
+      phone: _str(json['phone'] ?? json['mobileNo'] ?? json['lcoMobileNo']),
       lcoCode: _str(json['lcoCode']),
-      businessName: _str(json['businessName']),
+      businessName: _str(json['businessName'] ?? json['business_name']),
       lcoLocation: _str(json['lcoLocation']),
       employeeParentType: _str(json['employeeParentType']),
       employeeParentId: _str(json['employeeParentId']),

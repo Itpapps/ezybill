@@ -18,6 +18,16 @@ sealed class District with _$District {
 
 Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
   final r = Map<String, dynamic>.from(json);
+  // Server variants: {id, name, stateId}
+  if (!r.containsKey('district_id') && r['id'] != null) {
+    r['district_id'] = r['id'];
+  }
+  if (!r.containsKey('district_name') && r['name'] != null) {
+    r['district_name'] = r['name'];
+  }
+  if (!r.containsKey('state_id') && r['stateId'] != null) {
+    r['state_id'] = r['stateId'];
+  }
   const intFields = ['district_id', 'state_id'];
   for (final key in intFields) {
     final v = r[key];

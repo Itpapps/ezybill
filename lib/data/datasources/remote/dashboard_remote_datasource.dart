@@ -26,11 +26,13 @@ class DashboardRemoteDatasource {
   /// LCO Deposit Amount
   Future<Map<String, dynamic>> getLcoDepositAmount({
     required String authtoken,
+    required int dealerId,
   }) async {
     final response = await _dio.post(
       ApiConstants.lcoDepositAmount,
       data: {
         'authtoken': authtoken,
+        'dealer_id': dealerId,
       },
     );
     return response.data as Map<String, dynamic>;

@@ -8,6 +8,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
+import '../../../core/utils/parse_utils.dart';
 import '../../../data/models/payment/invoice_item.dart';
 import '../../../l10n/app_localizations.dart';
 
@@ -56,11 +57,12 @@ class _InvoiceHistoryNotifier extends ChangeNotifier {
       final data = await ds.getInvoiceHistory(
         authtoken: session?.token ?? '',
         customerId: customerId,
+        dealerId: session?.dealerId ?? 0,
       );
-      final list = (data['invoiceList'] as List<dynamic>?)
-              ?.map((e) => InvoiceItem.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final list = parseList<InvoiceItem>(
+        data['invoice_details'],
+        InvoiceItem.fromJson,
+      );
       _state = _state.copyWith(isLoading: false, items: list);
       notifyListeners();
     } catch (e) {

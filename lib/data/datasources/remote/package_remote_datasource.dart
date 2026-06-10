@@ -71,14 +71,17 @@ class PackageRemoteDatasource {
   /// Activate service — sends all required params from the Android spec.
   ///
   /// CRITICAL: Uses product_id (comma-separated) NOT customer_service_id.
-  /// Hard-coded values: quantity=1, dateType=0, pricingStructureType=1,
-  /// validityDays=1, fromMobileApp=1
+  /// Package-cycle fields are passed from provider using backend package data.
   Future<Map<String, dynamic>> activateService({
     required String authtoken,
     required String customerId,
     required String customerDeviceId,
     required String productId,
     required String stockId,
+    required String quantity,
+    required String dateType,
+    required String pricingStructureType,
+    required String validityDays,
     required String dealerId,
     required String resellerId,
     required String loginEmployeeId,
@@ -90,10 +93,10 @@ class PackageRemoteDatasource {
         'customerId': customerId,
         'customerDeviceId': customerDeviceId,
         'productId': productId,
-        'quantity': '1',
-        'dateType': '0',
-        'pricingStructureType': '1',
-        'validityDays': '1',
+        'quantity': quantity,
+        'dateType': dateType,
+        'pricingStructureType': pricingStructureType,
+        'validityDays': validityDays,
         'stockId': stockId,
         'fromMobileApp': '1',
         'login_employee_id': loginEmployeeId,

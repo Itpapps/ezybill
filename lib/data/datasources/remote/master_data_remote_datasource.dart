@@ -52,11 +52,13 @@ class MasterDataRemoteDatasource {
     required String authtoken,
     required String stateId,
     required String districtId,
+    String boxNumber = '',
   }) async {
     return _fetch(ApiConstants.cities, data: {
       'authtoken': authtoken,
       'stateId': stateId,
       'districtId': districtId,
+      'boxNumber': boxNumber,
     });
   }
 
@@ -64,10 +66,14 @@ class MasterDataRemoteDatasource {
   Future<Map<String, dynamic>> getMandals({
     required String authtoken,
     required String districtId,
+    String boxNumber = '',
+    String serialNumber = '',
   }) async {
     return _fetch(ApiConstants.mandals, data: {
       'authtoken': authtoken,
       'districtId': districtId,
+      'boxNumber': boxNumber,
+      'serialNumber': serialNumber,
     });
   }
 
@@ -85,9 +91,11 @@ class MasterDataRemoteDatasource {
   /// Get groups list
   Future<Map<String, dynamic>> getGroups({
     required String authtoken,
+    String serialNumber = '',
   }) async {
     return _fetch(ApiConstants.groups, data: {
       'authtoken': authtoken,
+      'serialNumber': serialNumber,
     });
   }
 

@@ -44,6 +44,9 @@ class _MiniDayReportScreenState extends ConsumerState<MiniDayReportScreen> {
     final colors = Theme.of(context).extension<AppColors>()!;
     final state = ref.watch(reportProvider);
     final today = DateTime.now();
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    // Ensure footer + button are never hidden by app-level bottom bars/overlays.
+    final bottomSafeSpace = bottomInset + 92;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -88,14 +91,14 @@ class _MiniDayReportScreenState extends ConsumerState<MiniDayReportScreen> {
 
           // ── Body ─────────────────────────────────────────────────────────
           Expanded(
-            child: _buildBody(colors, state),
+            child: _buildBody(colors, state, bottomSafeSpace),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBody(AppColors colors, ReportState state) {
+  Widget _buildBody(AppColors colors, ReportState state, double bottomSafeSpace) {
     // Loading
     if (state.isDailyLoading) {
       return Center(
@@ -122,7 +125,7 @@ class _MiniDayReportScreenState extends ConsumerState<MiniDayReportScreen> {
         // ── List ─────────────────────────────────────────────────────────
         Expanded(
           child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+            padding: EdgeInsets.fromLTRB(20, 16, 20, 8 + bottomSafeSpace),
             itemCount: rows.length,
             separatorBuilder: (_, __) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
@@ -137,72 +140,84 @@ class _MiniDayReportScreenState extends ConsumerState<MiniDayReportScreen> {
           ),
         ),
 
-        // ── Footer: Grand Total ──────────────────────────────────────────
-        Container(
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-          decoration: BoxDecoration(
-            color: colors.redSoft,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: colors.red.withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                AppLocalizations.of(context)!.grandTotal,
-                style: TextStyle(
-                  fontFamily: 'DM Sans',
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: colors.ink,
-                ),
-              ),
-              Text(
-                formatCurrency(grandTotal),
-                style: TextStyle(
-                  fontFamily: 'JetBrains Mono',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: colors.red,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // ── Print button ─────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-          child: SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: FilledButton.icon(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('BLE print coming soon'),
-                    duration: Duration(seconds: 2),
+        SafeArea(
+          top: false,
+          minimum: const EdgeInsets.only(bottom: 12),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // ── Footer: Grand Total ────────────────────────────────
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: BoxDecoration(
+                    color: colors.redSoft,
+                    borderRadius: BorderRadius.circular(14),
+                    border:
+                        Border.all(color: colors.red.withValues(alpha: 0.2)),
                   ),
-                );
-              },
-              icon: const Icon(LucideIcons.printer, size: 18),
-              label: const Text(
-                'Print Report',
-                style: TextStyle(
-                  fontFamily: 'DM Sans',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        AppLocalizations.of(context)!.grandTotal,
+                        style: TextStyle(
+                          fontFamily: 'DM Sans',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: colors.ink,
+                        ),
+                      ),
+                      Text(
+                        formatCurrency(grandTotal),
+                        style: TextStyle(
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: colors.red,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              style: FilledButton.styleFrom(
-                backgroundColor: colors.red,
-                foregroundColor: colors.card,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+
+                // ── Print button ───────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('BLE print coming soon'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    icon: const Icon(LucideIcons.printer, size: 18),
+                    label: const Text(
+                      'Print Report',
+                      style: TextStyle(
+                        fontFamily: 'DM Sans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.red,
+                      foregroundColor: colors.card,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                SizedBox(height: bottomSafeSpace),
+              ],
             ),
           ),
         ),

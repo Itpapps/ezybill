@@ -55,12 +55,17 @@ sealed class CustomerModel with _$CustomerModel {
       if (v == null) r[key] = 0.0;
     }
 
-    // Ensure customer_id is String (server may send int)
-    if (r['customer_id'] is int) {
-      r['customer_id'] = r['customer_id'].toString();
-    }
-    if (r['reseller_id'] is int) {
-      r['reseller_id'] = r['reseller_id'].toString();
+    // Ensure String fields stay String even when SOAP _smartConvert
+    // aggressively converts numeric-looking values to int/double.
+    // Without this, generated fromJson's `as String?` throws TypeError.
+    const stringFields = [
+      'customer_id', 'reseller_id', 'caf_no', 'mobile_no',
+      'pin_code', 'crf_number', 'bill_type', 'baid',
+      'account_number', 'serial_number', 'vc_number',
+      'billing_address', 'installation_address', 'customerName',
+    ];
+    for (final key in stringFields) {
+      if (r[key] is num) r[key] = r[key].toString();
     }
     // status may come as int (1=active, 0=inactive)
     if (r['status'] is int) {

@@ -5,6 +5,7 @@ import '../constants/app_constants.dart';
 import '../services/debug_log_service.dart';
 import 'api_exception.dart';
 import 'payload_encryption.dart';
+import 'soap_helper.dart';
 
 class DioClient {
   late final Dio _dio;
@@ -139,20 +140,27 @@ class _PayloadEncryptionInterceptor extends Interceptor {
     if (options.method == 'POST') {
       final data = options.data;
       final mapData = data is Map<String, dynamic> ? data : <String, dynamic>{};
-      debugPrint('[ENC-v2] Encrypting ${mapData.length} fields for ${options.path}');
-      final encrypted = PayloadEncryption.encryptPayload(mapData);
-      debugPrint('[ENC-v2] Result: payload=${encrypted['payload']?.length ?? 0}chars, hash=${encrypted['hash']?.length ?? 0}chars');
 
-      // Store encrypted preview for debug log
-      final debugLog = DebugLogService();
-      if (debugLog.enabled) {
-        final payloadStr = encrypted['payload']?.toString() ?? '';
-        final hashStr = encrypted['hash']?.toString() ?? '';
-        options.extra['_debug_encrypted_preview'] =
-            'payload=${payloadStr.length > 50 ? payloadStr.substring(0, 50) : payloadStr}... hash=${hashStr.length > 20 ? hashStr.substring(0, 20) : hashStr}...';
+      // LIVE: customerRestservices expects plain form data (no encryption).
+      // LOCAL: LcoRestServices requires encrypted {payload, hash} format.
+      if (ApiConstants.isWsController) {
+        debugPrint('[ENC-v2] LIVE mode — skipping encryption for ${options.path}');
+      } else {
+        debugPrint('[ENC-v2] Encrypting ${mapData.length} fields for ${options.path}');
+        final encrypted = PayloadEncryption.encryptPayload(mapData);
+        debugPrint('[ENC-v2] Result: payload=${encrypted['payload']?.length ?? 0}chars, hash=${encrypted['hash']?.length ?? 0}chars');
+
+        // Store encrypted preview for debug log
+        final debugLog = DebugLogService();
+        if (debugLog.enabled) {
+          final payloadStr = encrypted['payload']?.toString() ?? '';
+          final hashStr = encrypted['hash']?.toString() ?? '';
+          options.extra['_debug_encrypted_preview'] =
+              'payload=${payloadStr.length > 50 ? payloadStr.substring(0, 50) : payloadStr}... hash=${hashStr.length > 20 ? hashStr.substring(0, 20) : hashStr}...';
+        }
+
+        options.data = encrypted;
       }
-
-      options.data = encrypted;
     }
     handler.next(options);
   }
@@ -224,11 +232,47 @@ class _DebugLogResponseInterceptor extends Interceptor {
 }
 
 /// Decrypts server responses that are encrypted via `sendResponse -> app_data_encryption`.
-/// Server wraps all responses as `{payload: "...", hash: "..."}`.
+/// Server wraps all responses as `{payload: "...", hash: "..."}` .
 /// We decode via the `hash` field for efficiency.
+///
+/// Also handles SOAP XML responses (live mode) by parsing them to Map.
 class _ResponseDecryptionInterceptor extends Interceptor {
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
+    final soapMethod = response.requestOptions.extra['_soap_method'] as String?;
+
+    // ── SOAP XML response (live mode) ──
+    if (soapMethod != null && response.data is String) {
+      final xml = response.data as String;
+      debugPrint('[SOAP-RESP] Parsing response for $soapMethod (${xml.length} chars)');
+
+      final parsed = SoapHelper.parseResponse(xml);
+      if (parsed != null) {
+        debugPrint('[SOAP-RESP] Parsed keys: ${parsed.keys.toList()}');
+        response.data = parsed;
+      } else {
+        debugPrint('[SOAP-RESP] FAILED to parse SOAP response, passing raw string');
+        debugPrint('[SOAP-RESP] XML (first 500): ${xml.substring(0, xml.length > 500 ? 500 : xml.length)}');
+        // Try to extract error message from SOAP fault
+        final faultMatch = RegExp(r'<faultstring[^>]*>(.*?)</faultstring>', dotAll: true).firstMatch(xml);
+        if (faultMatch != null) {
+          response.data = <String, dynamic>{
+            'status_code': 1,
+            'status_msg': faultMatch.group(1) ?? 'SOAP Fault',
+          };
+        } else {
+          // Ensure response.data is always a Map so cast in datasources won't crash
+          response.data = <String, dynamic>{
+            'status_code': 1,
+            'status_msg': 'Unexpected response format from server',
+          };
+        }
+      }
+      handler.next(response);
+      return;
+    }
+
+    // ── Regular JSON response (local mode or customerRestservices) ──
     final data = response.data;
     debugPrint('[DECRYPT] Response type: ${data.runtimeType} for ${response.requestOptions.uri}');
     if (data is Map<String, dynamic>) {
@@ -259,18 +303,80 @@ class _AuthInterceptor extends Interceptor {
 
   _AuthInterceptor(this._client);
 
+  /// Methods available in customerRestservices on the live server.
+  /// Derived from configg.properties entries with /customerRestservices/ prefix.
+  /// These use REST; all others route through wsController SOAP.
+  static const _customerRestMethods = <String>{
+    // From configg.properties: /customerRestservices/ endpoints (V1 unencrypted REST)
+    'getaccesscontroll',
+    'getComplaintsubCategory',
+    'getLcoEmployeeList',
+    'getReceiptRanges',
+    'updateCustomerLocation',
+    'getExpiryServicesDateWiseCount',
+    'extendCustomerServices',
+    'getbilldetails',
+    'getlcowallet',
+    // Retrofit endpoints (also customerRestservices)
+    'getComplaintList',
+    'gettotalcomplaintslist',
+    'getdashboardlist',
+    // PG transactions — V1 uses customerRestservices, not wsController SOAP
+    'pgTransactionLogs',
+  };
+
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    // Add JWT token to header if available
-    if (_client.jwtToken != null && _client.jwtToken!.isNotEmpty) {
-      options.headers['Authorization'] = 'Bearer ${_client.jwtToken}';
-    }
-
-    // Handle custom base URL
+    // Always resolve base URL dynamically (may change after BMS registration)
     final customBaseUrl = options.extra['customBaseUrl'] as String?;
     if (customBaseUrl != null) {
       options.baseUrl = customBaseUrl;
       options.extra.remove('customBaseUrl');
+    } else if (ApiConstants.isWsController) {
+      // ══ LIVE MODE: Hybrid routing ══
+      // Some methods exist in customerRestservices (REST), others only in wsController (SOAP).
+      // Route accordingly based on the known REST method list from configg.properties.
+      final rawPath = options.path; // e.g. /dashBoardDetailsRest
+      var methodName = rawPath.startsWith('/') ? rawPath.substring(1) : rawPath;
+      // Strip "Rest" suffix for both REST and SOAP
+      if (methodName.endsWith('Rest')) {
+        methodName = methodName.substring(0, methodName.length - 'Rest'.length);
+      }
+
+      if (_customerRestMethods.contains(methodName)) {
+        // ── REST path: method exists in customerRestservices ──
+        options.baseUrl = ApiConstants.restBase;
+        options.path = '/$methodName';
+        debugPrint('[LIVE-REST] $methodName → customerRestservices');
+      } else {
+        // ── SOAP path: method only exists in wsController ──
+        final data = options.data;
+        final mapData = data is Map<String, dynamic>
+            ? data
+            : <String, dynamic>{};
+
+        final soapXml = SoapHelper.buildEnvelope(methodName, mapData);
+
+        debugPrint('[SOAP] Wrapping $methodName with ${mapData.length} params');
+
+        options.baseUrl = ApiConstants.baseUrl; // .../index.php/wsController
+        options.path = '';
+        options.data = soapXml;
+        options.contentType = 'text/xml; charset=utf-8';
+        options.responseType = ResponseType.plain; // receive XML as string
+        options.headers['SOAPAction'] = '/$methodName';
+
+        // Flag for response parser
+        options.extra['_soap_method'] = methodName;
+      }
+    } else {
+      // ══ LOCAL MODE: Direct REST to LcoRestServices ══
+      options.baseUrl = ApiConstants.restBase;
+    }
+
+    // Add JWT token to header if available
+    if (_client.jwtToken != null && _client.jwtToken!.isNotEmpty) {
+      options.headers['Authorization'] = 'Bearer ${_client.jwtToken}';
     }
 
     handler.next(options);
@@ -281,6 +387,33 @@ class _AuthInterceptor extends Interceptor {
     if (err.response?.statusCode == 401) {
       _client.onAuthFailure?.call();
     }
+
+    // For SOAP requests that get HTTP errors (e.g., 500 SOAP fault),
+    // try to parse the fault and return it as a resolved response
+    // so the app gets a proper error message instead of a raw exception.
+    final soapMethod = err.requestOptions.extra['_soap_method'] as String?;
+    if (soapMethod != null && err.response != null) {
+      final body = err.response?.data;
+      if (body is String && body.contains('faultstring')) {
+        final faultMatch = RegExp(
+          r'<faultstring[^>]*>(.*?)</faultstring>',
+          dotAll: true,
+        ).firstMatch(body);
+        final message = faultMatch?.group(1) ?? 'SOAP error';
+        debugPrint('[SOAP-ERR] $soapMethod fault: $message');
+        // Resolve as a "success" response with error status
+        handler.resolve(Response(
+          requestOptions: err.requestOptions,
+          statusCode: 200,
+          data: <String, dynamic>{
+            'status_code': 1,
+            'status_msg': message,
+          },
+        ));
+        return;
+      }
+    }
+
     handler.next(err);
   }
 }
@@ -312,6 +445,10 @@ class _LoggingInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     debugPrint('x ${err.type} ${err.message}');
+    if (err.response != null) {
+      debugPrint('[ERROR] Status: ${err.response?.statusCode}');
+      debugPrint('[ERROR] Response body: ${err.response?.data}');
+    }
     handler.next(err);
   }
 }

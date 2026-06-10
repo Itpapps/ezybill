@@ -8,6 +8,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
+import '../../../core/utils/parse_utils.dart';
 import '../../../data/models/payment/payment_history_item.dart';
 import '../../../data/models/payment/pg_transaction.dart';
 
@@ -53,14 +54,14 @@ class _DealerPaymentHistoryNotifier
       final data = await ds.getPaymentHistory(
         authtoken: session?.token ?? '',
         customerId: session?.dealerId.toString() ?? '',
+        dealerId: session?.dealerId ?? 0,
         fromDate: fromDate,
         toDate: toDate,
       );
-      final list = (data['paymentList'] as List<dynamic>?)
-              ?.map((e) =>
-                  PaymentHistoryItem.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final list = parseList<PaymentHistoryItem>(
+        data['payment_details'],
+        PaymentHistoryItem.fromJson,
+      );
       state = state.copyWith(isLoading: false, items: list);
     } catch (e) {
       state = state.copyWith(
@@ -120,10 +121,10 @@ class _DealerPgTransactionNotifier
         dealerId: session?.dealerId ?? 0,
         paymentStatus: paymentStatus,
       );
-      final list = (data['transactionList'] as List<dynamic>?)
-              ?.map((e) => PgTransaction.fromJson(e as Map<String, dynamic>))
-              .toList() ??
-          [];
+      final list = parseList<PgTransaction>(
+        data['transactionList'],
+        PgTransaction.fromJson,
+      );
       state = state.copyWith(isLoading: false, items: list);
     } catch (e) {
       state = state.copyWith(

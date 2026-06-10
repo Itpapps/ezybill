@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:http/http.dart' as http;
 
+import '../../../core/constants/api_constants.dart';
 import '../../models/auth/bms_registration_response.dart';
 
 /// Remote datasource for BMS (Business Management System) SOAP calls.
@@ -14,14 +15,12 @@ class BmsRemoteDatasource {
 
   final http.Client _client;
 
-  static const String defaultBmsUrl =
-      'http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication';
+  /// Default BMS URL — sourced from ApiConstants so the environment toggle
+  /// in api_constants.dart applies everywhere automatically.
+  static String get defaultBmsUrl => ApiConstants.bmsUrl;
 
-  static const String _defaultSoapAction =
-      'http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication';
-
-  static const String _defaultNamespace =
-      'http://183.83.216.66:9090/ezybms_m8/app/index.php';
+  static String get _defaultNamespace =>
+      ApiConstants.bmsUrl.replaceAll('/validateAuthentication', '');
 
   /// Auto-login check: is this device already registered?
   ///

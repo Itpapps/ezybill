@@ -14,6 +14,7 @@ import '../../../data/models/package/cas_package.dart';
 
 class NewCustomerPackageScreen extends ConsumerStatefulWidget {
   final String stbNumber;
+  final bool packageRequired;
   final CasPackage? selectedPackage;
   final int cycle;
   final int quantity;
@@ -26,6 +27,7 @@ class NewCustomerPackageScreen extends ConsumerStatefulWidget {
   const NewCustomerPackageScreen({
     super.key,
     required this.stbNumber,
+    required this.packageRequired,
     required this.selectedPackage,
     required this.cycle,
     required this.quantity,
@@ -91,6 +93,7 @@ class _NewCustomerPackageScreenState
       );
 
       final rawList = data['casPackagesList'] ??
+          data['caspackageList'] ??
           data['casPackages'] ??
           data['data'] ??
           [];
@@ -130,11 +133,11 @@ class _NewCustomerPackageScreenState
       _selected = pkg;
       // Default cycle based on pricing structure type
       if (pkg.pricingStructureType == '1') {
-        // One-time: allow Year/Month/Day
-        _cycle = 2;
+        // One-time: default to Month (Month=1, Year=2, Day=3)
+        _cycle = 1;
       } else {
         // Recurring: Year only
-        _cycle = 1;
+        _cycle = 2;
       }
     });
   }
@@ -143,6 +146,22 @@ class _NewCustomerPackageScreenState
     _quantity = int.tryParse(_quantityCtrl.text) ?? 1;
     _validityDays = int.tryParse(_validityCtrl.text) ?? 30;
     widget.onPackageSelected(_selected, _cycle, _quantity, _validityDays);
+  }
+
+  double _estimatedAmount() {
+    if (_selected == null) return 0;
+    final unit = _selected!.price;
+    final qty = (int.tryParse(_quantityCtrl.text) ?? 1).clamp(1, 9999);
+    if (_cycle == 2) {
+      // Yearly = 12x base monthly amount
+      return unit * 12 * qty;
+    }
+    if (_cycle == 3) {
+      final days = (int.tryParse(_validityCtrl.text) ?? 30).clamp(1, 3650);
+      return (unit / 30.0) * days * qty;
+    }
+    // Monthly
+    return unit * qty;
   }
 
   @override
@@ -195,29 +214,101 @@ class _NewCustomerPackageScreenState
                 const SizedBox(height: 16),
 
                 // Package list
-                if (_isLoading)
+                if (!widget.packageRequired)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: colors.amberSoft,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colors.amber.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      'VC number is not available for this STB. You can create customer now, '
+                      'but package operations are disabled until VC is available.',
+                      style: TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                        color: colors.ink80,
+                      ),
+                    ),
+                  )
+                else if (_isLoading)
                   _LoadingIndicator(colors: colors)
                 else if (_error != null)
                   _ErrorCard(error: _error!, colors: colors, onRetry: _loadPackages)
                 else if (_packages.isEmpty)
                   _EmptyState(colors: colors)
                 else
-                  ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _filtered.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) {
-                      final pkg = _filtered[i];
-                      final isSelected =
-                          _selected?.productId == pkg.productId;
-                      return _PackageCard(
-                        package: pkg,
-                        isSelected: isSelected,
-                        colors: colors,
-                        onTap: () => _selectPackage(pkg),
-                      );
-                    },
+                  Column(
+                    children: [
+                      DropdownButtonFormField<CasPackage>(
+                        value: _selected != null && _filtered.any((p) => p.productId == _selected!.productId)
+                            ? _filtered.firstWhere((p) => p.productId == _selected!.productId)
+                            : null,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Product',
+                          labelStyle: TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontSize: 13,
+                            color: colors.ink40,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: colors.ink10),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: colors.ink10),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: colors.red),
+                          ),
+                          filled: true,
+                          fillColor: colors.card,
+                        ),
+                        items: _filtered
+                            .map(
+                              (pkg) => DropdownMenuItem<CasPackage>(
+                                value: pkg,
+                                child: Text(
+                                  pkg.productName,
+                                  style: TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 14,
+                                    color: colors.ink,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (pkg) {
+                          if (pkg != null) _selectPackage(pkg);
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _filtered.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 8),
+                        itemBuilder: (ctx, i) {
+                          final pkg = _filtered[i];
+                          final isSelected = _selected?.productId == pkg.productId;
+                          return _PackageCard(
+                            package: pkg,
+                            isSelected: isSelected,
+                            colors: colors,
+                            onTap: () => _selectPackage(pkg),
+                          );
+                        },
+                      ),
+                    ],
                   ),
 
                 // Activation details (when a package is selected)
@@ -280,12 +371,12 @@ class _NewCustomerPackageScreenState
                           ),
                           items: [
                             DropdownMenuItem(
-                              value: 1,
+                              value: 2,
                               child: const Text('Year'),
                             ),
                             if (_selected!.pricingStructureType == '1') ...[
                               DropdownMenuItem(
-                                value: 2,
+                                value: 1,
                                 child: const Text('Month'),
                               ),
                               DropdownMenuItem(
@@ -390,6 +481,41 @@ class _NewCustomerPackageScreenState
                             ),
                           ),
                         ],
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: colors.redSoft,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: colors.red.withValues(alpha: 0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(LucideIcons.indianRupee, size: 16, color: colors.red),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Estimated Amount:',
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 13,
+                                  color: colors.ink60,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const Spacer(),
+                              Text(
+                                _estimatedAmount().toStringAsFixed(2),
+                                style: TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 15,
+                                  color: colors.red,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -433,7 +559,7 @@ class _NewCustomerPackageScreenState
               Expanded(
                 flex: 2,
                 child: ElevatedButton.icon(
-                  onPressed: _selected != null
+                  onPressed: (!widget.packageRequired || _selected != null)
                       ? () {
                           _notifyParent();
                           widget.onNext();

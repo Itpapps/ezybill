@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../application/providers/auth_provider.dart';
+import '../../core/constants/api_constants.dart';
 import '../../application/providers/bms_provider.dart';
 import '../../application/providers/core_providers.dart';
 import '../common/widgets/app_shell.dart';
@@ -94,12 +95,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // If not registered with BMS, go to registration (unless already there)
-      if (!kIsWeb && !hasRegistration && !isRegistering) {
+      // In local mode (_forceLocal), skip BMS — go straight to login.
+      if (!kIsWeb && !hasRegistration && !isRegistering && !ApiConstants.forceLocal) {
         return RouteNames.registration;
       }
 
-      // If registered with BMS but not logged in, go to login
-      if (hasRegistration && !isLoggedIn && !isLoggingIn && !isRegistering) {
+      // If registered with BMS (or in local mode) but not logged in, go to login
+      if ((hasRegistration || ApiConstants.forceLocal) && !isLoggedIn && !isLoggingIn && !isRegistering) {
         return RouteNames.login;
       }
 
@@ -150,6 +152,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                   // "customer/new" must come before "customer/:id" so the
                   // literal path is matched first.
                   GoRoute(
+                    path: 'customer/new',
+                    builder: (context, state) {
+                      final extra = state.extra as Map<String, dynamic>?;
+                      return NewCustomerScreen(
+                        prefilledSerial: extra?['serialNumber']?.toString(),
+                        prefilledVc: extra?['vcNumber']?.toString(),
+                        prefilledStbCode: extra?['stbCode']?.toString(),
+                      );
+                    },
+                  ),
+                  GoRoute(
                     path: 'customer/:id/edit',
                     name: RouteNames.editCustomerName,
                     builder: (context, state) {
@@ -171,6 +184,7 @@ final routerProvider = Provider<GoRouter>((ref) {
                       return CustomerProfileScreen(
                         customerId: id,
                         customerName: extra?['customerName']?.toString(),
+                        initialData: extra,
                       );
                     },
                   ),
@@ -184,6 +198,8 @@ final routerProvider = Provider<GoRouter>((ref) {
                       return MakePaymentScreen(
                         customerId: extra?['customerId']?.toString(),
                         customerName: extra?['customerName']?.toString(),
+                        initialPendingAmount: (extra?['pendingAmount'] is num) ? 
+                        (extra!['pendingAmount'] as num).toDouble() : null,
                       );
                     },
                   ),

@@ -41,6 +41,28 @@ sealed class CustomerSearchResponse with _$CustomerSearchResponse {
       r['customerDetailsList'] = r['existCustomerDetails'];
     }
 
+    // PHP json_encode may return customerDetailsList as a JSON object
+    // (e.g. {"0": {...}}) instead of a JSON array ([{...}]) when there is
+    // exactly 1 result.  The generated .g.dart code does a hard cast to
+    // List<dynamic>? which would crash.  Convert Map→List here so every
+    // downstream consumer sees a consistent List shape.
+    //
+    // Also: the server sometimes appends integer-valued metadata entries
+    // (e.g. lco_deposits, deposits) alongside the customer objects in the
+    // same PHP array.  Filter those out so only Map elements reach fromJson.
+    final rawList = r['customerDetailsList'];
+    if (rawList is Map) {
+      r['customerDetailsList'] = rawList.values
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    } else if (rawList is List) {
+      // Guard against non-Map elements written back by the datasource layer
+      // (e.g. integer metadata values from a mixed-type PHP array).
+      r['customerDetailsList'] = rawList
+          .whereType<Map<String, dynamic>>()
+          .toList();
+    }
+
     // customerCount may not be present in getCustomerDetailsRest (only in Count endpoint)
     // Derive from list length if missing
     if (!r.containsKey('customerCount') || r['customerCount'] == null) {

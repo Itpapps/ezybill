@@ -1,96 +1,75 @@
 import 'dart:async';
-import 'dart:typed_data';
-
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+
+import '../../application/providers/core_providers.dart';
 
 // ---------------------------------------------------------------------------
 // Connection state enum
 // ---------------------------------------------------------------------------
 
-/// Mirrors the Android BluetoothChatService state constants.
 enum BtConnectionState {
-  /// Idle / not connected.
   none,
-
-  /// Scanning for nearby Bluetooth devices.
-  scanning,
-
-  /// Attempting to connect to a device.
   connecting,
-
-  /// Connected and ready to print.
   connected,
-
-  /// An error occurred (check [BluetoothPrintState.errorMessage]).
   error,
 }
 
 // ---------------------------------------------------------------------------
-// Discovered device model
+// Permission status result — never throws
 // ---------------------------------------------------------------------------
 
-/// Lightweight value object representing a Bluetooth device found during scan.
+enum BtPermissionStatus {
+  granted,
+  denied,
+  permanentlyDenied,
+}
+
+// ---------------------------------------------------------------------------
+// Device model
+// ---------------------------------------------------------------------------
+
 class BtDevice {
   final String name;
   final String address;
-  final int rssi;
 
-  const BtDevice({
-    required this.name,
-    required this.address,
-    this.rssi = 0,
-  });
+  const BtDevice({required this.name, required this.address});
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is BtDevice &&
-          runtimeType == other.runtimeType &&
-          address == other.address;
+      other is BtDevice && address == other.address;
 
   @override
   int get hashCode => address.hashCode;
 
   @override
-  String toString() => 'BtDevice($name, $address, rssi=$rssi)';
+  String toString() => 'BtDevice($name, $address)';
 }
 
 // ---------------------------------------------------------------------------
-// Printer model detection
+// Printer model
 // ---------------------------------------------------------------------------
 
-/// Detected printer width derived from the connected device name prefix.
 enum PrinterModel {
-  /// 58mm thermal printer (32 printable chars per line).
   thermal58mm(32),
-
-  /// 80mm thermal printer (40 printable chars per line).
   thermal80mm(40);
 
   final int lineWidth;
   const PrinterModel(this.lineWidth);
 }
 
-/// Detect the printer model from the Bluetooth device name.
-///
-/// - Names starting with `ANTHERMAL` or `AT2TV` => 58mm (32 chars).
-/// - Names starting with `97BT-` => 80mm (40 chars).
-/// - Anything else falls back to 58mm.
 PrinterModel detectPrinterModel(String deviceName) {
-  final upper = deviceName.toUpperCase();
-  if (upper.startsWith('97BT-')) return PrinterModel.thermal80mm;
-  // ANTHERMAL, AT2TV, or unknown -> 58mm
+  if (deviceName.toUpperCase().startsWith('97BT-')) {
+    return PrinterModel.thermal80mm;
+  }
   return PrinterModel.thermal58mm;
 }
-
-// ---------------------------------------------------------------------------
-// SharedPreferences key
-// ---------------------------------------------------------------------------
-
-const String _kBluetoothMacKey = 'bluetoothmac';
-const String _kBluetoothNameKey = 'bluetoothname';
 
 // ---------------------------------------------------------------------------
 // State
@@ -98,25 +77,21 @@ const String _kBluetoothNameKey = 'bluetoothname';
 
 class BluetoothPrintState {
   final BtConnectionState connectionState;
-  final List<BtDevice> discoveredDevices;
   final BtDevice? connectedDevice;
   final PrinterModel printerModel;
   final String? errorMessage;
 
   const BluetoothPrintState({
     this.connectionState = BtConnectionState.none,
-    this.discoveredDevices = const [],
     this.connectedDevice,
     this.printerModel = PrinterModel.thermal58mm,
     this.errorMessage,
   });
 
   bool get isConnected => connectionState == BtConnectionState.connected;
-  bool get isScanning => connectionState == BtConnectionState.scanning;
 
   BluetoothPrintState copyWith({
     BtConnectionState? connectionState,
-    List<BtDevice>? discoveredDevices,
     BtDevice? connectedDevice,
     PrinterModel? printerModel,
     String? errorMessage,
@@ -125,324 +100,405 @@ class BluetoothPrintState {
   }) {
     return BluetoothPrintState(
       connectionState: connectionState ?? this.connectionState,
-      discoveredDevices: discoveredDevices ?? this.discoveredDevices,
       connectedDevice:
           clearDevice ? null : (connectedDevice ?? this.connectedDevice),
       printerModel: printerModel ?? this.printerModel,
-      errorMessage:
-          clearError ? null : (errorMessage ?? this.errorMessage),
+      errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Notifier
+// Notifier — production-grade, crash-proof design
 // ---------------------------------------------------------------------------
 
-/// Manages BLE printer discovery, connection, and data transmission.
+/// Production Bluetooth print notifier.
 ///
-/// **Important:** This implementation uses `flutter_blue_plus` for BLE
-/// communication. Make sure the package is added to `pubspec.yaml` and the
-/// required Android/iOS permissions are configured.
-///
-/// Android permissions (AndroidManifest.xml):
-///   - `BLUETOOTH`, `BLUETOOTH_ADMIN`
-///   - `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT` (Android 12+)
-///   - `ACCESS_FINE_LOCATION` (for BLE scanning)
-///
-/// iOS permissions (Info.plist):
-///   - `NSBluetoothAlwaysUsageDescription`
-///   - `NSBluetoothPeripheralUsageDescription`
+/// Design principles:
+/// - `build()` is PURE SYNCHRONOUS — cannot crash, cannot fail.
+/// - SharedPreferences accessed via `ref.read()` only (never watched).
+/// - No Timers or async work in `build()`.
+/// - All platform calls wrapped in try/catch with typed error handling.
+/// - Permissions are checked silently first; only requested if not granted.
+/// - `openAppSettings()` is NEVER called automatically — only exposed as a
+///   method for the UI to call when the user explicitly taps a button.
 class BluetoothPrintNotifier extends Notifier<BluetoothPrintState> {
-  // TODO: Replace with actual flutter_blue_plus instances once the package is
-  // added. The current implementation stores connection state and delegates
-  // actual BLE I/O to platform-channel methods.
-  //
-  // Example with flutter_blue_plus:
-  //   final FlutterBluePlus _flutterBlue = FlutterBluePlus.instance;
-  //   BluetoothDevice? _bleDevice;
-  //   BluetoothCharacteristic? _writeCharacteristic;
+  // ── SharedPreferences keys ──────────────────────────────────────────────
+  static const String _kMacKey = 'bluetoothmac';
+  static const String _kNameKey = 'bluetoothname';
 
-  late SharedPreferences _prefs;
-
-  StreamSubscription<dynamic>? _scanSubscription;
-  Timer? _reconnectTimer;
+  // ── build — MUST be synchronous and infallible ──────────────────────────
 
   @override
   BluetoothPrintState build() {
-    _prefs = ref.watch(_sharedPrefsProvider);
-
-    // Attempt auto-reconnect to the last known printer.
-    _autoReconnect();
-
-    ref.onDispose(() {
-      _scanSubscription?.cancel();
-      _reconnectTimer?.cancel();
-    });
-
+    // Pure initial state. No async, no watchers, no side effects.
+    // This guarantees the provider can NEVER enter an error state at startup.
     return const BluetoothPrintState();
   }
 
-  // ── Persistence helpers ──────────────────────────────────────────────────
+  // ── Permission helpers ────────────────────────────────────────────────────
 
-  /// Save the selected printer MAC and name to SharedPreferences.
-  Future<void> _persistDevice(BtDevice device) async {
-    await _prefs.setString(_kBluetoothMacKey, device.address);
-    await _prefs.setString(_kBluetoothNameKey, device.name);
-  }
-
-  /// Read the last connected printer from SharedPreferences.
-  BtDevice? _loadPersistedDevice() {
-    final mac = _prefs.getString(_kBluetoothMacKey);
-    final name = _prefs.getString(_kBluetoothNameKey) ?? '';
-    if (mac == null || mac.isEmpty) return null;
-    return BtDevice(name: name, address: mac);
-  }
-
-  /// Clear the persisted printer info.
-  Future<void> _clearPersistedDevice() async {
-    await _prefs.remove(_kBluetoothMacKey);
-    await _prefs.remove(_kBluetoothNameKey);
-  }
-
-  // ── Auto-reconnect ───────────────────────────────────────────────────────
-
-  /// Try to reconnect to the last known printer on app start.
-  void _autoReconnect() {
-    final saved = _loadPersistedDevice();
-    if (saved == null) return;
-
-    // Delay slightly to let the BLE adapter initialise.
-    _reconnectTimer = Timer(const Duration(seconds: 2), () {
-      debugPrint('[BT] Auto-reconnecting to ${saved.address}...');
-      connectToDevice(saved);
-    });
-  }
-
-  // ── Scanning ─────────────────────────────────────────────────────────────
-
-  /// Start scanning for nearby Bluetooth LE devices.
-  ///
-  /// Scanning runs for [timeout] (default 10 seconds) then stops automatically.
-  Future<void> startScan({Duration timeout = const Duration(seconds: 10)}) async {
-    state = state.copyWith(
-      connectionState: BtConnectionState.scanning,
-      discoveredDevices: [],
-      clearError: true,
-    );
-
+  /// Check current Bluetooth permission status WITHOUT requesting. Never throws.
+  /// Only checks the two BT permissions needed for classic printer operations.
+  /// Location is excluded — our manifest uses neverForLocation flag.
+  Future<BtPermissionStatus> checkPermissions() async {
+    if (!Platform.isAndroid) return BtPermissionStatus.granted;
     try {
-      // TODO: Replace with flutter_blue_plus scan.
-      // Example:
-      //   _scanSubscription = FlutterBluePlus.onScanResults.listen((results) {
-      //     final devices = results.map((r) => BtDevice(
-      //       name: r.device.platformName.isNotEmpty
-      //           ? r.device.platformName
-      //           : 'Unknown',
-      //       address: r.device.remoteId.str,
-      //       rssi: r.rssi,
-      //     )).toList();
-      //     state = state.copyWith(discoveredDevices: devices);
-      //   });
-      //   await FlutterBluePlus.startScan(timeout: timeout);
+      final scan = await Permission.bluetoothScan.status;
+      final connect = await Permission.bluetoothConnect.status;
 
-      // Placeholder: simulate a scan completing after timeout.
-      await Future<void>.delayed(timeout);
-
-      state = state.copyWith(
-        connectionState: state.connectedDevice != null
-            ? BtConnectionState.connected
-            : BtConnectionState.none,
-      );
+      if (scan.isPermanentlyDenied || connect.isPermanentlyDenied) {
+        return BtPermissionStatus.permanentlyDenied;
+      }
+      if (scan.isGranted && connect.isGranted) {
+        return BtPermissionStatus.granted;
+      }
+      return BtPermissionStatus.denied;
     } catch (e) {
-      state = state.copyWith(
-        connectionState: BtConnectionState.error,
-        errorMessage: 'Scan failed: $e',
-      );
+      debugPrint('[BT] checkPermissions error: $e');
+      // If we can't check, assume granted and let the platform call fail gracefully.
+      return BtPermissionStatus.granted;
     }
   }
 
-  /// Stop an ongoing scan.
-  Future<void> stopScan() async {
-    _scanSubscription?.cancel();
-    _scanSubscription = null;
+  /// Request Bluetooth permissions only. Returns true if all granted. Never throws.
+  /// Does NOT include locationWhenInUse — handled at registration.
+  /// Does NOT open app settings automatically.
+  Future<bool> requestPermissions() async {
+    if (!Platform.isAndroid) return true;
+    try {
+      final results = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ].request();
 
-    // TODO: FlutterBluePlus.stopScan();
-
-    if (state.connectionState == BtConnectionState.scanning) {
-      state = state.copyWith(
-        connectionState: state.connectedDevice != null
-            ? BtConnectionState.connected
-            : BtConnectionState.none,
-      );
+      return results.values.every((s) => s.isGranted);
+    } catch (e) {
+      debugPrint('[BT] Permission request error: $e');
+      return false;
     }
   }
 
-  // ── Connection ───────────────────────────────────────────────────────────
+  /// Open the system App Settings page (for permission management).
+  Future<void> openAppSettingsPage() async {
+    try {
+      await openAppSettings();
+    } catch (e) {
+      debugPrint('[BT] openAppSettings error: $e');
+    }
+  }
 
-  /// Connect to a specific Bluetooth device by its [device] descriptor.
-  ///
-  /// Uses RFCOMM channel 1 (insecure) to match the Android Java implementation
-  /// that calls `createInsecureRfcommSocket` via reflection.
+  /// Open the Android Bluetooth Settings page so the user can pair new devices.
+  /// Falls back to openAppSettings if the intent fails.
+  Future<void> openBluetoothSettings() async {
+    if (!Platform.isAndroid) return;
+    try {
+      const platform = MethodChannel('com.ezybill/settings');
+      await platform.invokeMethod('openBluetoothSettings');
+    } catch (e) {
+      debugPrint('[BT] MethodChannel openBluetoothSettings failed: $e');
+      // Fallback: try intent via url_launcher-style approach
+      try {
+        // Fallback to app settings if platform channel not available
+        await openAppSettings();
+      } catch (e2) {
+        debugPrint('[BT] Fallback openAppSettings also failed: $e2');
+      }
+    }
+  }
+
+  // ── SharedPreferences (read lazily, never watch) ──────────────────────────
+
+  void _saveDevice(BtDevice device) {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      prefs.setString(_kMacKey, device.address);
+      prefs.setString(_kNameKey, device.name);
+    } catch (e) {
+      debugPrint('[BT] Save prefs error: $e');
+    }
+  }
+
+  BtDevice? _loadSavedDevice() {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      final mac = prefs.getString(_kMacKey);
+      final name = prefs.getString(_kNameKey) ?? '';
+      if (mac == null || mac.isEmpty) return null;
+      return BtDevice(name: name, address: mac);
+    } catch (e) {
+      debugPrint('[BT] Load prefs error: $e');
+      return null;
+    }
+  }
+
+  void _clearSavedDevice() {
+    try {
+      final prefs = ref.read(sharedPreferencesProvider);
+      prefs.remove(_kMacKey);
+      prefs.remove(_kNameKey);
+    } catch (e) {
+      debugPrint('[BT] Clear prefs error: $e');
+    }
+  }
+
+  // ── MAC address normalization ─────────────────────────────────────────────
+
+  String _formatMac(String mac) {
+    if (mac.contains(':') && mac.length == 17) return mac.toUpperCase();
+    final cleaned = mac.replaceAll(RegExp(r'[:\s\-]'), '').toUpperCase();
+    if (cleaned.length == 12) {
+      return cleaned
+          .replaceAllMapped(RegExp(r'.{2}'), (m) => '${m.group(0)}:')
+          .substring(0, 17);
+    }
+    return mac;
+  }
+
+  // ── Bluetooth enabled check ───────────────────────────────────────────────
+
+  /// Returns true if Bluetooth adapter is enabled. Never throws.
+  Future<bool> isBluetoothEnabled() async {
+    try {
+      return await PrintBluetoothThermal.bluetoothEnabled;
+    } catch (e) {
+      debugPrint('[BT] bluetoothEnabled check error: $e');
+      return false;
+    }
+  }
+
+  // ── Get bonded devices ────────────────────────────────────────────────────
+
+  /// Returns bonded devices. Requires permissions to be already granted.
+  /// Never throws — returns empty list on any error.
+  Future<List<BtDevice>> getBondedDevices() async {
+    try {
+      final List<BluetoothInfo> bonded =
+          await PrintBluetoothThermal.pairedBluetooths;
+      return bonded
+          .where((i) => i.macAdress.isNotEmpty)
+          .map((i) => BtDevice(
+                name: i.name.isNotEmpty ? i.name : 'Unknown Device',
+                address: i.macAdress,
+              ))
+          .toList();
+    } catch (e) {
+      debugPrint('[BT] getBondedDevices error: $e');
+      return [];
+    }
+  }
+
+  // ── Connect ───────────────────────────────────────────────────────────────
+
   Future<void> connectToDevice(BtDevice device) async {
-    await stopScan();
-
     state = state.copyWith(
       connectionState: BtConnectionState.connecting,
       clearError: true,
     );
 
     try {
-      // TODO: Replace with flutter_blue_plus connect.
-      // Example:
-      //   _bleDevice = BluetoothDevice(remoteId: DeviceIdentifier(device.address));
-      //   await _bleDevice!.connect(timeout: const Duration(seconds: 15));
-      //   final services = await _bleDevice!.discoverServices();
-      //   // Find the SPP-like write characteristic...
-      //   for (final s in services) {
-      //     for (final c in s.characteristics) {
-      //       if (c.properties.write || c.properties.writeWithoutResponse) {
-      //         _writeCharacteristic = c;
-      //         break;
-      //       }
-      //     }
-      //   }
+      // Permissions MUST be granted before connecting
+      final granted = await requestPermissions();
+      if (!granted) {
+        state = state.copyWith(
+          connectionState: BtConnectionState.error,
+          errorMessage:
+              'Bluetooth permission denied. Tap "Open App Settings" to grant it.',
+        );
+        return;
+      }
 
-      // Simulate connection delay.
-      await Future<void>.delayed(const Duration(seconds: 1));
+      // Disconnect any existing session cleanly
+      try {
+        final already = await PrintBluetoothThermal.connectionStatus;
+        if (already) {
+          await PrintBluetoothThermal.disconnect;
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      } catch (_) {}
+
+      final mac = _formatMac(device.address);
+      debugPrint('[BT] Connecting to $mac...');
+
+      final connectResult = await PrintBluetoothThermal.connect(
+        macPrinterAddress: mac,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => false,
+      );
+
+      // Poll for actual connection (up to 6 × 300ms = 1.8s)
+      bool connected = false;
+      for (int i = 0; i < 6; i++) {
+        try {
+          connected = await PrintBluetoothThermal.connectionStatus;
+        } catch (_) {
+          connected = false;
+        }
+        if (connected) break;
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+
+      if (!connectResult || !connected) {
+        state = state.copyWith(
+          connectionState: BtConnectionState.error,
+          errorMessage:
+              'Could not connect to "${device.name}". Make sure the printer is on and nearby.',
+        );
+        return;
+      }
 
       final model = detectPrinterModel(device.name);
-      await _persistDevice(device);
+      _saveDevice(device);
 
       state = state.copyWith(
         connectionState: BtConnectionState.connected,
         connectedDevice: device,
         printerModel: model,
+        clearError: true,
       );
-
-      debugPrint(
-          '[BT] Connected to ${device.name} (${device.address}), model=$model');
+      debugPrint('[BT] Connected → ${device.name} ($mac)');
+    } on TimeoutException {
+      state = state.copyWith(
+        connectionState: BtConnectionState.error,
+        errorMessage:
+            'Connection timed out. Make sure the printer is powered on.',
+      );
     } catch (e) {
       state = state.copyWith(
         connectionState: BtConnectionState.error,
-        errorMessage: 'Unable to connect device: $e',
+        errorMessage: 'Unable to connect: ${_friendlyError(e)}',
       );
     }
   }
 
-  /// Disconnect from the currently connected printer.
+  // ── Auto-reconnect (call explicitly, e.g. from registration screen) ───────
+
+  Future<void> tryAutoReconnect() async {
+    final saved = _loadSavedDevice();
+    if (saved == null) return;
+    try {
+      final btEnabled = await isBluetoothEnabled();
+      if (!btEnabled) return;
+      final perms = await checkPermissions();
+      if (perms != BtPermissionStatus.granted) return;
+      debugPrint('[BT] Auto-reconnecting to ${saved.address}...');
+      await connectToDevice(saved);
+    } catch (e) {
+      debugPrint('[BT] Auto-reconnect failed: $e');
+    }
+  }
+
+  // ── Disconnect ────────────────────────────────────────────────────────────
+
   Future<void> disconnect() async {
     try {
-      // TODO: _bleDevice?.disconnect();
-
-      state = state.copyWith(
-        connectionState: BtConnectionState.none,
-        clearDevice: true,
-      );
-
-      debugPrint('[BT] Disconnected');
+      await PrintBluetoothThermal.disconnect;
     } catch (e) {
       debugPrint('[BT] Disconnect error: $e');
     }
+    state = state.copyWith(
+      connectionState: BtConnectionState.none,
+      clearDevice: true,
+      clearError: true,
+    );
   }
 
-  /// Forget the saved printer and disconnect.
   Future<void> forgetDevice() async {
     await disconnect();
-    await _clearPersistedDevice();
+    _clearSavedDevice();
   }
 
-  // ── Printing ─────────────────────────────────────────────────────────────
+  // ── Printing ──────────────────────────────────────────────────────────────
 
-  /// Write raw bytes to the connected printer.
+  /// Print a full receipt from pre-formatted text lines.
   ///
-  /// The caller is responsible for formatting ESC/POS commands. Use
-  /// [EscPosCommands] and [ReceiptFormatter] to build byte payloads.
-  Future<bool> printBytes(List<int> bytes) async {
-    if (!state.isConnected) {
-      debugPrint('[BT] Cannot print — not connected');
-      return false;
-    }
+  /// Sends all content in one write call (most reliable for thermal printers).
+  Future<bool> printReceipt(List<String> lines) async {
+    if (!state.isConnected) return false;
 
     try {
-      // TODO: Replace with actual BLE write.
-      // Example:
-      //   if (_writeCharacteristic != null) {
-      //     // Chunk into max BLE packet sizes (typically 20 bytes for BLE,
-      //     // or up to 512 for RFCOMM). Thermal printers usually accept
-      //     // larger chunks over classic BT.
-      //     const chunkSize = 512;
-      //     for (var i = 0; i < bytes.length; i += chunkSize) {
-      //       final end = (i + chunkSize > bytes.length)
-      //           ? bytes.length
-      //           : i + chunkSize;
-      //       await _writeCharacteristic!.write(
-      //         bytes.sublist(i, end),
-      //         withoutResponse: true,
-      //       );
-      //     }
-      //   }
+      // Verify connection is still alive
+      bool connected = false;
+      try {
+        connected = await PrintBluetoothThermal.connectionStatus;
+      } catch (_) {
+        connected = false;
+      }
 
-      debugPrint('[BT] Wrote ${bytes.length} bytes to printer');
-      return true;
+      if (!connected) {
+        // Try once to reconnect
+        final saved = state.connectedDevice ?? _loadSavedDevice();
+        if (saved != null) {
+          await connectToDevice(saved);
+          connected = state.isConnected;
+        }
+        if (!connected) {
+          state = state.copyWith(
+            connectionState: BtConnectionState.error,
+            errorMessage: 'Printer disconnected. Please reconnect.',
+            clearDevice: true,
+          );
+          return false;
+        }
+      }
+
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+
+      // Build full byte buffer
+      final List<int> byteList = [];
+      byteList.addAll(utf8.encode('\n'));
+      for (final line in lines) {
+        byteList.addAll(utf8.encode('$line\n'));
+      }
+      // Paper feed — 3 blank lines
+      byteList.addAll(utf8.encode('\n\n\n'));
+
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      // The plugin's Kotlin side casts the argument to java.util.List,
+      // so we MUST send List<int> (not Uint8List which becomes byte[]).
+      const btChannel = MethodChannel('groons.web.app/print');
+      final result = await btChannel.invokeMethod<bool>('writebytes', byteList) ?? false;
+      debugPrint('[BT] printReceipt result=$result (${byteList.length} bytes)');
+      return result;
     } catch (e) {
-      debugPrint('[BT] Print error: $e');
+      debugPrint('[BT] printReceipt error: $e');
       state = state.copyWith(
         connectionState: BtConnectionState.error,
-        errorMessage: 'Print failed: $e',
+        errorMessage: 'Print failed: ${_friendlyError(e)}',
       );
       return false;
     }
   }
 
-  /// Convenience: write a UTF-8 string followed by a line feed.
-  Future<bool> printLine(String text) async {
-    final bytes = Uint8List.fromList([...text.codeUnits, 0x0A]);
-    return printBytes(bytes);
-  }
+  // ── Error helpers ─────────────────────────────────────────────────────────
 
-  /// Print a full receipt from pre-formatted lines.
-  ///
-  /// Inserts a 3-second pause between batches of 15 lines to match the
-  /// Android implementation's `sleep(3000)` flush cadence.
-  Future<bool> printReceipt(List<String> lines) async {
-    const batchSize = 15;
-    for (var i = 0; i < lines.length; i += batchSize) {
-      final end =
-          (i + batchSize > lines.length) ? lines.length : i + batchSize;
-      final batch = lines.sublist(i, end);
-      final payload = batch.join('\n');
-      final ok = await printBytes(
-        Uint8List.fromList([...payload.codeUnits, 0x0A]),
-      );
-      if (!ok) return false;
-
-      // Pause between batches for the printer buffer to flush.
-      if (end < lines.length) {
-        await Future<void>.delayed(const Duration(seconds: 3));
-      }
+  String _friendlyError(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('permission') || msg.contains('security')) {
+      return 'Bluetooth permission denied. Grant it in App Settings.';
     }
-    return true;
+    if (msg.contains('timeout')) {
+      return 'Connection timed out. Make sure the printer is on and nearby.';
+    }
+    if (msg.contains('socket') || msg.contains('rfcomm')) {
+      return 'Could not open printer connection. Toggle printer power and retry.';
+    }
+    if (msg.contains('bonded') || msg.contains('paired')) {
+      return 'Printer not paired. Pair via System Bluetooth Settings first.';
+    }
+    if (Platform.isAndroid && msg.contains('null')) {
+      return 'Bluetooth adapter error. Restart Bluetooth and try again.';
+    }
+    return e.toString().replaceAll('Exception: ', '');
   }
 }
 
 // ---------------------------------------------------------------------------
-// Providers
+// Provider
 // ---------------------------------------------------------------------------
 
-/// Internal provider for SharedPreferences. Override in the root ProviderScope.
-final _sharedPrefsProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError(
-      'sharedPreferencesProvider must be overridden in ProviderScope');
-});
-
-/// Riverpod provider exposing the Bluetooth print service state and controls.
-///
-/// Usage:
-/// ```dart
-/// final btState = ref.watch(bluetoothPrintProvider);
-/// ref.read(bluetoothPrintProvider.notifier).startScan();
-/// ```
 final bluetoothPrintProvider =
     NotifierProvider<BluetoothPrintNotifier, BluetoothPrintState>(
   BluetoothPrintNotifier.new,

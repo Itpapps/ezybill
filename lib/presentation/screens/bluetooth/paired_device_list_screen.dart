@@ -1,550 +1,655 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
-import 'package:lucide_icons/lucide_icons.dart';
-
-import '../../../core/services/bluetooth_print_service.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
-import '../../router/route_names.dart';
+import '../../../core/theme/app_theme.dart';
 
-/// Displays already-paired Bluetooth devices and the currently connected
-/// printer. Allows the user to connect, disconnect, or navigate to the
-/// full discovery screen to find new devices.
-class PairedDeviceListScreen extends ConsumerStatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Bluetooth Printer Screen
+//
+// Standalone StatefulWidget — NO Riverpod in build().
+// Calls PrintBluetoothThermal directly (same as user's reference code).
+// Null-safe theme access (fallback to AppColors.light if extension missing).
+// ─────────────────────────────────────────────────────────────────────────────
+
+class PairedDeviceListScreen extends StatefulWidget {
   const PairedDeviceListScreen({super.key});
 
   @override
-  ConsumerState<PairedDeviceListScreen> createState() =>
-      _PairedDeviceListScreenState();
+  State<PairedDeviceListScreen> createState() => _PairedDeviceListScreenState();
 }
 
-class _PairedDeviceListScreenState
-    extends ConsumerState<PairedDeviceListScreen> {
-  // In a real implementation, this would come from flutter_blue_plus's
-  // bonded device list. For now we maintain a local list that includes
-  // any previously-connected device stored in SharedPreferences.
-  List<BtDevice> _pairedDevices = [];
+class _PairedDeviceListScreenState extends State<PairedDeviceListScreen>
+    with WidgetsBindingObserver {
+  // ── State ─────────────────────────────────────────────────────────────────
+  List<BluetoothInfo> _devices = [];
   bool _loading = true;
+  String? _error;
+  String? _savedMac;
+  String? _savedName;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadPairedDevices());
-  }
-
-  Future<void> _loadPairedDevices() async {
-    setState(() => _loading = true);
-
-    // TODO: Replace with flutter_blue_plus bonded devices.
-    // Example:
-    //   final bondedDevices = await FlutterBluePlus.bondedDevices;
-    //   _pairedDevices = bondedDevices.map((d) => BtDevice(
-    //     name: d.platformName,
-    //     address: d.remoteId.str,
-    //   )).toList();
-
-    // For now, if there is a connected device, show it.
-    final btState = ref.read(bluetoothPrintProvider);
-    if (btState.connectedDevice != null) {
-      _pairedDevices = [btState.connectedDevice!];
-    }
-
-    setState(() => _loading = false);
-  }
-
-  Future<void> _connectToDevice(BtDevice device) async {
-    await ref.read(bluetoothPrintProvider.notifier).connectToDevice(device);
-
-    if (!mounted) return;
-    final state = ref.read(bluetoothPrintProvider);
-    if (state.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Connected to ${device.name}'),
-          backgroundColor: AppColors.success,
-        ),
-      );
-    }
-  }
-
-  Future<void> _disconnectDevice() async {
-    await ref.read(bluetoothPrintProvider.notifier).disconnect();
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Printer disconnected'),
-        backgroundColor: AppColors.textSecondary,
-      ),
-    );
-  }
-
-  Future<void> _forgetDevice() async {
-    await ref.read(bluetoothPrintProvider.notifier).forgetDevice();
-    setState(() => _pairedDevices = []);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Printer removed'),
-        backgroundColor: AppColors.textSecondary,
-      ),
-    );
-  }
-
-  void _navigateToDiscovery() async {
-    final result = await context.push<bool>(RouteNames.bluetoothDiscovery);
-    if (result == true) {
-      _loadPairedDevices();
-    }
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
   @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Auto-refresh when returning from System BT Settings
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_loading) _loadDevices();
+      });
+    }
+  }
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  Future<void> _init() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    if(mounted){
+      setState((){
+        _savedMac = prefs.getString('bluetoothmac');
+        _savedName = prefs.getString('bluetoothname');
+      });
+    }
+
+    // 1. Request permissions (Android only)
+    if (Platform.isAndroid) {
+      try {
+        final results = await [
+          Permission.bluetoothScan,
+          Permission.bluetoothConnect,
+        ].request();
+
+        final allGranted = results.values.every((s) => s.isGranted);
+        if (!allGranted) {
+          if (!mounted) return;
+          final permDenied =
+              results.values.any((s) => s.isPermanentlyDenied);
+          setState(() {
+            _loading = false;
+            _error = permDenied
+                ? 'Bluetooth permission permanently denied.\nTap below to open App Settings.'
+                : 'Bluetooth permission required to show paired devices.';
+          });
+          return;
+        }
+      } catch (e) {
+        debugPrint('[BT Screen] Permission error: $e');
+        // Continue — let the device list call handle it
+      }
+    }
+
+    // 2. Load paired devices
+    await _loadDevices();
+  }
+
+  Future<void> _loadDevices() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final List<BluetoothInfo> bonded =
+          await PrintBluetoothThermal.pairedBluetooths;
+      if (!mounted) return;
+      setState(() {
+        _devices = bonded.where((d) => d.macAdress.isNotEmpty).toList();
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('[BT Screen] Load devices error: $e');
+      if (!mounted) return;
+      setState(() {
+        _devices = [];
+        _loading = false;
+        final msg = e.toString().toLowerCase();
+        if (msg.contains('permission') || msg.contains('security')) {
+          _error =
+              'Bluetooth permission required.\nPlease grant it in App Settings.';
+        } else {
+          _error = 'Could not load paired devices.\nMake sure Bluetooth is on.';
+        }
+      });
+    }
+  }
+
+  // ── Save / Forget ──────────────────────────────────────────────────────────
+  Future<void> _saveDevice(BluetoothInfo device) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('bluetoothmac',device.macAdress);
+    final name = device.name.isNotEmpty? device.name:'Printer';
+    await prefs.setString('bluetoothname',name);
+    if(!mounted)return;
+    setState((){
+      _savedMac = device.macAdress;
+      _savedName = name;
+    });
+    _showSnack('Saved: $name',isError:false);
+  }
+  Future<void> _forgetDevice() async{
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('bluetoothmac');
+    await prefs.remove('bluetoothname');
+    if(!mounted)return;
+    setState((){
+      _savedMac = null;
+      _savedName = null;
+    });
+    _showSnack('Saved Printer Removed',isError:false);
+  }
+
+  Future<void> _openSystemBluetooth() async {
+    try {
+      if (Platform.isAndroid) {
+        await launchUrl(
+          Uri.parse(
+              'intent:#Intent;action=android.settings.BLUETOOTH_SETTINGS;end'),
+          mode: LaunchMode.externalApplication,
+        );
+      } else if (Platform.isIOS) {
+        await launchUrl(Uri.parse('App-prefs:Bluetooth'));
+      }
+    } catch (_) {
+      if (mounted) {
+        _showSnack(
+          'Open Bluetooth in phone Settings to pair new devices',
+          isError: false,
+        );
+      }
+    }
+  }
+
+  void _showSnack(String msg, {required bool isError}) {
+    if (!mounted) return;
+    final c = Theme.of(context).extension<AppColors>() ?? AppColors.light;
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text(msg),
+        backgroundColor: isError ? c.red : c.green,
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: isError ? 4 : 2),
+      ));
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+
+  @override
   Widget build(BuildContext context) {
-    final btState = ref.watch(bluetoothPrintProvider);
+    // Null-safe theme access — fallback to light colors if extension missing
+    final c = Theme.of(context).extension<AppColors>() ?? AppColors.light;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: c.bg,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           'Bluetooth Printer',
           style: TextStyle(
             fontFamily: 'DM Sans',
             fontSize: 18,
             fontWeight: FontWeight.w700,
+            color: c.ink,
           ),
         ),
-        backgroundColor: AppColors.white,
-        foregroundColor: AppColors.textPrimary,
+        backgroundColor: c.card,
+        foregroundColor: c.ink,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
+        actions: [
+          if (!_loading)
+            IconButton(
+              icon: Icon(Icons.refresh_rounded, size: 22, color: c.ink60),
+              tooltip: 'Refresh',
+              onPressed: _loadDevices,
+            ),
+        ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _buildContent(btState),
-      bottomNavigationBar: _buildBottomBar(),
+      body: _buildBody(c),
+      bottomNavigationBar: _buildBottomBar(c),
     );
   }
 
-  Widget _buildContent(BluetoothPrintState btState) {
-    return ListView(
-      padding: const EdgeInsets.all(20),
-      children: [
-        // ── Current printer section ─────────────────────────────────────
-        if (btState.connectedDevice != null) ...[
-          const _SectionHeader(title: 'Current Printer'),
-          const SizedBox(height: 12),
-          _ConnectedPrinterCard(
-            device: btState.connectedDevice!,
-            printerModel: btState.printerModel,
-            onDisconnect: _disconnectDevice,
-            onForget: _forgetDevice,
-          ),
-          const SizedBox(height: 24),
-        ],
+  Widget _buildBody(AppColors c) {
+    if (_loading) return _buildLoading(c);
+    if (_error != null && _devices.isEmpty) return _buildErrorState(c);
+    return _buildList(c);
+  }
 
-        // ── Paired devices section ──────────────────────────────────────
-        const _SectionHeader(title: 'Paired Devices'),
-        const SizedBox(height: 12),
+  // ── Loading ───────────────────────────────────────────────────────────────
 
-        if (_pairedDevices.isEmpty)
-          _buildNoPairedDevices()
-        else
-          ..._pairedDevices.map(
-            (device) => _PairedDeviceCard(
-              device: device,
-              isConnected: btState.connectedDevice?.address == device.address,
-              isConnecting:
-                  btState.connectionState == BtConnectionState.connecting,
-              onConnect: () => _connectToDevice(device),
+  Widget _buildLoading(AppColors c) {
+    return Container(
+      color: c.bg,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 48,
+            height: 48,
+            child: CircularProgressIndicator(
+              color: c.red,
+              strokeWidth: 3,
             ),
           ),
+          const SizedBox(height: 20),
+          Text(
+            'Checking Bluetooth...',
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+              color: c.ink,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Please wait',
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontSize: 13,
+              color: c.ink40,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-        // ── Error message ───────────────────────────────────────────────
-        if (btState.connectionState == BtConnectionState.error &&
-            btState.errorMessage != null) ...[
-          const SizedBox(height: 16),
+  // ── Error / Permission denied ─────────────────────────────────────────────
+
+  Widget _buildErrorState(AppColors c) {
+    final isPermanent = _error?.contains('permanently') ?? false;
+    return Container(
+      color: c.bg,
+      padding: const EdgeInsets.all(40),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: c.red.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Icon(Icons.bluetooth_disabled, size: 36, color: c.red),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            isPermanent ? 'Permission Required' : 'Bluetooth Issue',
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: c.ink,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _error ?? 'An error occurred.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontSize: 14,
+              color: c.ink40,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: isPermanent ? _openSystemBluetooth : _init,
+              icon: Icon(
+                isPermanent ? Icons.settings : Icons.refresh_rounded,
+                size: 18,
+              ),
+              label: Text(
+                isPermanent ? 'Open App Settings' : 'Try Again',
+                style: const TextStyle(
+                  fontFamily: 'DM Sans',
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.red,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppRadius.pill),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Device List ───────────────────────────────────────────────────────────
+
+  Widget _buildList(AppColors c) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Connected banner
+         _buildSavedBanner(c),
+
+        // Error banner (non-blocking — list still shows)
+        if (_error != null)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.dangerBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.danger.withValues(alpha: 0.3)),
+              color: c.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: c.red.withValues(alpha: 0.25)),
             ),
             child: Row(
               children: [
-                const Icon(LucideIcons.alertCircle,
-                    size: 16, color: AppColors.danger),
+                Icon(Icons.warning_amber_rounded, size: 16, color: c.red),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    btState.errorMessage!,
-                    style: const TextStyle(
-                      fontFamily: 'DM Sans',
-                      fontSize: 12,
-                      color: AppColors.danger,
-                    ),
+                    _error!,
+                    style: TextStyle(
+                        fontFamily: 'DM Sans', fontSize: 13, color: c.red),
                   ),
                 ),
               ],
             ),
           ),
-        ],
+
+        // Info banner
+        Container(
+          padding: const EdgeInsets.all(12),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: c.blue.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: c.blue.withValues(alpha: 0.2)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 15, color: c.blue),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Only paired devices are shown. '
+                  'Tap "Scan for New Devices" to pair via System Bluetooth Settings.',
+                  style: TextStyle(
+                    fontFamily: 'DM Sans',
+                    fontSize: 12,
+                    color: c.blue,
+                    height: 1.5,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Section header
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            'PAIRED DEVICES',
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: c.ink40,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ),
+
+        // Devices or empty
+        if (_devices.isEmpty)
+          _buildEmpty(c)
+        else
+          ..._devices.map((d) => _buildDeviceTile(d, c)),
       ],
     );
   }
 
-  Widget _buildNoPairedDevices() {
+  Widget _buildSavedBanner(AppColors c) {
+    if (_savedMac == null) return const SizedBox.shrink();
     return Container(
-      padding: const EdgeInsets.all(24),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: c.green.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(color: c.green.withValues(alpha: 0.3)),
       ),
-      child: Column(
+      child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(LucideIcons.printer,
-                size: 28, color: AppColors.primary),
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: c.green, shape: BoxShape.circle),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'No Paired Printers',
-            style: TextStyle(
-              fontFamily: 'DM Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Default Printer',
+                    style: TextStyle(
+                        fontFamily: 'DM Sans',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c.green)),
+                Text(_savedName ?? '',
+                    style: TextStyle(
+                        fontFamily: 'DM Sans',
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: c.ink)),
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Scan for nearby printers to get started',
-            style: TextStyle(
-              fontFamily: 'DM Sans',
-              fontSize: 12,
-              color: AppColors.textSecondary,
-            ),
+          TextButton(
+            onPressed: _forgetDevice,
+            child: Text('Forget',
+                style: TextStyle(
+                    fontFamily: 'DM Sans',
+                    fontSize: 12,
+                    color: c.red,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildEmpty(AppColors c) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      padding: const EdgeInsets.all(28),
       decoration: BoxDecoration(
-        color: AppColors.white,
-        border: Border(
-          top: BorderSide(color: AppColors.border),
-        ),
+        color: c.card,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: c.ink10),
       ),
-      child: SizedBox(
-        width: double.infinity,
-        height: 48,
-        child: ElevatedButton.icon(
-          onPressed: _navigateToDiscovery,
-          icon: const Icon(LucideIcons.search, size: 18),
-          label: const Text('Scan for New Devices'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: AppColors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            textStyle: const TextStyle(
-              fontFamily: 'DM Sans',
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+      child: Column(
+        children: [
+          Icon(Icons.print_outlined,
+              size: 40, color: c.red.withValues(alpha: 0.5)),
+          const SizedBox(height: 14),
+          Text('No Paired Printers',
+              style: TextStyle(
+                  fontFamily: 'DM Sans',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: c.ink)),
+          const SizedBox(height: 8),
+          Text(
+            'Pair your thermal printer in System Bluetooth\nSettings, then tap Refresh.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+                fontFamily: 'DM Sans',
+                fontSize: 13,
+                color: c.ink40,
+                height: 1.5),
           ),
-        ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: _openSystemBluetooth,
+            icon: Icon(Icons.bluetooth_rounded, size: 16, color: c.red),
+            label: Text('Open Bluetooth Settings',
+                style: TextStyle(
+                    fontFamily: 'DM Sans',
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: c.red)),
+          ),
+        ],
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sub-widgets
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  const _SectionHeader({required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontFamily: 'DM Sans',
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textMuted,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
-}
-
-class _ConnectedPrinterCard extends StatelessWidget {
-  final BtDevice device;
-  final PrinterModel printerModel;
-  final VoidCallback onDisconnect;
-  final VoidCallback onForget;
-
-  const _ConnectedPrinterCard({
-    required this.device,
-    required this.printerModel,
-    required this.onDisconnect,
-    required this.onForget,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final modelLabel = printerModel == PrinterModel.thermal80mm
-        ? '80mm (40 chars)'
-        : '58mm (32 chars)';
+  Widget _buildDeviceTile(BluetoothInfo device, AppColors c) {
+  final isSaved = _savedMac == device.macAdress;
+    final name =
+        device.name.isNotEmpty ? device.name : 'Unknown Device';
 
     return Container(
+      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: AppColors.white,
+        color: c.card,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.success, width: 2),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.successBg,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(LucideIcons.printer,
-                      size: 22, color: AppColors.success),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              device.name.isNotEmpty
-                                  ? device.name
-                                  : 'Printer',
-                              style: const TextStyle(
-                                fontFamily: 'DM Sans',
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
-                              ),
-                            ),
-                          ),
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: AppColors.success,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        device.address,
-                        style: const TextStyle(
-                          fontFamily: 'DM Sans',
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Detected: $modelLabel',
-                        style: const TextStyle(
-                          fontFamily: 'DM Sans',
-                          fontSize: 11,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onDisconnect,
-                    icon: const Icon(LucideIcons.unplug, size: 14),
-                    label: const Text('Disconnect'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.danger,
-                      side: const BorderSide(color: AppColors.danger),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      textStyle: const TextStyle(
-                        fontFamily: 'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onForget,
-                    icon: const Icon(LucideIcons.trash2, size: 14),
-                    label: const Text('Forget'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.textMuted,
-                      side: const BorderSide(color: AppColors.border),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      textStyle: const TextStyle(
-                        fontFamily: 'DM Sans',
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
+        border: Border.all(
+          color: isSaved ? c.green : c.ink10,
+          width: isSaved ? 2 : 1,
         ),
-      ),
-    );
-  }
-}
-
-class _PairedDeviceCard extends StatelessWidget {
-  final BtDevice device;
-  final bool isConnected;
-  final bool isConnecting;
-  final VoidCallback onConnect;
-
-  const _PairedDeviceCard({
-    required this.device,
-    required this.isConnected,
-    required this.isConnecting,
-    required this.onConnect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: AppColors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.border),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         leading: Container(
           width: 40,
           height: 40,
           decoration: BoxDecoration(
-            color: isConnected ? AppColors.successBg : AppColors.primaryLight,
+            color: isSaved
+                ? c.green.withValues(alpha: 0.1)
+                : c.red.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(
-            LucideIcons.printer,
+            Icons.print_rounded,
             size: 20,
-            color: isConnected ? AppColors.success : AppColors.primary,
+            color: isSaved ? c.green : c.red,
           ),
         ),
-        title: Text(
-          device.name.isNotEmpty ? device.name : 'Unknown',
-          style: const TextStyle(
-            fontFamily: 'DM Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        subtitle: Text(
-          device.address,
-          style: const TextStyle(
-            fontFamily: 'DM Sans',
-            fontSize: 12,
-            color: AppColors.textMuted,
-          ),
-        ),
-        trailing: isConnected
+        title: Text(name,
+            style: TextStyle(
+                fontFamily: 'DM Sans',
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: c.ink)),
+        subtitle: Text(device.macAdress,
+            style: TextStyle(
+                fontFamily: 'DM Sans',
+                fontSize: 12,
+                color: c.ink40)),
+        trailing: isSaved
             ? Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppColors.successBg,
+                  color: c.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 6,
-                      height: 6,
-                      decoration: const BoxDecoration(
-                        color: AppColors.success,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    const Text(
-                      'Active',
-                      style: TextStyle(
+                child: Text('Saved ✓',
+                    style: TextStyle(
                         fontFamily: 'DM Sans',
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ],
-                ),
+                        fontWeight: FontWeight.w700,
+                        color: c.green)),
               )
             : SizedBox(
-                height: 32,
+                height: 34,
                 child: ElevatedButton(
-                  onPressed: isConnecting ? null : onConnect,
+                  onPressed: () => _saveDevice(device),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: AppColors.white,
+                    backgroundColor: c.red,
+                    foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 14),
+                    minimumSize: Size.zero,
                     textStyle: const TextStyle(
-                      fontFamily: 'DM Sans',
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
+                        fontFamily: 'DM Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
                   ),
-                  child: const Text('Connect'),
+                  child: const Text('Save'),
                 ),
               ),
+      ),
+    );
+  }
+
+  Widget _buildBottomBar(AppColors c) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+      decoration: BoxDecoration(
+        color: c.card,
+        border: Border(top: BorderSide(color: c.ink10)),
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: ElevatedButton.icon(
+          onPressed: _openSystemBluetooth,
+          icon: const Icon(Icons.bluetooth_searching_rounded, size: 18),
+          label: const Text(
+            'Scan for New Devices',
+            style: TextStyle(
+                fontFamily: 'DM Sans',
+                fontSize: 14,
+                fontWeight: FontWeight.w600),
+          ),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: c.red,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppRadius.pill),
+            ),
+            elevation: 0,
+          ),
+        ),
       ),
     );
   }

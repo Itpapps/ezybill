@@ -8,22 +8,22 @@ part of 'pg_transaction.dart';
 
 _PgTransaction _$PgTransactionFromJson(Map<String, dynamic> json) =>
     _PgTransaction(
-      transactionId: json['transactionId'] as String? ?? '',
-      customerId: json['customerId'] as String? ?? '',
+      transactionId: json['transactionno'] as String? ?? '',
+      customerId: json['code'] as String? ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String? ?? '',
-      gateway: json['gateway'] as String? ?? '',
-      orderId: json['orderId'] as String? ?? '',
-      transactionDate: json['transactionDate'] as String? ?? '',
+      gateway: json['displayname'] as String? ?? '',
+      orderId: json['transaction_id'] as String? ?? '',
+      transactionDate: json['paydate'] as String? ?? '',
     );
 
 Map<String, dynamic> _$PgTransactionToJson(_PgTransaction instance) =>
     <String, dynamic>{
-      'transactionId': instance.transactionId,
-      'customerId': instance.customerId,
+      'transactionno': instance.transactionId,
+      'code': instance.customerId,
       'amount': instance.amount,
       'status': instance.status,
-      'gateway': instance.gateway,
-      'orderId': instance.orderId,
-      'transactionDate': instance.transactionDate,
+      'displayname': instance.gateway,
+      'transaction_id': instance.orderId,
+      'paydate': instance.transactionDate,
     };

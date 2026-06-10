@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/parse_utils.dart';
 import '../../data/datasources/remote/stb_remote_datasource.dart';
 import '../../data/models/stb/deactivation_reason.dart';
 import '../../data/models/stb/stb_model.dart';
@@ -110,10 +111,10 @@ class StbNotifier extends Notifier<StbState> {
         authtoken: _token,
         customerId: customerId,
       );
-      final rawList = (data['customerBoxList'] as List?) ?? (data['data'] as List?) ?? [];
-      final boxes = rawList
-          .map((e) => StbModel.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final boxes = parseList<StbModel>(
+        data['customerBoxList'] ?? data['data'],
+        StbModel.fromJson,
+      );
       state = state.copyWith(isLoading: false, stbList: boxes);
     } catch (e) {
       state = state.copyWith(isLoading: false, errorMessage: e.toString());
@@ -147,10 +148,10 @@ class StbNotifier extends Notifier<StbState> {
   Future<void> loadDeactivationReasons() async {
     try {
       final data = await _remoteDs.getDeactivationReasons(authtoken: _token);
-      final rawList = (data['reasonList'] as List?) ?? (data['data'] as List?) ?? [];
-      final reasons = rawList
-          .map((e) => DeactivationReason.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final reasons = parseList<DeactivationReason>(
+        data['reasonList'] ?? data['data'],
+        DeactivationReason.fromJson,
+      );
       state = state.copyWith(deactivationReasons: reasons);
     } catch (_) {}
   }

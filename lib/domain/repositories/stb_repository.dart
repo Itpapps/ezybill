@@ -50,8 +50,7 @@ abstract class StbRepository {
 
   /// Validate box info for pairing.
   Future<Result<Map<String, dynamic>>> validateBoxInfo({
-    required String stbNo,
-    required String vcNo,
+    required String boxNumber,
   });
 
   /// Pair an STB.

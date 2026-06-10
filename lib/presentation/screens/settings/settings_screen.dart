@@ -9,11 +9,13 @@ import '../../../application/providers/locale_provider.dart';
 import '../../../application/providers/theme_provider.dart';
 import '../../../core/constants/api_constants.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/bluetooth_print_service.dart';
 import '../../../core/services/debug_log_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../common/widgets/language_selector.dart';
 import '../../router/route_names.dart';
+import '../bluetooth/paired_device_list_screen.dart';
 import '../../../l10n/app_localizations.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -27,6 +29,9 @@ class SettingsScreen extends ConsumerWidget {
     final currentLocale = ref.watch(localeProvider);
     final debugLog = ref.watch(debugLogProvider);
     final colors = Theme.of(context).extension<AppColors>() ?? AppColors.light;
+    final bottomInset = MediaQuery.of(context).padding.bottom;
+    // Keep bottom actions visible above persistent bottom bars / overlays.
+    final bottomSafeSpace = bottomInset + 92;
 
     return Scaffold(
       backgroundColor: colors.bg,
@@ -93,7 +98,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
 
           SliverPadding(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomSafeSpace),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 // ── Account section ─────────────────────────────────────
@@ -178,14 +183,42 @@ class SettingsScreen extends ConsumerWidget {
                 _SettingsCard(
                   colors: colors,
                   children: [
-                    _SettingsTile(
-                      colors: colors,
-                      icon: LucideIcons.printer,
-                      title: l.bluetoothPrinter,
-                      subtitle: l.notConnected,
-                      showDivider: false,
-                      onTap: () {
-                        // TODO: navigate to paired device screen
+                    Consumer(
+                      builder: (ctx, watchRef, _) {
+                        final btState =
+                            watchRef.watch(bluetoothPrintProvider);
+                        final subtitle = btState.isConnected
+                            ? btState.connectedDevice?.name ?? 'Connected'
+                            : l.notConnected;
+                        return _SettingsTile(
+                          colors: colors,
+                          icon: LucideIcons.printer,
+                          title: l.bluetoothPrinter,
+                          subtitle: subtitle,
+                          showDivider: false,
+                          trailing: btState.isConnected
+                              ? Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: colors.green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                )
+                              : null,
+                          onTap: () {
+                              // Use rootNavigator: true to push above the
+                              // StatefulShellRoute — GoRouter's pushNamed for
+                              // parentNavigatorKey routes can show a black
+                              // frame when called from within a shell branch.
+                              Navigator.of(context, rootNavigator: true).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      const PairedDeviceListScreen(),
+                                ),
+                              );
+                            },
+                        );
                       },
                     ),
                   ],
@@ -219,7 +252,7 @@ class SettingsScreen extends ConsumerWidget {
                       subtitle: ref.watch(debugEnabledProvider) ? l.debugOn : l.debugOff,
                       trailing: Switch(
                         value: ref.watch(debugEnabledProvider),
-                        activeColor: colors.green,
+                        activeThumbColor: colors.green,
                         inactiveTrackColor: colors.ink10,
                         onChanged: (value) {
                           debugLog.enabled = value;
@@ -692,7 +725,7 @@ class _SettingsTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (trailing != null) trailing!,
+                ?trailing,
                 if (onTap != null && trailing == null)
                   Icon(
                     LucideIcons.chevronRight,

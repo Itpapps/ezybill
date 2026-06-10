@@ -27,6 +27,8 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
   final String pinCode;
   final String instAddress1;
   final String instAddress2;
+  final String instPinCode;
+  final int billType;
   final String cafNumber;
   final String lcoCustomerId;
   final String remarks;
@@ -56,6 +58,8 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
     required this.pinCode,
     required this.instAddress1,
     required this.instAddress2,
+    required this.instPinCode,
+    required this.billType,
     required this.cafNumber,
     required this.lcoCustomerId,
     required this.remarks,
@@ -71,9 +75,9 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
   String get _cycleName {
     switch (cycle) {
       case 1:
-        return 'Year';
-      case 2:
         return 'Month';
+      case 2:
+        return 'Year';
       case 3:
         return 'Day';
       default:
@@ -84,6 +88,14 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
   String? get _dobFormatted {
     if (dob == null) return null;
     return '${dob!.day.toString().padLeft(2, '0')}/${dob!.month.toString().padLeft(2, '0')}/${dob!.year}';
+  }
+
+  double get _estimatedAmount {
+    if (selectedPackage == null) return 0;
+    final unit = selectedPackage!.price ?? 0;
+    if (cycle == 2) return unit * 12 * quantity;
+    if (cycle == 3) return (unit / 30.0) * validityDays * quantity;
+    return unit * quantity;
   }
 
   @override
@@ -239,12 +251,12 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
                           _ConfirmRow('State', md.selectedState!.name),
                         if (md.selectedDistrict != null)
                           _ConfirmRow('District', md.selectedDistrict!.name),
-                        if (md.selectedCity != null)
-                          _ConfirmRow(
-                              'City', md.selectedCity!.locationName),
                         if (md.selectedMandal != null)
                           _ConfirmRow(
                               'Mandal', md.selectedMandal!.mandalName),
+                        if (md.selectedCity != null)
+                          _ConfirmRow(
+                              'City', md.selectedCity!.locationName),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -258,36 +270,32 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
                         _ConfirmRow('Address', instAddress1),
                         if (instAddress2.isNotEmpty)
                           _ConfirmRow('Address 2', instAddress2),
+                        if (instPinCode.isNotEmpty)
+                          _ConfirmRow('PIN Code', instPinCode),
                       ],
                     ),
                     const SizedBox(height: 16),
 
                     // ── Other ────────────────────────────────────────
-                    if (md.selectedGroup != null ||
-                        cafNumber.isNotEmpty ||
-                        lcoCustomerId.isNotEmpty ||
-                        remarks.isNotEmpty)
-                      _ConfirmSection(
-                        title: 'Other',
-                        icon: LucideIcons.settings,
-                        colors: colors,
-                        rows: [
-                          if (md.selectedGroup != null)
-                            _ConfirmRow(
-                                'Group', md.selectedGroup!.groupName),
-                          if (cafNumber.isNotEmpty)
-                            _ConfirmRow('CAF Number', cafNumber),
-                          if (lcoCustomerId.isNotEmpty)
-                            _ConfirmRow('LCO Customer ID', lcoCustomerId),
-                          if (remarks.isNotEmpty)
-                            _ConfirmRow('Remarks', remarks),
-                        ],
-                      ),
-                    if (md.selectedGroup != null ||
-                        cafNumber.isNotEmpty ||
-                        lcoCustomerId.isNotEmpty ||
-                        remarks.isNotEmpty)
-                      const SizedBox(height: 16),
+                    _ConfirmSection(
+                      title: 'Other Details',
+                      icon: LucideIcons.settings,
+                      colors: colors,
+                      rows: [
+                        if (md.selectedGroup != null)
+                          _ConfirmRow(
+                              'Group', md.selectedGroup!.groupName),
+                        _ConfirmRow('Bill Type',
+                            billType == 1 ? 'Advance Billing' : 'Postpaid'),
+                        if (cafNumber.isNotEmpty)
+                          _ConfirmRow('CAF Number', cafNumber),
+                        if (lcoCustomerId.isNotEmpty)
+                          _ConfirmRow('LCO Customer ID', lcoCustomerId),
+                        if (remarks.isNotEmpty)
+                          _ConfirmRow('Remarks', remarks),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
 
                     // ── Package ──────────────────────────────────────
                     if (selectedPackage != null)
@@ -307,6 +315,7 @@ class NewCustomerConfirmScreen extends ConsumerWidget {
                           if (selectedPackage!.price != null)
                             _ConfirmRow('Price',
                                 '\u20B9${selectedPackage!.price!.toStringAsFixed(2)}'),
+                        _ConfirmRow('Estimated Amount', '\u20B9${_estimatedAmount.toStringAsFixed(2)}'),
                         ],
                       ),
 

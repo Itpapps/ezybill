@@ -174,8 +174,15 @@ class _QuickActionSheetState extends ConsumerState<QuickActionSheet> {
                               ref.read(quickActionProvider.notifier).refresh();
                             },
                             onNewCustomer: () {
+                              final s = ref.read(quickActionProvider);
                               Navigator.of(context).pop();
-                              // TODO: Navigate to new customer screen
+                              context.push(
+                                RouteNames.newCustomer,
+                                extra: {
+                                  'serialNumber': s.serialNumber ?? '',
+                                  'vcNumber': s.vcNumber ?? '',
+                                },
+                              );
                             },
                           )
                         : _EmptyView(colors: colors, l: l),
@@ -314,38 +321,48 @@ class _HeaderBar extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: Colors.white70,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
 
           const Spacer(),
 
           // Wallet balance (tappable → opens ledger)
-          GestureDetector(
-            onTap: onLedger,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(100),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(LucideIcons.wallet, size: 12, color: Color(0xFF2ECC71)),
-                  const SizedBox(width: 4),
-                  Text(
-                    '$currencySymbol${walletBalance.toStringAsFixed(0)}',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
+          Flexible(
+            child: GestureDetector(
+              onTap: onLedger,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(100),
+                ),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerRight,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(LucideIcons.wallet,
+                          size: 12, color: Color(0xFF2ECC71)),
+                      const SizedBox(width: 4),
+                      Text(
+                        '$currencySymbol${walletBalance.toStringAsFixed(0)}',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      if (onLedger != null) ...[
+                        const SizedBox(width: 2),
+                        const Icon(LucideIcons.history,
+                            size: 10, color: Colors.white54),
+                      ],
+                    ],
                   ),
-                  if (onLedger != null) ...[
-                    const SizedBox(width: 2),
-                    const Icon(LucideIcons.history, size: 10, color: Colors.white54),
-                  ],
-                ],
+                ),
               ),
             ),
           ),
@@ -380,6 +397,8 @@ class _HeaderBar extends StatelessWidget {
                       color: Colors.white,
                       letterSpacing: 0.5,
                     ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ],
               ),

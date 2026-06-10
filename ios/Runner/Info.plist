@@ -4,6 +4,16 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<!-- ── Bluetooth permissions required for thermal printer ───────── -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>EzyBill needs Bluetooth to connect to your thermal printer and print payment receipts.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>EzyBill needs Bluetooth to communicate with your thermal printer.</string>
+	<!-- ── Location required for BLE scanning on iOS ───────────────── -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>EzyBill uses your location to scan for nearby Bluetooth printers.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>EzyBill uses your location to scan for nearby Bluetooth printers.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

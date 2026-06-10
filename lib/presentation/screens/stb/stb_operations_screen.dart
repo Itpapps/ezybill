@@ -43,6 +43,11 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
     }
   }
 
+  bool _hasVcNumber(StbModel box) {
+    final vc = (box.vcNo ?? '').trim().toLowerCase();
+    return vc.isNotEmpty && vc != 'anytype{}' && vc != 'null' && vc != '0';
+  }
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -393,6 +398,17 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
           },
           // Other actions
           onPackages: () {
+            if (!_hasVcNumber(box)) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text(
+                    'VC number missing for this STB. Customer can exist, but package operations are not allowed.',
+                  ),
+                  backgroundColor: _c.amber,
+                ),
+              );
+              return;
+            }
             context.push(RouteNames.packageOperations, extra: {
               'customerId': _activeCustomerId,
               'stbNo': box.stbNo,

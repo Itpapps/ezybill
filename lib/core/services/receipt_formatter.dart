@@ -46,8 +46,44 @@ class ReceiptFormatter {
 
   /// Format a label:value pair where label is left-aligned and value follows.
   static String _field(String label, String value, int width) {
-    final padded = label.padRight(17);
-    return '$padded:$value';
+    // Label takes ~38% of line width: 18 chars for 48w, 14 for 32w
+    final labelWidth = (width * 0.38).round().clamp(12, 20);
+    final padded = label.padRight(labelWidth);
+    final valueSpace = width - labelWidth - 1; // -1 for ':'
+    final trimmedVal = value.length > valueSpace ? value.substring(0, valueSpace) : value;
+    return '$padded:$trimmedVal';
+  }
+
+  /// Wrap a long value field across multiple lines.
+  /// First line has the label, subsequent lines are indented.
+  static List<String> _wrapField(String label, String value, int width) {
+    final labelWidth = (width * 0.38).round().clamp(12, 20);
+    final padded = label.padRight(labelWidth);
+    final prefix = '$padded:';
+    final valueWidth = width - prefix.length;
+    if (valueWidth <= 0 || value.length <= valueWidth) {
+      return [_field(label, value, width)];
+    }
+    // Split value across multiple lines
+    final lines = <String>[];
+    final indent = ' ' * prefix.length;
+    var remaining = value;
+    var first = true;
+    while (remaining.isNotEmpty) {
+      final chunk = remaining.length > valueWidth
+          ? remaining.substring(0, valueWidth)
+          : remaining;
+      if (first) {
+        lines.add('$prefix$chunk');
+        first = false;
+      } else {
+        lines.add('$indent$chunk');
+      }
+      remaining = remaining.length > valueWidth
+          ? remaining.substring(valueWidth)
+          : '';
+    }
+    return lines;
   }
 
   /// Current date/time in the format used by the Android app:
@@ -67,10 +103,10 @@ class ReceiptFormatter {
   /// Formats a standard payment receipt.
   ///
   /// Matches the Android `write2()` / `sendMessage2()` method.
-  /// For 80mm (97BT-), date is indented by 7 spaces.
+  /// Date/time is centered. Address wraps if too long.
   static List<String> formatPaymentReceipt({
     required String customerName,
-    required String customerId,
+    String accountNumber = '',
     required String mobile,
     required String address,
     required String receiptNo,
@@ -78,32 +114,43 @@ class ReceiptFormatter {
     required String paidAmount,
     String? paymentMode,
     String? date,
-    required int width,
+    int width = 32,
   }) {
     final sep = separator(width);
     final dateStr = date ?? _nowFormatted();
-    final dateDisplay =
-        width >= 40 ? '       $dateStr' : dateStr;
+    // Center the date/time line
+    final dateDisplay = center(dateStr, width);
 
-    return [
+    final lines = <String>[
       sep,
       center('PAYMENT RECEIPT', width),
       sep,
-      width >= 40 ? dateDisplay : dateStr,
+      dateDisplay,
       sep,
       _field('CUSTOMER NAME', customerName, width),
-      _field('Customer ID', customerId, width),
-      _field('MOBILE no.', mobile, width),
-      _field('CUSTOMER ADDRESS', address, width),
-      _field('RECEIPT NUMBER', receiptNo, width),
-      _field('BILL.AMT', dueAmount, width),
-      _field('PAID.AMT', paidAmount, width),
-      if (paymentMode != null) _field('PAYMENT MODE', paymentMode, width),
+    ];
+    // Account Number (replaces Customer ID)
+    if (accountNumber.isNotEmpty) {
+      lines.add(_field('ACCOUNT NO.', accountNumber, width));
+    }
+    lines.add(_field('MOBILE NO.', mobile, width));
+    // Address with wrapping for long values
+    if (address.isNotEmpty) {
+      lines.addAll(_wrapField('ADDRESS', address, width));
+    }
+    lines.add(_field('RECEIPT NUMBER', receiptNo, width));
+    lines.add(_field('BILL AMT', dueAmount, width));
+    lines.add(_field('PAID AMT', paidAmount, width));
+    if (paymentMode != null) {
+      lines.add(_field('PAYMENT MODE', paymentMode, width));
+    }
+    lines.addAll([
       sep,
       '', // blank line
       '', // blank line
       '', // blank line (paper feed)
-    ];
+    ]);
+    return lines;
   }
 
   // ── 2. FORMAT1 Payment Receipt — Cheque (write1) ───────────────────────
@@ -113,7 +160,7 @@ class ReceiptFormatter {
   /// Matches the Android `write1()` / `sendMessage1()` method.
   static List<String> formatChequeReceipt({
     required String customerName,
-    required String customerId,
+    String accountNumber = '',
     required String mobile,
     required String address,
     required String receiptNo,
@@ -123,26 +170,31 @@ class ReceiptFormatter {
     required String bankName,
     required String branch,
     String? date,
-    required int width,
+    int width = 32,
   }) {
     final sep = separator(width);
     final dateStr = date ?? _nowFormatted();
-    final dateDisplay =
-        width >= 40 ? '       $dateStr' : dateStr;
+    final dateDisplay = center(dateStr, width);
 
-    return [
+    final lines = <String>[
       sep,
       center('PAYMENT RECEIPT', width),
       sep,
-      width >= 40 ? dateDisplay : dateStr,
+      dateDisplay,
       sep,
       _field('CUSTOMER NAME', customerName, width),
-      _field('Customer ID', customerId, width),
-      _field('MOBILE no.', mobile, width),
-      _field('CUSTOMER ADDRESS', address, width),
+    ];
+    if (accountNumber.isNotEmpty) {
+      lines.add(_field('ACCOUNT NO.', accountNumber, width));
+    }
+    lines.add(_field('MOBILE NO.', mobile, width));
+    if (address.isNotEmpty) {
+      lines.addAll(_wrapField('ADDRESS', address, width));
+    }
+    lines.addAll([
       _field('RECEIPT NUMBER', receiptNo, width),
-      _field('BILL.AMT', dueAmount, width),
-      _field('PAID.AMT', paidAmount, width),
+      _field('BILL AMT', dueAmount, width),
+      _field('PAID AMT', paidAmount, width),
       _field('CHEQUE NO.', chequeNo, width),
       _field('BANK NAME', bankName, width),
       _field('BRANCH', branch, width),
@@ -150,7 +202,8 @@ class ReceiptFormatter {
       '',
       '',
       '',
-    ];
+    ]);
+    return lines;
   }
 
   // ── 3. Legacy ESC/POS Payment Receipt (write) ─────────────────────────

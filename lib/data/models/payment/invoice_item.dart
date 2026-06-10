@@ -27,6 +27,26 @@ sealed class InvoiceItem with _$InvoiceItem {
 
   static Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
     final r = Map<String, dynamic>.from(json);
+    // Server returns snake_case keys — remap to camelCase for freezed.
+    const keyMap = {
+      'billing_id': 'billingId',
+      'bill_date': 'billDate',
+      'due_date': 'dueDate',
+      'total_amount': 'totalAmount',
+      'base_price': 'basePrice',
+      'serial_number': 'serialNumber',
+      'mac_vc_number': 'macVcNumber',
+      'setup_price': 'setupPrice',
+      'tax_amount': 'taxAmount',
+      'pending_amount': 'pendingAmount',
+      'discount_amount': 'discountAmount',
+      'is_adhoc': 'isAdhoc',
+    };
+    for (final entry in keyMap.entries) {
+      if (r.containsKey(entry.key) && !r.containsKey(entry.value)) {
+        r[entry.value] = r[entry.key];
+      }
+    }
     const doubleFields = [
       'totalAmount', 'basePrice', 'setupPrice',
       'taxAmount', 'pendingAmount', 'discountAmount',

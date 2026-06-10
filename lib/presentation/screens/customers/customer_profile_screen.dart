@@ -20,11 +20,17 @@ import '../../router/route_names.dart';
 class CustomerProfileScreen extends ConsumerStatefulWidget {
   final String customerId;
   final String? customerName;
+  final String? initialSerialNumber;
+  final String? initialVcNumber;
+  final Map<String, dynamic>? initialData;
 
   const CustomerProfileScreen({
     super.key,
     required this.customerId,
     this.customerName,
+    this.initialSerialNumber,
+    this.initialVcNumber,
+    this.initialData,
   });
 
   @override
@@ -43,6 +49,21 @@ class _CustomerProfileScreenState
   @override
   void initState() {
     super.initState();
+    // Pre-populate from route extras so UI shows data immediately
+    if (widget.initialData != null && widget.initialData!.isNotEmpty) {
+      _customer = {
+        'customer_id': widget.customerId,
+        'customer_name': widget.initialData!['customerName'] ?? widget.customerName ?? '',
+        'mobile_no': widget.initialData!['mobileNumber'] ?? '',
+        'account_number': widget.initialData!['accountNumber'] ?? '',
+        'status': widget.initialData!['status'] ?? '',
+        'pending_amount': widget.initialData!['pendingAmount'] ?? 0.0,
+        'billing_address': widget.initialData!['billingAddress'] ?? '',
+        'serial_number': widget.initialData!['serialNumber'] ?? widget.initialSerialNumber ?? '',
+        'vc_number': widget.initialData!['vcNumber'] ?? widget.initialVcNumber ?? '',
+        'caf_no': widget.initialData!['cafNumber'] ?? '',
+      };
+    }
     _loadCustomer();
   }
 
@@ -52,39 +73,95 @@ class _CustomerProfileScreenState
       _error = null;
     });
 
+    // Guard: don't call API with empty/invalid customer ID (e.g. fresh STBs)
+    final id = widget.customerId.trim();
+    if (id.isEmpty || id == 'null' || id == '0') {
+      setState(() {
+        _isLoading = false;
+        _customer = {
+          'customer_id': id,
+          'customer_name': widget.customerName ?? 'Fresh STB',
+        };
+        _error = 'This is a fresh STB with no customer assigned yet.';
+      });
+      return;
+    }
+
     try {
       final ds = ref.read(customerRemoteDatasourceProvider);
       final session = ref.read(appSessionProvider);
 
+      if (session == null || session.token.isEmpty) {
+        throw Exception('Session expired. Please log in again.');
+      }
+
       final data = await ds.getCustomerDetails(
-        authtoken: session?.token ?? '',
-        lcoCustomerId: widget.customerId,
+        authtoken: session.token,
+        customerNumber: widget.customerId,
         startValue: 0,
         endValue: 1,
       );
 
+      debugPrint('[PROFILE] Response top-level keys: ${data.keys.toList()}');
+
       Map<String, dynamic>? found;
+
+      // Try extracting customer data from known list keys
       for (final key in [
         'customerDetailsList',
         'existCustomerDetails',
         'customerDetails',
         'data',
       ]) {
-        final list = data[key];
-        if (list is List && list.isNotEmpty) {
-          found = list[0] as Map<String, dynamic>;
+        final raw = data[key];
+        if (raw is List && raw.isNotEmpty) {
+          final first = raw[0];
+          if (first is Map) {
+            found = Map<String, dynamic>.from(first);
+            debugPrint('[PROFILE] Found data under "$key" — keys: ${found.keys.toList()}');
+            break;
+          }
+        } else if (raw is Map && raw.isNotEmpty) {
+          // Some endpoints return a Map directly instead of a List
+          found = Map<String, dynamic>.from(raw);
+          debugPrint('[PROFILE] Found data as Map under "$key" — keys: ${found.keys.toList()}');
           break;
+        }
+      }
+
+      // Validate found data has a real customer (not server placeholder with empty IDs)
+      if (found != null) {
+        final custId = found['customer_id'] ?? found['customerId'] ?? '';
+        final custName = found['customer_name'] ?? found['customerName'] ?? '';
+        final isPlaceholder = custId.toString().isEmpty && custName.toString().isEmpty;
+
+        if (isPlaceholder) {
+          debugPrint('[PROFILE] API returned placeholder with empty ID+Name — treating as not found');
+          found = null;
         }
       }
 
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _customer = found ??
-              {
+          if (found != null && found.isNotEmpty) {
+            _customer = _normalizeCustomerData(found);
+            debugPrint('[PROFILE] Normalized customer: '
+                'name=${_customer['customer_name']}, '
+                'mobile=${_customer['mobile_no']}, '
+                'account=${_customer['account_number']}, '
+                'pending=${_customer['pending_amount']}');
+          } else {
+            debugPrint('[PROFILE] No customer data found in response');
+            // Only set error if we don't already have pre-populated data
+            if (_customer.isEmpty || _customer['customer_name']?.toString().isEmpty == true) {
+              _customer = {
                 'customer_id': widget.customerId,
-                'customerName': widget.customerName ?? 'Customer',
+                'customer_name': widget.customerName ?? 'Customer',
               };
+              _error = 'Could not load customer details. Pull down to retry.';
+            }
+          }
         });
       }
     } catch (e) {
@@ -92,25 +169,104 @@ class _CustomerProfileScreenState
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _error = e.toString().replaceAll('ApiException: ', '');
-          _customer = {
-            'customer_id': widget.customerId,
-            'customerName': widget.customerName ?? 'Customer',
-          };
+          // Only show error and overwrite if we don't have pre-populated data
+          if (_customer.isEmpty || _customer['customer_name']?.toString().isEmpty == true) {
+            _error = e.toString().replaceAll('Exception: ', '').replaceAll('ApiException: ', '');
+            _customer = {
+              'customer_id': widget.customerId,
+              'customer_name': widget.customerName ?? 'Customer',
+            };
+          }
         });
       }
     }
   }
 
-  String _f(String key, [String fallback = '']) =>
-      _customer[key]?.toString() ?? fallback;
+  /// Normalize the raw server map into a consistent set of standard keys.
+  /// The server may return camelCase, snake_case, or mixed keys depending
+  /// on the API endpoint and DB query aliases. This maps all known variants
+  /// to a single canonical key set for reliable reading.
+  Map<String, dynamic> _normalizeCustomerData(Map<String, dynamic> raw) {
+    final n = <String, dynamic>{};
+
+    // Keep the original raw map intact for pass-through to edit screen
+    n.addAll(raw);
+
+    // ── Helper: pick first non-null/non-empty value from candidate keys ──
+    String s(List<String> keys, [String fallback = '']) {
+      for (final k in keys) {
+        final v = raw[k];
+        if (v != null && v.toString().isNotEmpty) return v.toString();
+      }
+      return fallback;
+    }
+
+    dynamic d(List<String> keys) {
+      for (final k in keys) {
+        if (raw[k] != null) return raw[k];
+      }
+      return null;
+    }
+
+    // ── Map each field to a canonical key ────────────────────────────────
+    n['customer_id'] = s(['customer_id', 'customerId']);
+    n['customer_name'] = s(['customer_name', 'customerName', 'customer_Name']);
+    n['mobile_no'] = s(['mobile_no', 'mobileNumber', 'mobile_number', 'mobileNo']);
+    n['account_number'] = s(['account_number', 'accountNumber', 'accountnumber']);
+    n['caf_no'] = s(['caf_no', 'cafNumber', 'caf_number', 'cafNo']);
+    n['crf_number'] = s(['crf_number', 'crfNumber', 'crf_no']);
+    n['pin_code'] = s(['pin_code', 'pinCode', 'pincode']);
+    n['billing_address'] = s([
+      'billing_address', 'billingAddress',
+      'billing_address1', 'billingAddress1', 'address1',
+    ]);
+    n['billing_address2'] = s([
+      'billing_address2', 'billingAddress2', 'address2',
+    ]);
+    n['installation_address'] = s([
+      'installation_address', 'installationAddress',
+      'installation_address1', 'installationAddress1',
+    ]);
+    n['status'] = s(['status'], '1');
+    n['pending_amount'] = d(['pending_amount', 'pendingAmount']) ?? 0;
+    n['bill_type'] = s(['bill_type', 'billType']);
+    n['reseller_id'] = s(['reseller_id', 'resellerId']);
+    n['email'] = s(['email', 'emailId', 'email_id']);
+    n['phone_no'] = s(['phone_no', 'phoneNumber', 'phone_number', 'phone']);
+    n['gender'] = s(['gender', 'genderId', 'gender_id']);
+    n['latitude'] = d(['latitude', 'lati', 'lat', 'Latitude']) ?? 0.0;
+    n['longitude'] = d(['longitude', 'longi', 'lng', 'lon', 'Longitude']) ?? 0.0;
+    n['serial_number'] = s(['serial_number', 'box_number', 'boxNumber', 'serialNumber', 'stb_no']);
+    n['vc_number'] = s(['vc_number', 'vcNumber', 'vc_no']);
+    n['baid'] = s(['baid', 'lcoCustomerId', 'lco_customer_id']);
+    n['group_id'] = s(['group_id', 'groupId']);
+    n['group_name'] = s(['group_name', 'groupName']);
+    n['customer_type_id'] = s(['customer_type_id', 'customerTypeId']);
+    n['id_type'] = s(['id_type', 'idType']);
+    n['id_number'] = s(['id_number', 'idNumber']);
+    n['is_direct_lco'] = d(['is_direct_lco', 'isDirectLco']) ?? 0;
+    n['location_name'] = s(['location_name', 'city_name', 'city']);
+    n['state_name'] = s(['state_name', 'state']);
+    n['stb_count'] = d(['stbCount', 'stb_count']) ?? 0;
+
+    return n;
+  }
+
+  /// Multi-key lookup — returns first non-empty match.
+  String _fm(List<String> keys, [String fallback = '']) {
+    for (final k in keys) {
+      final v = _customer[k];
+      if (v != null && v.toString().isNotEmpty) return v.toString();
+    }
+    return fallback;
+  }
 
   String get _name =>
-      _f('customer_name', _f('customerName', widget.customerName ?? 'Customer'))
+      _fm(['customer_name', 'customerName'], widget.customerName ?? 'Customer')
           .trim();
 
   String get _statusString {
-    final s = _f('status', '1');
+    final s = _fm(['status'], '1');
     if (s == '1' || s.toLowerCase() == 'active') return 'Active';
     if (s == '0' || s.toLowerCase() == 'deactivated' || s.toLowerCase() == 'inactive') {
       return 'Deactivated';
@@ -128,10 +284,51 @@ class _CustomerProfileScreenState
   }
 
   String get _mobile =>
-      _f('mobile_no', _f('mobileNumber', _f('mobile_number', '')));
+      _fm(['mobile_no', 'mobileNumber', 'mobile_number', 'mobileNo']);
 
   String get _area =>
-      _f('area', _f('location', _f('billing_address', '')));
+      _fm(['area', 'location', 'billing_address', 'billingAddress', 'address1', 'location_name']);
+
+  String get _billingAddress {
+    final parts = <String>[];
+    final a1 = _fm(['billing_address', 'billingAddress', 'address1', 'billingAddress1', 'billing_address1']);
+    final a2 = _fm(['billing_address2', 'billingAddress2', 'address2']);
+    final city = _fm(['location_name', 'city_name', 'city']);
+    final state = _fm(['state_name', 'state']);
+    final country = _fm(['country_name', 'country']);
+    if (a1.isNotEmpty) parts.add(a1);
+    if (a2.isNotEmpty) parts.add(a2);
+    if (city.isNotEmpty) parts.add(city);
+    if (state.isNotEmpty) parts.add(state);
+    if (country.isNotEmpty) parts.add(country);
+    return parts.join(', ');
+  }
+
+  String get _pinCode =>
+      _fm(['pin_code', 'pinCode', 'pincode']);
+
+  String get _cafNo =>
+      _fm(['caf_no', 'cafNumber', 'crf_number', 'crfNumber', 'caf_number']);
+
+  String get _accountNo =>
+      _fm(['account_number', 'accountNumber', 'accountnumber']);
+
+  double _readLat() {
+    final v = _customer['latitude'] ??
+        _customer['lati'] ??
+        _customer['lat'] ??
+        _customer['Latitude'];
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
+
+  double _readLng() {
+    final v = _customer['longitude'] ??
+        _customer['longi'] ??
+        _customer['lng'] ??
+        _customer['lon'] ??
+        _customer['Longitude'];
+    return double.tryParse(v?.toString() ?? '') ?? 0.0;
+  }
 
   Future<void> _updateLocation() async {
     final session = ref.read(appSessionProvider);
@@ -140,6 +337,17 @@ class _CustomerProfileScreenState
     setState(() => _isUpdatingLocation = true);
 
     try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (mounted) {
+          _showSnackBar(
+            'Location services are disabled. Please enable GPS.',
+            isError: true,
+          );
+        }
+        return;
+      }
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
@@ -176,6 +384,10 @@ class _CustomerProfileScreenState
       );
 
       if (mounted) {
+        setState(() {
+          _customer['latitude'] = position.latitude;
+          _customer['longitude'] = position.longitude;
+        });
         _showSnackBar('Location updated successfully');
       }
     } catch (e) {
@@ -211,28 +423,33 @@ class _CustomerProfileScreenState
     );
   }
 
-  void _viewOnMap() {
-    final lat = _customer['latitude'];
-    final lng = _customer['longitude'];
-    if (lat == null || lng == null) {
-      _showSnackBar('No location data available for this customer', isError: true);
-      return;
-    }
-    final latitude = double.tryParse(lat.toString()) ?? 0.0;
-    final longitude = double.tryParse(lng.toString()) ?? 0.0;
+  Future<void> _viewOnMap() async {
+    final latitude = _readLat();
+    final longitude = _readLng();
     if (latitude == 0.0 && longitude == 0.0) {
-      _showSnackBar('No location data available for this customer', isError: true);
+      _showSnackBar('No location data available. Please update location first.',
+          isError: true);
       return;
     }
-    final uri = Uri.parse(
-      'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
-    );
-    launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$latitude,$longitude',
+      );
+      final launched =
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!launched && mounted) {
+        _showSnackBar('Could not open Maps app', isError: true);
+      }
+    } catch (e) {
+      debugPrint('[PROFILE] View on map error: $e');
+      if (mounted) {
+        _showSnackBar('Failed to open map: $e', isError: true);
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
     final c = Theme.of(context).extension<AppColors>()!;
     final tt = Theme.of(context).textTheme;
     final session = ref.watch(appSessionProvider);
@@ -391,35 +608,35 @@ class _CustomerProfileScreenState
 
     final cells = <_GridCell>[
       _GridCell(
-        label: 'CUSTOMER ID',
-        value: widget.customerId,
+        label: 'CUSTOMER NAME',
+        value: _name,
       ),
       _GridCell(
         label: 'A/C NUMBER',
-        value: _f('accountnumber', _f('account_number', '-')),
+        value: _accountNo.isNotEmpty ? _accountNo : '-',
       ),
       _GridCell(
         label: cafLabel.toUpperCase(),
-        value: _f('cafNumber', _f('caf_no', _f('crfNumber', _f('crf_number', '-')))),
+        value: _cafNo.isNotEmpty ? _cafNo : '-',
       ),
       _GridCell(
         label: l.mobile.toUpperCase(),
         value: _mobile.isNotEmpty ? _mobile : '-',
       ),
       _GridCell(
-        label: 'STB COUNT',
-        value: _f('stbCount', _f('stb_count', '-')),
-      ),
-      _GridCell(
-        label: 'BILL TYPE',
-        value: _f('bill_type', _f('billType', '-')),
-      ),
-      _GridCell(
         label: 'STATUS',
         value: _statusString,
       ),
       _GridCell(
-        label: 'PENDING',
+        label: 'PINCODE',
+        value: _pinCode.isNotEmpty ? _pinCode : '-',
+      ),
+      _GridCell(
+        label: 'BILLING ADDRESS',
+        value: _billingAddress.isNotEmpty ? _billingAddress : '-',
+      ),
+      _GridCell(
+        label: 'DUE AMOUNT',
         value: formatCurrency(pending, symbol: currencySymbol),
         valueColor: pendingColor,
       ),
@@ -513,8 +730,10 @@ class _CustomerProfileScreenState
             'customerId': widget.customerId,
             'customerName': _name,
             'pendingAmount': _pendingAmount,
-            'resellerId': _f('reseller_id', _f('resellerId', '')),
-            'billType': _f('bill_type', _f('billType', '')),
+            'resellerId': _fm(['reseller_id', 'resellerId']),
+            'billType': _fm(['bill_type', 'billType']),
+            'address': _billingAddress,
+            'accountNumber': _accountNo,
           },
         ),
       ));
@@ -571,12 +790,43 @@ class _CustomerProfileScreenState
     // Edit
     actions.add(CircleAction(
       icon: LucideIcons.pencil,
-      label: 'Edit',
+      label: _statusString == 'Fresh' ? 'Add Customer' : 'Edit',
       color: c.purple,
       onTap: () async {
+        final serial = _fm(
+          ['serial_number', 'serialNumber', 'box_number', 'boxNumber'],
+          widget.initialSerialNumber ?? '',
+        );
+        final vc = _fm(
+          ['vc_number', 'vcNumber', 'vc_no'],
+          widget.initialVcNumber ?? '',
+        );
+
+        // Fresh customers have no existing record — use NewCustomerScreen
+        // (saveCustomerRest) instead of EditCustomerScreen (editCustomerRest).
+        // editCustomerRest requires an existing customer_id on the server,
+        // which causes "Dealer or Employee does not exist (statusCode:1)" for
+        // fresh STBs.
+        if (_statusString == 'Fresh') {
+          context.push(
+            RouteNames.newCustomer,
+            extra: {
+              'serialNumber': serial,
+              'vcNumber': vc,
+            },
+          );
+          return;
+        }
+
         final result = await context.push<bool>(
           '/customer/${widget.customerId}/edit',
-          extra: {'customer': _customer},
+          extra: {
+            'customer': {
+              ..._customer,
+              if (serial.isNotEmpty) 'serialNumber': serial,
+              if (vc.isNotEmpty) 'vcNumber': vc,
+            },
+          },
         );
         if (result == true) {
           _loadCustomer();
@@ -593,30 +843,26 @@ class _CustomerProfileScreenState
       child: Column(
         children: [
           // Invoice History
-          if (session?.canAccessInvoices == true)
-            _ActionTile(
+          _ActionTile(
               icon: LucideIcons.fileText,
               label: l.invoiceHistory,
               iconColor: c.blue,
               iconBg: c.blueSoft,
               colors: c,
               onTap: () {
-                // TODO: Navigate to invoice history
-                _showSnackBar('Invoice History coming soon');
+                context.push('/invoice-history/${widget.customerId}');
               },
             ),
 
           // Payment History
-          if (session?.canAccessPaymentHistory == true)
-            _ActionTile(
+          _ActionTile(
               icon: LucideIcons.receipt,
               label: l.paymentHistory,
               iconColor: c.green,
               iconBg: c.greenSoft,
               colors: c,
               onTap: () {
-                // TODO: Navigate to payment history
-                _showSnackBar('Payment History coming soon');
+                context.push('/payment-history/${widget.customerId}');
               },
             ),
 

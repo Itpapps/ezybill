@@ -32,6 +32,11 @@ sealed class PendingAmount with _$PendingAmount {
       if (v is String) r[key] = double.tryParse(v) ?? 0.0;
       if (v == null) r[key] = 0.0;
     }
+    // SOAP _smartConvert may turn numeric strings into int/double;
+    // ensure String fields stay String to avoid TypeError in generated fromJson.
+    for (final key in ['customerName', 'mobileNumber', 'billingId']) {
+      if (r[key] is num) r[key] = r[key].toString();
+    }
     return r;
   }
 }

@@ -13,6 +13,7 @@ abstract class AuthRepository {
     required String password,
     String? mobileNo,
     String? imei,
+    String? employeeId,
   });
 
   /// Fetch access control flags for the current user session.
