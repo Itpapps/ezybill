@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$InvoiceItem {
 
-@JsonKey(name: 'billingId') String get billingId;@JsonKey(name: 'billDate') String get billDate;@JsonKey(name: 'dueDate') String get dueDate;@JsonKey(name: 'totalAmount') double get totalAmount;@JsonKey(name: 'quantity') int get quantity;@JsonKey(name: 'basePrice') double get basePrice;@JsonKey(name: 'serialNumber') String get serialNumber;@JsonKey(name: 'macVcNumber') String get macVcNumber;@JsonKey(name: 'pname') String get pname;@JsonKey(name: 'setupPrice') double get setupPrice;@JsonKey(name: 'taxAmount') double get taxAmount;@JsonKey(name: 'pendingAmount') double get pendingAmount;@JsonKey(name: 'discountAmount') double get discountAmount;@JsonKey(name: 'isAdhoc') int get isAdhoc;
+@JsonKey(name: 'billingId') String get billingId;@JsonKey(name: 'billDate') String get billDate;@JsonKey(name: 'dueDate') String get dueDate;@JsonKey(name: 'totalAmount') double get totalAmount;@JsonKey(name: 'quantity') int get quantity;@JsonKey(name: 'basePrice') double get basePrice;@JsonKey(name: 'serialNumber') String get serialNumber;@JsonKey(name: 'macVcNumber') String get macVcNumber;@JsonKey(name: 'pname') String get pname;@JsonKey(name: 'setupPrice') double get setupPrice;@JsonKey(name: 'taxAmount') double get taxAmount;@JsonKey(name: 'pendingAmount') double get pendingAmount;@JsonKey(name: 'discountAmount') double get discountAmount;@JsonKey(name: 'isAdhoc') int get isAdhoc;@JsonKey(name: 'billAmount') double get billAmount;@JsonKey(name: 'msoShare') double get msoShare;@JsonKey(name: 'billPeriodStartDate') String get billPeriodStartDate;@JsonKey(name: 'billPeriodEndDate') String get billPeriodEndDate;@JsonKey(name: 'remarks') String get remarks;
 /// Create a copy of InvoiceItem
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -28,16 +28,16 @@ $InvoiceItemCopyWith<InvoiceItem> get copyWith => _$InvoiceItemCopyWithImpl<Invo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is InvoiceItem&&(identical(other.billingId, billingId) || other.billingId == billingId)&&(identical(other.billDate, billDate) || other.billDate == billDate)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.totalAmount, totalAmount) || other.totalAmount == totalAmount)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.basePrice, basePrice) || other.basePrice == basePrice)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.macVcNumber, macVcNumber) || other.macVcNumber == macVcNumber)&&(identical(other.pname, pname) || other.pname == pname)&&(identical(other.setupPrice, setupPrice) || other.setupPrice == setupPrice)&&(identical(other.taxAmount, taxAmount) || other.taxAmount == taxAmount)&&(identical(other.pendingAmount, pendingAmount) || other.pendingAmount == pendingAmount)&&(identical(other.discountAmount, discountAmount) || other.discountAmount == discountAmount)&&(identical(other.isAdhoc, isAdhoc) || other.isAdhoc == isAdhoc));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is InvoiceItem&&(identical(other.billingId, billingId) || other.billingId == billingId)&&(identical(other.billDate, billDate) || other.billDate == billDate)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.totalAmount, totalAmount) || other.totalAmount == totalAmount)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.basePrice, basePrice) || other.basePrice == basePrice)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.macVcNumber, macVcNumber) || other.macVcNumber == macVcNumber)&&(identical(other.pname, pname) || other.pname == pname)&&(identical(other.setupPrice, setupPrice) || other.setupPrice == setupPrice)&&(identical(other.taxAmount, taxAmount) || other.taxAmount == taxAmount)&&(identical(other.pendingAmount, pendingAmount) || other.pendingAmount == pendingAmount)&&(identical(other.discountAmount, discountAmount) || other.discountAmount == discountAmount)&&(identical(other.isAdhoc, isAdhoc) || other.isAdhoc == isAdhoc)&&(identical(other.billAmount, billAmount) || other.billAmount == billAmount)&&(identical(other.msoShare, msoShare) || other.msoShare == msoShare)&&(identical(other.billPeriodStartDate, billPeriodStartDate) || other.billPeriodStartDate == billPeriodStartDate)&&(identical(other.billPeriodEndDate, billPeriodEndDate) || other.billPeriodEndDate == billPeriodEndDate)&&(identical(other.remarks, remarks) || other.remarks == remarks));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,billingId,billDate,dueDate,totalAmount,quantity,basePrice,serialNumber,macVcNumber,pname,setupPrice,taxAmount,pendingAmount,discountAmount,isAdhoc);
+int get hashCode => Object.hashAll([runtimeType,billingId,billDate,dueDate,totalAmount,quantity,basePrice,serialNumber,macVcNumber,pname,setupPrice,taxAmount,pendingAmount,discountAmount,isAdhoc,billAmount,msoShare,billPeriodStartDate,billPeriodEndDate,remarks]);
 
 @override
 String toString() {
-  return 'InvoiceItem(billingId: $billingId, billDate: $billDate, dueDate: $dueDate, totalAmount: $totalAmount, quantity: $quantity, basePrice: $basePrice, serialNumber: $serialNumber, macVcNumber: $macVcNumber, pname: $pname, setupPrice: $setupPrice, taxAmount: $taxAmount, pendingAmount: $pendingAmount, discountAmount: $discountAmount, isAdhoc: $isAdhoc)';
+  return 'InvoiceItem(billingId: $billingId, billDate: $billDate, dueDate: $dueDate, totalAmount: $totalAmount, quantity: $quantity, basePrice: $basePrice, serialNumber: $serialNumber, macVcNumber: $macVcNumber, pname: $pname, setupPrice: $setupPrice, taxAmount: $taxAmount, pendingAmount: $pendingAmount, discountAmount: $discountAmount, isAdhoc: $isAdhoc, billAmount: $billAmount, msoShare: $msoShare, billPeriodStartDate: $billPeriodStartDate, billPeriodEndDate: $billPeriodEndDate, remarks: $remarks)';
 }
 
 
@@ -48,7 +48,7 @@ abstract mixin class $InvoiceItemCopyWith<$Res>  {
   factory $InvoiceItemCopyWith(InvoiceItem value, $Res Function(InvoiceItem) _then) = _$InvoiceItemCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'billingId') String billingId,@JsonKey(name: 'billDate') String billDate,@JsonKey(name: 'dueDate') String dueDate,@JsonKey(name: 'totalAmount') double totalAmount,@JsonKey(name: 'quantity') int quantity,@JsonKey(name: 'basePrice') double basePrice,@JsonKey(name: 'serialNumber') String serialNumber,@JsonKey(name: 'macVcNumber') String macVcNumber,@JsonKey(name: 'pname') String pname,@JsonKey(name: 'setupPrice') double setupPrice,@JsonKey(name: 'taxAmount') double taxAmount,@JsonKey(name: 'pendingAmount') double pendingAmount,@JsonKey(name: 'discountAmount') double discountAmount,@JsonKey(name: 'isAdhoc') int isAdhoc
+@JsonKey(name: 'billingId') String billingId,@JsonKey(name: 'billDate') String billDate,@JsonKey(name: 'dueDate') String dueDate,@JsonKey(name: 'totalAmount') double totalAmount,@JsonKey(name: 'quantity') int quantity,@JsonKey(name: 'basePrice') double basePrice,@JsonKey(name: 'serialNumber') String serialNumber,@JsonKey(name: 'macVcNumber') String macVcNumber,@JsonKey(name: 'pname') String pname,@JsonKey(name: 'setupPrice') double setupPrice,@JsonKey(name: 'taxAmount') double taxAmount,@JsonKey(name: 'pendingAmount') double pendingAmount,@JsonKey(name: 'discountAmount') double discountAmount,@JsonKey(name: 'isAdhoc') int isAdhoc,@JsonKey(name: 'billAmount') double billAmount,@JsonKey(name: 'msoShare') double msoShare,@JsonKey(name: 'billPeriodStartDate') String billPeriodStartDate,@JsonKey(name: 'billPeriodEndDate') String billPeriodEndDate,@JsonKey(name: 'remarks') String remarks
 });
 
 
@@ -65,7 +65,7 @@ class _$InvoiceItemCopyWithImpl<$Res>
 
 /// Create a copy of InvoiceItem
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? billingId = null,Object? billDate = null,Object? dueDate = null,Object? totalAmount = null,Object? quantity = null,Object? basePrice = null,Object? serialNumber = null,Object? macVcNumber = null,Object? pname = null,Object? setupPrice = null,Object? taxAmount = null,Object? pendingAmount = null,Object? discountAmount = null,Object? isAdhoc = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? billingId = null,Object? billDate = null,Object? dueDate = null,Object? totalAmount = null,Object? quantity = null,Object? basePrice = null,Object? serialNumber = null,Object? macVcNumber = null,Object? pname = null,Object? setupPrice = null,Object? taxAmount = null,Object? pendingAmount = null,Object? discountAmount = null,Object? isAdhoc = null,Object? billAmount = null,Object? msoShare = null,Object? billPeriodStartDate = null,Object? billPeriodEndDate = null,Object? remarks = null,}) {
   return _then(_self.copyWith(
 billingId: null == billingId ? _self.billingId : billingId // ignore: cast_nullable_to_non_nullable
 as String,billDate: null == billDate ? _self.billDate : billDate // ignore: cast_nullable_to_non_nullable
@@ -81,7 +81,12 @@ as double,taxAmount: null == taxAmount ? _self.taxAmount : taxAmount // ignore: 
 as double,pendingAmount: null == pendingAmount ? _self.pendingAmount : pendingAmount // ignore: cast_nullable_to_non_nullable
 as double,discountAmount: null == discountAmount ? _self.discountAmount : discountAmount // ignore: cast_nullable_to_non_nullable
 as double,isAdhoc: null == isAdhoc ? _self.isAdhoc : isAdhoc // ignore: cast_nullable_to_non_nullable
-as int,
+as int,billAmount: null == billAmount ? _self.billAmount : billAmount // ignore: cast_nullable_to_non_nullable
+as double,msoShare: null == msoShare ? _self.msoShare : msoShare // ignore: cast_nullable_to_non_nullable
+as double,billPeriodStartDate: null == billPeriodStartDate ? _self.billPeriodStartDate : billPeriodStartDate // ignore: cast_nullable_to_non_nullable
+as String,billPeriodEndDate: null == billPeriodEndDate ? _self.billPeriodEndDate : billPeriodEndDate // ignore: cast_nullable_to_non_nullable
+as String,remarks: null == remarks ? _self.remarks : remarks // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 
@@ -163,10 +168,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc, @JsonKey(name: 'billAmount')  double billAmount, @JsonKey(name: 'msoShare')  double msoShare, @JsonKey(name: 'billPeriodStartDate')  String billPeriodStartDate, @JsonKey(name: 'billPeriodEndDate')  String billPeriodEndDate, @JsonKey(name: 'remarks')  String remarks)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _InvoiceItem() when $default != null:
-return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc);case _:
+return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc,_that.billAmount,_that.msoShare,_that.billPeriodStartDate,_that.billPeriodEndDate,_that.remarks);case _:
   return orElse();
 
 }
@@ -184,10 +189,10 @@ return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc, @JsonKey(name: 'billAmount')  double billAmount, @JsonKey(name: 'msoShare')  double msoShare, @JsonKey(name: 'billPeriodStartDate')  String billPeriodStartDate, @JsonKey(name: 'billPeriodEndDate')  String billPeriodEndDate, @JsonKey(name: 'remarks')  String remarks)  $default,) {final _that = this;
 switch (_that) {
 case _InvoiceItem():
-return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc);}
+return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc,_that.billAmount,_that.msoShare,_that.billPeriodStartDate,_that.billPeriodEndDate,_that.remarks);}
 }
 /// A variant of `when` that fallback to returning `null`
 ///
@@ -201,10 +206,10 @@ return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'billingId')  String billingId, @JsonKey(name: 'billDate')  String billDate, @JsonKey(name: 'dueDate')  String dueDate, @JsonKey(name: 'totalAmount')  double totalAmount, @JsonKey(name: 'quantity')  int quantity, @JsonKey(name: 'basePrice')  double basePrice, @JsonKey(name: 'serialNumber')  String serialNumber, @JsonKey(name: 'macVcNumber')  String macVcNumber, @JsonKey(name: 'pname')  String pname, @JsonKey(name: 'setupPrice')  double setupPrice, @JsonKey(name: 'taxAmount')  double taxAmount, @JsonKey(name: 'pendingAmount')  double pendingAmount, @JsonKey(name: 'discountAmount')  double discountAmount, @JsonKey(name: 'isAdhoc')  int isAdhoc, @JsonKey(name: 'billAmount')  double billAmount, @JsonKey(name: 'msoShare')  double msoShare, @JsonKey(name: 'billPeriodStartDate')  String billPeriodStartDate, @JsonKey(name: 'billPeriodEndDate')  String billPeriodEndDate, @JsonKey(name: 'remarks')  String remarks)?  $default,) {final _that = this;
 switch (_that) {
 case _InvoiceItem() when $default != null:
-return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc);case _:
+return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_that.quantity,_that.basePrice,_that.serialNumber,_that.macVcNumber,_that.pname,_that.setupPrice,_that.taxAmount,_that.pendingAmount,_that.discountAmount,_that.isAdhoc,_that.billAmount,_that.msoShare,_that.billPeriodStartDate,_that.billPeriodEndDate,_that.remarks);case _:
   return null;
 
 }
@@ -216,7 +221,7 @@ return $default(_that.billingId,_that.billDate,_that.dueDate,_that.totalAmount,_
 @JsonSerializable()
 
 class _InvoiceItem implements InvoiceItem {
-  const _InvoiceItem({@JsonKey(name: 'billingId') this.billingId = '', @JsonKey(name: 'billDate') this.billDate = '', @JsonKey(name: 'dueDate') this.dueDate = '', @JsonKey(name: 'totalAmount') this.totalAmount = 0.0, @JsonKey(name: 'quantity') this.quantity = 0, @JsonKey(name: 'basePrice') this.basePrice = 0.0, @JsonKey(name: 'serialNumber') this.serialNumber = '', @JsonKey(name: 'macVcNumber') this.macVcNumber = '', @JsonKey(name: 'pname') this.pname = '', @JsonKey(name: 'setupPrice') this.setupPrice = 0.0, @JsonKey(name: 'taxAmount') this.taxAmount = 0.0, @JsonKey(name: 'pendingAmount') this.pendingAmount = 0.0, @JsonKey(name: 'discountAmount') this.discountAmount = 0.0, @JsonKey(name: 'isAdhoc') this.isAdhoc = 0});
+  const _InvoiceItem({@JsonKey(name: 'billingId') this.billingId = '', @JsonKey(name: 'billDate') this.billDate = '', @JsonKey(name: 'dueDate') this.dueDate = '', @JsonKey(name: 'totalAmount') this.totalAmount = 0.0, @JsonKey(name: 'quantity') this.quantity = 0, @JsonKey(name: 'basePrice') this.basePrice = 0.0, @JsonKey(name: 'serialNumber') this.serialNumber = '', @JsonKey(name: 'macVcNumber') this.macVcNumber = '', @JsonKey(name: 'pname') this.pname = '', @JsonKey(name: 'setupPrice') this.setupPrice = 0.0, @JsonKey(name: 'taxAmount') this.taxAmount = 0.0, @JsonKey(name: 'pendingAmount') this.pendingAmount = 0.0, @JsonKey(name: 'discountAmount') this.discountAmount = 0.0, @JsonKey(name: 'isAdhoc') this.isAdhoc = 0, @JsonKey(name: 'billAmount') this.billAmount = 0.0, @JsonKey(name: 'msoShare') this.msoShare = 0.0, @JsonKey(name: 'billPeriodStartDate') this.billPeriodStartDate = '', @JsonKey(name: 'billPeriodEndDate') this.billPeriodEndDate = '', @JsonKey(name: 'remarks') this.remarks = ''});
   factory _InvoiceItem.fromJson(Map<String, dynamic> json) => _$InvoiceItemFromJson(json);
 
 @override@JsonKey(name: 'billingId') final  String billingId;
@@ -233,6 +238,11 @@ class _InvoiceItem implements InvoiceItem {
 @override@JsonKey(name: 'pendingAmount') final  double pendingAmount;
 @override@JsonKey(name: 'discountAmount') final  double discountAmount;
 @override@JsonKey(name: 'isAdhoc') final  int isAdhoc;
+@override@JsonKey(name: 'billAmount') final  double billAmount;
+@override@JsonKey(name: 'msoShare') final  double msoShare;
+@override@JsonKey(name: 'billPeriodStartDate') final  String billPeriodStartDate;
+@override@JsonKey(name: 'billPeriodEndDate') final  String billPeriodEndDate;
+@override@JsonKey(name: 'remarks') final  String remarks;
 
 /// Create a copy of InvoiceItem
 /// with the given fields replaced by the non-null parameter values.
@@ -247,16 +257,16 @@ Map<String, dynamic> toJson() {
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InvoiceItem&&(identical(other.billingId, billingId) || other.billingId == billingId)&&(identical(other.billDate, billDate) || other.billDate == billDate)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.totalAmount, totalAmount) || other.totalAmount == totalAmount)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.basePrice, basePrice) || other.basePrice == basePrice)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.macVcNumber, macVcNumber) || other.macVcNumber == macVcNumber)&&(identical(other.pname, pname) || other.pname == pname)&&(identical(other.setupPrice, setupPrice) || other.setupPrice == setupPrice)&&(identical(other.taxAmount, taxAmount) || other.taxAmount == taxAmount)&&(identical(other.pendingAmount, pendingAmount) || other.pendingAmount == pendingAmount)&&(identical(other.discountAmount, discountAmount) || other.discountAmount == discountAmount)&&(identical(other.isAdhoc, isAdhoc) || other.isAdhoc == isAdhoc));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _InvoiceItem&&(identical(other.billingId, billingId) || other.billingId == billingId)&&(identical(other.billDate, billDate) || other.billDate == billDate)&&(identical(other.dueDate, dueDate) || other.dueDate == dueDate)&&(identical(other.totalAmount, totalAmount) || other.totalAmount == totalAmount)&&(identical(other.quantity, quantity) || other.quantity == quantity)&&(identical(other.basePrice, basePrice) || other.basePrice == basePrice)&&(identical(other.serialNumber, serialNumber) || other.serialNumber == serialNumber)&&(identical(other.macVcNumber, macVcNumber) || other.macVcNumber == macVcNumber)&&(identical(other.pname, pname) || other.pname == pname)&&(identical(other.setupPrice, setupPrice) || other.setupPrice == setupPrice)&&(identical(other.taxAmount, taxAmount) || other.taxAmount == taxAmount)&&(identical(other.pendingAmount, pendingAmount) || other.pendingAmount == pendingAmount)&&(identical(other.discountAmount, discountAmount) || other.discountAmount == discountAmount)&&(identical(other.isAdhoc, isAdhoc) || other.isAdhoc == isAdhoc)&&(identical(other.billAmount, billAmount) || other.billAmount == billAmount)&&(identical(other.msoShare, msoShare) || other.msoShare == msoShare)&&(identical(other.billPeriodStartDate, billPeriodStartDate) || other.billPeriodStartDate == billPeriodStartDate)&&(identical(other.billPeriodEndDate, billPeriodEndDate) || other.billPeriodEndDate == billPeriodEndDate)&&(identical(other.remarks, remarks) || other.remarks == remarks));
 }
 
 @JsonKey(includeFromJson: false, includeToJson: false)
 @override
-int get hashCode => Object.hash(runtimeType,billingId,billDate,dueDate,totalAmount,quantity,basePrice,serialNumber,macVcNumber,pname,setupPrice,taxAmount,pendingAmount,discountAmount,isAdhoc);
+int get hashCode => Object.hashAll([runtimeType,billingId,billDate,dueDate,totalAmount,quantity,basePrice,serialNumber,macVcNumber,pname,setupPrice,taxAmount,pendingAmount,discountAmount,isAdhoc,billAmount,msoShare,billPeriodStartDate,billPeriodEndDate,remarks]);
 
 @override
 String toString() {
-  return 'InvoiceItem(billingId: $billingId, billDate: $billDate, dueDate: $dueDate, totalAmount: $totalAmount, quantity: $quantity, basePrice: $basePrice, serialNumber: $serialNumber, macVcNumber: $macVcNumber, pname: $pname, setupPrice: $setupPrice, taxAmount: $taxAmount, pendingAmount: $pendingAmount, discountAmount: $discountAmount, isAdhoc: $isAdhoc)';
+  return 'InvoiceItem(billingId: $billingId, billDate: $billDate, dueDate: $dueDate, totalAmount: $totalAmount, quantity: $quantity, basePrice: $basePrice, serialNumber: $serialNumber, macVcNumber: $macVcNumber, pname: $pname, setupPrice: $setupPrice, taxAmount: $taxAmount, pendingAmount: $pendingAmount, discountAmount: $discountAmount, isAdhoc: $isAdhoc, billAmount: $billAmount, msoShare: $msoShare, billPeriodStartDate: $billPeriodStartDate, billPeriodEndDate: $billPeriodEndDate, remarks: $remarks)';
 }
 
 
@@ -267,7 +277,7 @@ abstract mixin class _$InvoiceItemCopyWith<$Res> implements $InvoiceItemCopyWith
   factory _$InvoiceItemCopyWith(_InvoiceItem value, $Res Function(_InvoiceItem) _then) = __$InvoiceItemCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'billingId') String billingId,@JsonKey(name: 'billDate') String billDate,@JsonKey(name: 'dueDate') String dueDate,@JsonKey(name: 'totalAmount') double totalAmount,@JsonKey(name: 'quantity') int quantity,@JsonKey(name: 'basePrice') double basePrice,@JsonKey(name: 'serialNumber') String serialNumber,@JsonKey(name: 'macVcNumber') String macVcNumber,@JsonKey(name: 'pname') String pname,@JsonKey(name: 'setupPrice') double setupPrice,@JsonKey(name: 'taxAmount') double taxAmount,@JsonKey(name: 'pendingAmount') double pendingAmount,@JsonKey(name: 'discountAmount') double discountAmount,@JsonKey(name: 'isAdhoc') int isAdhoc
+@JsonKey(name: 'billingId') String billingId,@JsonKey(name: 'billDate') String billDate,@JsonKey(name: 'dueDate') String dueDate,@JsonKey(name: 'totalAmount') double totalAmount,@JsonKey(name: 'quantity') int quantity,@JsonKey(name: 'basePrice') double basePrice,@JsonKey(name: 'serialNumber') String serialNumber,@JsonKey(name: 'macVcNumber') String macVcNumber,@JsonKey(name: 'pname') String pname,@JsonKey(name: 'setupPrice') double setupPrice,@JsonKey(name: 'taxAmount') double taxAmount,@JsonKey(name: 'pendingAmount') double pendingAmount,@JsonKey(name: 'discountAmount') double discountAmount,@JsonKey(name: 'isAdhoc') int isAdhoc,@JsonKey(name: 'billAmount') double billAmount,@JsonKey(name: 'msoShare') double msoShare,@JsonKey(name: 'billPeriodStartDate') String billPeriodStartDate,@JsonKey(name: 'billPeriodEndDate') String billPeriodEndDate,@JsonKey(name: 'remarks') String remarks
 });
 
 
@@ -284,7 +294,7 @@ class __$InvoiceItemCopyWithImpl<$Res>
 
 /// Create a copy of InvoiceItem
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? billingId = null,Object? billDate = null,Object? dueDate = null,Object? totalAmount = null,Object? quantity = null,Object? basePrice = null,Object? serialNumber = null,Object? macVcNumber = null,Object? pname = null,Object? setupPrice = null,Object? taxAmount = null,Object? pendingAmount = null,Object? discountAmount = null,Object? isAdhoc = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? billingId = null,Object? billDate = null,Object? dueDate = null,Object? totalAmount = null,Object? quantity = null,Object? basePrice = null,Object? serialNumber = null,Object? macVcNumber = null,Object? pname = null,Object? setupPrice = null,Object? taxAmount = null,Object? pendingAmount = null,Object? discountAmount = null,Object? isAdhoc = null,Object? billAmount = null,Object? msoShare = null,Object? billPeriodStartDate = null,Object? billPeriodEndDate = null,Object? remarks = null,}) {
   return _then(_InvoiceItem(
 billingId: null == billingId ? _self.billingId : billingId // ignore: cast_nullable_to_non_nullable
 as String,billDate: null == billDate ? _self.billDate : billDate // ignore: cast_nullable_to_non_nullable
@@ -300,7 +310,12 @@ as double,taxAmount: null == taxAmount ? _self.taxAmount : taxAmount // ignore: 
 as double,pendingAmount: null == pendingAmount ? _self.pendingAmount : pendingAmount // ignore: cast_nullable_to_non_nullable
 as double,discountAmount: null == discountAmount ? _self.discountAmount : discountAmount // ignore: cast_nullable_to_non_nullable
 as double,isAdhoc: null == isAdhoc ? _self.isAdhoc : isAdhoc // ignore: cast_nullable_to_non_nullable
-as int,
+as int,billAmount: null == billAmount ? _self.billAmount : billAmount // ignore: cast_nullable_to_non_nullable
+as double,msoShare: null == msoShare ? _self.msoShare : msoShare // ignore: cast_nullable_to_non_nullable
+as double,billPeriodStartDate: null == billPeriodStartDate ? _self.billPeriodStartDate : billPeriodStartDate // ignore: cast_nullable_to_non_nullable
+as String,billPeriodEndDate: null == billPeriodEndDate ? _self.billPeriodEndDate : billPeriodEndDate // ignore: cast_nullable_to_non_nullable
+as String,remarks: null == remarks ? _self.remarks : remarks // ignore: cast_nullable_to_non_nullable
+as String,
   ));
 }
 

@@ -131,6 +131,11 @@ class DashboardCustomerListNotifier
 
   /// Search by free text query — triggers API call.
   Future<void> searchByQuery(String query) async {
+    debugPrint('=== searchByQuery TRIGGERED ===');
+    debugPrint('  query: "$query"');
+    debugPrint('  current tab: ${state.selectedTab}');
+    debugPrint('  fromDashboard that SHOULD filter: ${state.selectedTab.fromDashboard}');
+    debugPrint('  fromDashboard actually sent to API: NOTHING');
     state = state.copyWith(
       isLoading: true,
       customers: [],
@@ -143,6 +148,8 @@ class DashboardCustomerListNotifier
       // Try to guess the field: if digits, search by mobile; otherwise by name
       final isNumeric = RegExp(r'^\d+$').hasMatch(query.replaceAll(' ', ''));
 
+      debugPrint('  isNumeric=$isNumeric → customerName=${isNumeric ? null : query} mobileNumber=${isNumeric ? query : null}');
+
       final searchResult = await _customerRepo.searchCustomers(
         customerName: isNumeric ? null : query,
         mobileNumber: isNumeric ? query : null,
@@ -152,12 +159,23 @@ class DashboardCustomerListNotifier
 
       switch (searchResult) {
         case Success(:final data):
+          debugPrint('=== searchByQuery RESPONSE ===');
+          debugPrint('  total returned: ${data.existCustomerDetails.length}');
+          for (final c in data.existCustomerDetails) {
+            debugPrint('=== SEARCH RESULT CUSTOMER ===');
+            debugPrint('  id=${c.customerId}');
+            debugPrint('  name=${c.customerName}');
+            debugPrint('  status=${c.status}');
+          }
           state = state.copyWith(
             isLoading: false,
             customers: data.existCustomerDetails,
             totalCount: data.customerCount,
             currentPage: 1,
           );
+          debugPrint('=== state.customers UPDATED ===');
+          debugPrint('  new count: ${state.customers.length}');
+          debugPrint('  current tab still: ${state.selectedTab}');
         case Failure(:final message):
           state = state.copyWith(isLoading: false, errorMessage: message);
       }
@@ -241,6 +259,8 @@ class DashboardCustomerListNotifier
           final statusVal = (isActive == 'YES' || isActive == '1' || isActive == 1)
               ? '1'
               : '0';
+          debugPrint('[CUST-LIST] id=${m['customer_id']} name="${m['customer_name']}" '
+              'raw_is_active=$isActive → status=$statusVal fromDashboard=$fromDashboard');
           // Read pending_amount from server if available, otherwise default
           final pendingAmt = m['pending_amount']?.toString() ?? '0.00';
           final normalized = <String, dynamic>{

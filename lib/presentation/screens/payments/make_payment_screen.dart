@@ -209,7 +209,6 @@ class _MakePaymentScreenState extends ConsumerState<MakePaymentScreen> {
         return;
       }
     }
-
     // ── 2. Amount validation (section 1.5) ─────────────────────────────────
     double enteredAmount = 0.0;
     if (modeKey == 'voucher') {

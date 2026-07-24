@@ -100,7 +100,7 @@ class PackageRemoteDatasource {
         'stockId': stockId,
         'fromMobileApp': '1',
         'login_employee_id': loginEmployeeId,
-        'reseller_id': resellerId,
+        'resellerId': resellerId,
         'dealer_id': dealerId,
       },
     );
@@ -132,7 +132,7 @@ class PackageRemoteDatasource {
         'remarks': remarks,
         'fromMobileApp': '1',
         'dealer_id': dealerId,
-        'reseller_id': resellerId,
+        'resellerId': resellerId,
         'login_employee_id': loginEmployeeId,
         if (stockId != null) 'stock_id': stockId,
       },

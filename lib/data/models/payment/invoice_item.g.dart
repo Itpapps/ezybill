@@ -21,6 +21,11 @@ _InvoiceItem _$InvoiceItemFromJson(Map<String, dynamic> json) => _InvoiceItem(
   pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0.0,
   discountAmount: (json['discountAmount'] as num?)?.toDouble() ?? 0.0,
   isAdhoc: (json['isAdhoc'] as num?)?.toInt() ?? 0,
+  billAmount: (json['billAmount'] as num?)?.toDouble() ?? 0.0,
+  msoShare: (json['msoShare'] as num?)?.toDouble() ?? 0.0,
+  billPeriodStartDate: json['billPeriodStartDate'] as String? ?? '',
+  billPeriodEndDate: json['billPeriodEndDate'] as String? ?? '',
+  remarks: json['remarks'] as String? ?? '',
 );
 
 Map<String, dynamic> _$InvoiceItemToJson(_InvoiceItem instance) =>
@@ -39,4 +44,9 @@ Map<String, dynamic> _$InvoiceItemToJson(_InvoiceItem instance) =>
       'pendingAmount': instance.pendingAmount,
       'discountAmount': instance.discountAmount,
       'isAdhoc': instance.isAdhoc,
+      'billAmount': instance.billAmount,
+      'msoShare': instance.msoShare,
+      'billPeriodStartDate': instance.billPeriodStartDate,
+      'billPeriodEndDate': instance.billPeriodEndDate,
+      'remarks': instance.remarks,
     };

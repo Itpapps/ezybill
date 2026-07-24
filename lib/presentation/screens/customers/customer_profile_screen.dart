@@ -104,6 +104,42 @@ class _CustomerProfileScreenState
 
       debugPrint('[PROFILE] Response top-level keys: ${data.keys.toList()}');
 
+      // ── [DEBUG PROBE] existingCustomerRest with accountNumber ──────────
+      // Fires in parallel — does NOT affect loading state or displayed data.
+      // Purpose: capture the real field names inside existCustomerDetails
+      //          when a customer is found on a V1 server.
+      // Remove once profile fix is finalised.
+      ds.probeExistingCustomerByAccountNumber(
+        authtoken: session.token,
+        accountNumber: widget.customerId,
+      ).then((raw) {
+        debugPrint('[PROBE-existingCustomerRest] ── RAW RESPONSE ──');
+        debugPrint('[PROBE-existingCustomerRest] top-level keys: ${raw.keys.toList()}');
+        debugPrint('[PROBE-existingCustomerRest] status_code: ${raw['status_code']}');
+        debugPrint('[PROBE-existingCustomerRest] statusCode:  ${raw['statusCode']}');
+        debugPrint('[PROBE-existingCustomerRest] status_msg:  ${raw['status_msg']}');
+        final details = raw['existCustomerDetails'];
+        if (details is List && details.isNotEmpty) {
+          debugPrint('[PROBE-existingCustomerRest] existCustomerDetails length: ${details.length}');
+          final first = details[0];
+          if (first is Map) {
+            debugPrint('[PROBE-existingCustomerRest] first record keys: ${first.keys.toList()}');
+            first.forEach((k, v) {
+              debugPrint('[PROBE-existingCustomerRest]   $k = $v');
+            });
+          }
+        } else {
+          debugPrint('[PROBE-existingCustomerRest] existCustomerDetails = $details');
+          // Print every top-level value to see what else was returned
+          raw.forEach((k, v) {
+            debugPrint('[PROBE-existingCustomerRest] top[$k] = $v');
+          });
+        }
+      }).catchError((e) {
+        debugPrint('[PROBE-existingCustomerRest] ERROR: $e');
+      });
+      // ── end DEBUG PROBE ─────────────────────────────────────────────────
+
       Map<String, dynamic>? found;
 
       // Try extracting customer data from known list keys
@@ -145,7 +181,15 @@ class _CustomerProfileScreenState
         setState(() {
           _isLoading = false;
           if (found != null && found.isNotEmpty) {
+            final oldSerial = _customer['serial_number']?.toString() ?? '';
+            final oldVc = _customer['vc_number']?.toString() ?? '';
             _customer = _normalizeCustomerData(found);
+            if (_customer['serial_number']?.toString().isEmpty ?? true) {
+              _customer['serial_number'] = oldSerial;
+            }
+            if (_customer['vc_number']?.toString().isEmpty ?? true) {
+              _customer['vc_number'] = oldVc;
+            }
             debugPrint('[PROFILE] Normalized customer: '
                 'name=${_customer['customer_name']}, '
                 'mobile=${_customer['mobile_no']}, '

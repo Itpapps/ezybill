@@ -278,14 +278,25 @@ class _CustomerFilterListState extends ConsumerState<CustomerFilterList> {
                   ),
 
                   // Cards
-                  ...filtered.map((customer) => Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: _CompactCustomerCard(
-                          customer: customer,
-                          isActive:
-                              listState.selectedTab == CustomerFilterTab.active,
-                        ),
-                      )),
+                  ...() {
+                    debugPrint('=== RENDERING CUSTOMER CARDS ===');
+                    debugPrint('  selected tab: ${listState.selectedTab}');
+                    debugPrint('  isActive flag for ALL cards: ${listState.selectedTab == CustomerFilterTab.active}');
+                    debugPrint('  total cards: ${filtered.length}');
+                    for (final c in filtered) {
+                      debugPrint('  CARD → id=${c.customerId} name="${c.customerName}" '
+                          'model.status=${c.status} '
+                          'card_isActive=${listState.selectedTab == CustomerFilterTab.active}');
+                    }
+                    return filtered.map((customer) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: _CompactCustomerCard(
+                            customer: customer,
+                            isActive:
+                                listState.selectedTab == CustomerFilterTab.active,
+                          ),
+                        ));
+                  }(),
 
                   // Pager
                   if (listState.pageCount > 1)

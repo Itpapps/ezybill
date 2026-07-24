@@ -1,10 +1,13 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-
 import '../../../application/providers/core_providers.dart';
 import '../../../application/providers/master_data_provider.dart';
 import '../../../core/config/app_session.dart';
@@ -102,13 +105,40 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   int _cycle = 1; // Month=1, Year=2, Day=3
   int _quantity = 1;
   int _validityDays = 30;
+  List<CasPackage> _packages =[];
+  bool _packagesLoading = false;
+  String? _packagesError;
 
   // ── Step 4: Confirm ────────────────────────────────────────────────────────
   bool _isSaving = false;
+  bool _isGettingLocation = false;
+
+  // ── Document upload state ──────────────────────────────────────────────
+  bool _uploadDocs = false;
+  File? _customerPhoto;
+  File? _idProofPhoto;
+  File? _signaturePhoto;
+  String? _customerPhotoBase64;
+  String? _idProofPhotoBase64;
+  String? _signaturePhotoBase64;
+
+  FlutterExceptionHandler? _prevErrorHandler;
 
   @override
   void initState() {
     super.initState();
+    _prevErrorHandler = FlutterError.onError;
+    FlutterError.onError = (details) {
+      if (details.toString().contains('_dependents.isEmpty')) {
+        debugPrint('═══ [CRASH-DBG] _dependents.isEmpty CAUGHT ═══');
+        debugPrint('Exception: ${details.exception}');
+        debugPrint('Stack:\n${details.stack}');
+        debugPrint('Context: ${details.context}');
+        debugPrint('Library: ${details.library}');
+        debugPrint('═══ [CRASH-DBG] END ═══');
+      }
+      _prevErrorHandler?.call(details);
+    };
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(masterDataProvider.notifier).initialise();
       _applyRouteParams();
@@ -122,9 +152,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     if (widget.prefilledSerial != null && widget.prefilledSerial!.isNotEmpty) {
       _stbController.text = widget.prefilledSerial!;
       _stbVerified = true; // Skip verification for pre-filled fresh boxes
-      // Resolve resellerId: use session.dealerId as default for pre-filled boxes
+      // Resolve resellerId: use session.employeeId as default for pre-filled boxes
       final session = ref.read(appSessionProvider);
-      _stbResellerId = (session?.dealerId ?? 0).toString();
+      _stbResellerId = (session?.employeeId ?? 0).toString();
+      _loadPackages();
     }
     if (widget.prefilledVc != null && widget.prefilledVc!.isNotEmpty) {
       _vcController.text = widget.prefilledVc!;
@@ -186,6 +217,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     _latCtrl.dispose();
     _lonCtrl.dispose();
     _discountCtrl.dispose();
+    FlutterError.onError = _prevErrorHandler;
     super.dispose();
   }
 
@@ -201,7 +233,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
   }
 
   void _next() {
-    if (_currentStep < 3) _goToStep(_currentStep + 1);
+    if (_currentStep < 1) _goToStep(_currentStep + 1);
   }
 
   bool get _hasVc => _vcController.text.trim().isNotEmpty;
@@ -211,6 +243,70 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     if (cycle == 2) return 2;
     if (cycle == 3) return 3;
     return 1;
+  }
+  Future<void> _loadPackages() async {
+    final stb = _stbController.text.trim();
+    if (stb.isEmpty) return;
+    setState(() {
+      _packagesLoading = true;
+      _packagesError = null;
+    });
+    try {
+      final session = ref.read(appSessionProvider);
+      final ds = PackageRemoteDatasource(dio: ref.read(dioClientProvider));
+      final data = await ds.getCasPackages(
+        authtoken: session?.token ?? '',
+        boxNumber: stb,
+      );
+      final rawList = data['casPackagesList'] ??
+          data['caspackageList'] ??
+          data['casPackages'] ??
+          data['data'] ??
+          [];
+      final packages = (rawList as List)
+          .whereType<Map<String, dynamic>>()
+          .map((e) => CasPackage.fromJson(e))
+          .toList();
+      if (mounted) {
+        setState(() {
+          _packages = packages;
+          _packagesLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _packagesLoading = false;
+          _packagesError = e.toString().replaceAll('ApiException: ', '');
+        });
+      }
+    }
+  }
+
+  Widget _cycleChip(String label, int value, AppColors colors) {
+    final selected = _cycle == value;
+    return GestureDetector(
+      onTap: () => setState(() => _cycle = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? colors.red : colors.card,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: selected ? colors.red : colors.ink20,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: selected ? colors.card : colors.ink60,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _loadCustomerTypeTypes(CustomerType? customerType) async {
@@ -308,6 +404,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
           _stbResellerId = result['resellerId']?.toString() ??
               result['reseller_id']?.toString() ?? '';
         });
+        _loadPackages();
       } else {
         setState(() {
           _stbVerified = false;
@@ -344,6 +441,130 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     );
   }
 
+  Future<void> _getLocation() async {
+    setState(() => _isGettingLocation = true);
+    try {
+      final enabled = await Geolocator.isLocationServiceEnabled();
+      if (!enabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location services are disabled. Please enable GPS.')),
+          );
+        }
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permission denied')),
+            );
+          }
+          return;
+        }
+      }
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission permanently denied. Enable in Settings.')),
+          );
+        }
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      if (mounted) {
+        setState(() {
+          _latCtrl.text = position.latitude.toString();
+          _lonCtrl.text = position.longitude.toString();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Location: ${position.latitude}, ${position.longitude}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to get location: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isGettingLocation = false);
+    }
+  }
+
+  Future<void> _pickImage(void Function(File file, String base64) onPicked) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.camera,
+      maxWidth: 800,
+      maxHeight: 800,
+      imageQuality: 70,
+    );
+    if (picked == null) return;
+    final file = File(picked.path);
+    final bytes = await file.readAsBytes();
+    final b64 = base64Encode(bytes);
+    onPicked(file, b64);
+  }
+
+  Widget _buildImageUploadTile({
+    required String label,
+    required IconData icon,
+    required File? file,
+    required VoidCallback onPick,
+    required AppColors colors,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: colors.ink60,
+          ),
+        ),
+        const SizedBox(height: 8),
+        GestureDetector(
+          onTap: onPick,
+          child: file != null
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(
+                    file,
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                  ),
+                )
+              : Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: colors.ink05,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: colors.ink10, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(icon, size: 36, color: colors.green),
+                ),
+        ),
+      ],
+    );
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // VALIDATION: 20-rule sequential chain (first failure stops)
   // ══════════════════════════════════════════════════════════════════════════
@@ -360,17 +581,24 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     bool isDynMandatory(String col) => md.isFieldMandatory(col);
 
     // ── Rule 1: Customer Type must be selected (always mandatory) ──────────
+    debugPrint('[VALIDATE-DBG] Rule 1: md.selectedCustomerType = ${md.selectedCustomerType}');
     if (md.selectedCustomerType == null) {
+      debugPrint('[VALIDATE-DBG] Rule 1 FAILED: selectedCustomerType is null');
       return 'Please select a Customer Type!';
     }
 
     // ── Rule 2: useMandatoryForHotel sub-type required ─────────────────────
-    if (session.useMandatoryForHotel == 1 &&
+    debugPrint('[VALIDATE-DBG] Rule 2: useMandatoryForHotel=${session.useMandatoryForHotel}, '
+        'isCommercialMultiBox=${md.selectedCustomerType?.isCommercialMultiBox}, '
+        '_selectedCustTypeTypes=$_selectedCustTypeTypes');
+     if (session.useMandatoryForHotel == 1 &&
+        md.selectedCustomerType!.isCommercialMultiBox == 1 &&
         (_selectedCustTypeTypes == null ||
             _selectedCustTypeTypes == 'Select' ||
             _selectedCustTypeTypes!.isEmpty)) {
       return 'Please select a Customer Type!';
     }
+
 
     // ── Rule 3: CAF Number mandatory when useCRF==1 && useCAF=="MANUAL" ───
     if (session.useCRF == 1 &&
@@ -662,26 +890,25 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
       // Keep this payload minimal & correct to avoid backend mismatch.
       final customerData = <String, dynamic>{
         // Required-ish
-        if (md.selectedCustomerType != null)
-          'customerTypeId': md.selectedCustomerType!.customerTypeId.toString(),
+        'customerTypeId': (md.selectedCustomerType?.customerTypeId ?? 0).toString(),
         'firstName': _firstNameCtrl.text.trim(),
-        if (_lastNameCtrl.text.trim().isNotEmpty) 'lastName': _lastNameCtrl.text.trim(),
+        'lastName': _lastNameCtrl.text.trim(),
         'mobile': _mobileCtrl.text.trim(),
-        'mobileNumber': _mobileCtrl.text.trim(), // alias for server compatibility
-        if (_emailCtrl.text.trim().isNotEmpty) 'email': _emailCtrl.text.trim(),
-        if (_fatherNameCtrl.text.trim().isNotEmpty) 'fatherName': _fatherNameCtrl.text.trim(),
-        if (md.selectedGender != null) 'gender': md.selectedGender!.id.toString(),
-        if (_dob != null)
-          'dateofbirth':
-              '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}',
+        'mobileNumber': _mobileCtrl.text.trim(),
+        'email': _emailCtrl.text.trim(),
+        'fatherName': _fatherNameCtrl.text.trim(),
+        'gender': (md.selectedGender?.id ?? '').toString(),
+        'dateofbirth': _dob != null
+            ? '${_dob!.year}-${_dob!.month.toString().padLeft(2, '0')}-${_dob!.day.toString().padLeft(2, '0')}'
+            : '',
         // Identity / misc
-        if (md.selectedIdType != null) 'idType': md.selectedIdType!.id.toString(),
-        if (_idNumberCtrl.text.trim().isNotEmpty) 'idNumber': _idNumberCtrl.text.trim(),
-        if (_businessNameCtrl.text.trim().isNotEmpty) 'businessName': _businessNameCtrl.text.trim(),
-        if (_accountNumberCtrl.text.trim().isNotEmpty) 'accountNumber': _accountNumberCtrl.text.trim(),
+        'idType': (md.selectedIdType?.id ?? '').toString(),
+        'idNumber': _idNumberCtrl.text.trim(),
+        'businessName': _businessNameCtrl.text.trim(),
+        'accountNumber': _accountNumberCtrl.text.trim(),
         // Addresses
         'address': _address1Ctrl.text.trim(),
-        if (_address2Ctrl.text.trim().isNotEmpty) 'address2': _address2Ctrl.text.trim(),
+        'address2': _address2Ctrl.text.trim(),
         'pin': _pinCodeCtrl.text.trim(),
         'country': md.selectedCountry?.iso ?? '',
         'countryCode': md.selectedCountry?.iso ?? '',
@@ -689,9 +916,8 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         'stateId': md.selectedState?.id.toString() ?? '',
         'district': md.selectedDistrict?.id.toString() ?? '',
         'districtId': md.selectedDistrict?.id.toString() ?? '',
-        // TODO: TEMP TEST — hardcoded city=2 to verify real location_id works
-        'city': '2', // md.selectedCity?.locationId.toString() ?? '',
-        'cityId': '2', // md.selectedCity?.locationId.toString() ?? '',
+        'city': md.selectedCity?.locationId.toString() ?? '',
+        'cityId': md.selectedCity?.locationId.toString() ?? '',
         'mandal': md.selectedMandal?.mandalId.toString() ?? '',
         'mandalId': md.selectedMandal?.mandalId.toString() ?? '',
         // Installation
@@ -702,19 +928,21 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             ? _address1Ctrl.text.trim()
             : _instAddress1Ctrl.text.trim(),
         // Group / billing
-        if (md.selectedGroup != null) 'group': md.selectedGroup!.groupId.toString(),
-        if (md.selectedGroup != null) 'groupId': md.selectedGroup!.groupId.toString(),
+        'group': (md.selectedGroup?.groupId ?? '').toString(),
+        'groupId': (md.selectedGroup?.groupId ?? '').toString(),
         'billType': _billType.toString(),
-        if (_cafNumberCtrl.text.trim().isNotEmpty) 'cafNumber': _cafNumberCtrl.text.trim(),
-        if (_lcoCustomerIdCtrl.text.trim().isNotEmpty) 'lcoCustomerId': _lcoCustomerIdCtrl.text.trim(),
-        if (_remarksCtrl.text.trim().isNotEmpty) 'remarks': _remarksCtrl.text.trim(),
-        if (_discountCtrl.text.trim().isNotEmpty) 'discount': _discountCtrl.text.trim(),
-        if (_latCtrl.text.trim().isNotEmpty) 'latitude': _latCtrl.text.trim(),
-        if (_lonCtrl.text.trim().isNotEmpty) 'longitude': _lonCtrl.text.trim(),
-        if (_selectedCustTypeTypes != null &&
-            _selectedCustTypeTypes!.trim().isNotEmpty &&
-            (_custTypeTypesIdByName[_selectedCustTypeTypes!] ?? '').isNotEmpty)
-          'customerTypeTypesId': _custTypeTypesIdByName[_selectedCustTypeTypes!],
+        'cafNumber': _cafNumberCtrl.text.trim(),
+        'lcoCustomerId': _lcoCustomerIdCtrl.text.trim(),
+        'remarks': _remarksCtrl.text.trim(),
+        'discount': _discountCtrl.text.trim(),
+        'latitude': _latCtrl.text.trim(),
+        'longitude': _lonCtrl.text.trim(),
+        'customerImg': _customerPhotoBase64 ?? '',
+        'idProofImg': _idProofPhotoBase64 ?? '',
+        'signatureImg': _signaturePhotoBase64 ?? '',
+        'customerTypeTypesId': _selectedCustTypeTypes != null
+            ? (_custTypeTypesIdByName[_selectedCustTypeTypes!] ?? '')
+            : '',
 
         // STB
         'boxNumber': _stbController.text.trim(),
@@ -723,10 +951,10 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         if (_vcController.text.trim().isNotEmpty)
           'vcNumber': _vcController.text.trim(),
         // reseller_id — required by the server to verify dealer→customer chain.
-        // Use STB's resellerId from validateBoxInfoRest, fall back to dealer.
+        // Use STB's resellerId from validateBoxInfoRest, fall back to employeeId.
         'reseller_id': (_stbResellerId.isNotEmpty
             ? _stbResellerId
-            : (session?.dealerId ?? 0).toString()),
+            : (session?.employeeId ?? 0).toString()),
         // Dealer / Employee IDs — server extracts these from JWT but also
         // validates them in the request body for saveCustomerRest.
         if ((session?.dealerId ?? 0) > 0)
@@ -734,16 +962,29 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
         if ((session?.employeeId ?? 0) > 0)
           'employee_id': session!.employeeId.toString(),
       };
+      customerData['resellerId'] = customerData['reseller_id'];
+      customerData['phone'] = '';
+      customerData['customerapplicationformImg'] = '';
+      customerData['dateofanniversary'] = '';
+      customerData['ipAddress'] = '';
+      customerData['username'] = '';
+      customerData['password'] = '';
+      customerData['customerId'] = '0';
+      customerData['is_surrender'] = '0';
+      customerData['packageEndDate'] = '';
 
-      // Package selection should only be sent when VC exists and package selected.
       if (hasVc && _selectedPackage != null) {
-        customerData.addAll({
-          'packageId': _selectedPackage!.productId,
-          'pricingStructureType': _selectedPackage!.pricingStructureType,
-          'dateType': _dateTypeFromCycle(_cycle).toString(),
-          'quantity': _quantity.toString(),
-          if (_cycle == 3) 'validityDays': _validityDays.toString(),
-        });
+        customerData['packageId'] = _selectedPackage!.productId;
+        customerData['pricingStructureType'] = _selectedPackage!.pricingStructureType;
+        customerData['dateType'] = _dateTypeFromCycle(_cycle).toString();
+        customerData['quantity'] = _quantity.toString();
+        customerData['validityDays'] = (_cycle == 3) ? _validityDays.toString() : '';
+      } else {
+        customerData['packageId'] = '0';
+        customerData['pricingStructureType'] = '';
+        customerData['dateType'] = '';
+        customerData['quantity'] = '0';
+        customerData['validityDays'] = '';
       }
 
       // ── CRITICAL PAYLOAD DUMP (uses print() — cannot be filtered) ────
@@ -948,79 +1189,49 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             onPressed: _back,
           ),
         ),
-        body: Column(
+        body: PageView(
+          controller: _pageController,
+          physics: const NeverScrollableScrollPhysics(),
+          onPageChanged: (i) => setState(() => _currentStep = i),
           children: [
-            // ── Step indicator ──────────────────────────────────────
-            _StepIndicator(
-              currentStep: _currentStep,
-              colors: colors,
-            ),
-
-            // ── Pages ──────────────────────────────────────────────
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => setState(() => _currentStep = i),
-                children: [
-                  _buildStep1Stb(colors),
-                  _buildStep2Form(colors, session),
-                  NewCustomerPackageScreen(
-                    stbNumber: _stbController.text.trim(),
-                    packageRequired: _hasVc,
-                    selectedPackage: _selectedPackage,
-                    cycle: _cycle,
-                    quantity: _quantity,
-                    validityDays: _validityDays,
-                    onPackageSelected: (pkg, cycle, qty, days) {
-                      setState(() {
-                        _selectedPackage = pkg;
-                        _cycle = cycle;
-                        _quantity = qty;
-                        _validityDays = days;
-                      });
-                    },
-                    onNext: _next,
-                    onBack: _back,
-                  ),
-                  NewCustomerConfirmScreen(
-                    stbNumber: _stbController.text.trim(),
-                    vcNumber: _vcController.text.trim(),
-                    firstName: _firstNameCtrl.text.trim(),
-                    lastName: _lastNameCtrl.text.trim(),
-                    fatherName: _fatherNameCtrl.text.trim(),
-                    mobile: _mobileCtrl.text.trim(),
-                    email: _emailCtrl.text.trim(),
-                    dob: _dob,
-                    idNumber: _idNumberCtrl.text.trim(),
-                    businessName: _businessNameCtrl.text.trim(),
-                    accountNumber: _accountNumberCtrl.text.trim(),
-                    address1: _address1Ctrl.text.trim(),
-                    address2: _address2Ctrl.text.trim(),
-                    pinCode: _pinCodeCtrl.text.trim(),
-                    instAddress1: _sameAsBilling
-                        ? _address1Ctrl.text.trim()
-                        : _instAddress1Ctrl.text.trim(),
-                    instAddress2: _sameAsBilling
-                        ? _address2Ctrl.text.trim()
-                        : _instAddress2Ctrl.text.trim(),
-                    instPinCode: _sameAsBilling
-                        ? _pinCodeCtrl.text.trim()
-                        : _instPinCodeCtrl.text.trim(),
-                    billType: _billType,
-                    cafNumber: _cafNumberCtrl.text.trim(),
-                    lcoCustomerId: _lcoCustomerIdCtrl.text.trim(),
-                    remarks: _remarksCtrl.text.trim(),
-                    selectedPackage: _selectedPackage,
-                    cycle: _cycle,
-                    quantity: _quantity,
-                    validityDays: _validityDays,
-                    isSaving: _isSaving,
-                    onConfirm: _saveCustomer,
-                    onBack: _back,
-                  ),
-                ],
-              ),
+            // Page 0: STB + Customer Details + Package (merged)
+            _buildStep2Form(colors, session),
+            // Page 1: Confirm & Save
+            NewCustomerConfirmScreen(
+              stbNumber: _stbController.text.trim(),
+              vcNumber: _vcController.text.trim(),
+              firstName: _firstNameCtrl.text.trim(),
+              lastName: _lastNameCtrl.text.trim(),
+              fatherName: _fatherNameCtrl.text.trim(),
+              mobile: _mobileCtrl.text.trim(),
+              email: _emailCtrl.text.trim(),
+              dob: _dob,
+              idNumber: _idNumberCtrl.text.trim(),
+              businessName: _businessNameCtrl.text.trim(),
+              accountNumber: _accountNumberCtrl.text.trim(),
+              address1: _address1Ctrl.text.trim(),
+              address2: _address2Ctrl.text.trim(),
+              pinCode: _pinCodeCtrl.text.trim(),
+              instAddress1: _sameAsBilling
+                  ? _address1Ctrl.text.trim()
+                  : _instAddress1Ctrl.text.trim(),
+              instAddress2: _sameAsBilling
+                  ? _address2Ctrl.text.trim()
+                  : _instAddress2Ctrl.text.trim(),
+              instPinCode: _sameAsBilling
+                  ? _pinCodeCtrl.text.trim()
+                  : _instPinCodeCtrl.text.trim(),
+              billType: _billType,
+              cafNumber: _cafNumberCtrl.text.trim(),
+              lcoCustomerId: _lcoCustomerIdCtrl.text.trim(),
+              remarks: _remarksCtrl.text.trim(),
+              selectedPackage: _selectedPackage,
+              cycle: _cycle,
+              quantity: _quantity,
+              validityDays: _validityDays,
+              isSaving: _isSaving,
+              onConfirm: _saveCustomer,
+              onBack: _back,
             ),
           ],
         ),
@@ -1130,7 +1341,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                         style: TextStyle(
                           fontFamily: 'Plus Jakarta Sans',
                           fontSize: 13,
-                          color: colors.red,
+                          color: colors.red, 
                         ),
                       ),
                     ),
@@ -1236,7 +1447,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
           // STB Info card
           if (_stbInfo != null && _stbVerified) ...[
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -1288,6 +1499,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
 
   Widget _buildStep2Form(AppColors colors, dynamic session) {
     final md = ref.watch(masterDataProvider);
+    debugPrint('[BUILD-DBG] _buildStep2Form: state=${md.selectedState?.name}, districts=${md.districts.length}, isLoadingDistricts=${md.isLoadingDistricts}, mounted=$mounted');
     final sess = session as AppSession?;
     if (sess == null) {
       return const Center(child: CircularProgressIndicator());
@@ -1298,7 +1510,7 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     final cafMandatory = _isCafMandatory(sess);
     final showAcctNum = _showAccountNumber(sess);
     final showDiscountField = _showDiscount(sess);
-    final hotelMode = sess.useMandatoryForHotel == 1;
+    final hotelMode = md.selectedCustomerType?.isCommercialMultiBox == 1;
     final billTypeOpts = _billTypeOptions(sess);
 
     // Dynamic form validation flags for mandatory indicators
@@ -1314,17 +1526,252 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
     // LCO Customer ID is mandatory if useCAF==MANUAL OR baid dynamic flag
     final lcoIdMandatory =
         sess.useCAF == 'MANUAL' || isBaidMandatory;
+    final isPrefilled = widget.prefilledSerial != null && widget.prefilledSerial!.isNotEmpty;
 
     return Form(
       key: _formKey,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── STB Section ────────────────────────────────────────
+            _SectionHeader(title: 'Set-Top Box', colors: colors),
+            const SizedBox(height: 8),
+            if (isPrefilled)
+              // Fresh STB: single read-only field (matches Android)
+              _SectionCard(
+                colors: colors,
+                children: [
+                  _WizardTextField(
+                    controller: _stbController,
+                    label: 'STB Number',
+                    colors: colors,
+                    enabled: false,
+                    prefixIcon: LucideIcons.monitor,
+                  ),
+                ],
+              )
+            else
+              // Manual entry: full scan/verify/reset UI
+              _SectionCard(
+                colors: colors,
+                children: [
+                  GestureDetector(
+                    onTap: _stbVerified ? null : _openScanner,
+                    child: Container(
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: colors.blueSoft,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: _stbVerified ? colors.green : colors.blue,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            _stbVerified
+                                ? LucideIcons.checkCircle
+                                : LucideIcons.scan,
+                            size: 36,
+                            color: _stbVerified ? colors.green : colors.blue,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _stbVerified
+                                ? 'STB Verified'
+                                : 'Tap to Scan STB Barcode',
+                            style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: _stbVerified ? colors.green : colors.blue,
+                            ),
+                          ),
+                          if (!_stbVerified)
+                            Text(
+                              'or enter manually below',
+                              style: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                fontSize: 12,
+                                color: colors.ink40,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _WizardTextField(
+                    controller: _stbController,
+                    label: 'STB Serial Number',
+                    colors: colors,
+                    enabled: !_stbVerified,
+                    prefixIcon: LucideIcons.monitor,
+                    suffixIcon: _stbVerified
+                        ? Icon(LucideIcons.checkCircle,
+                            color: colors.green, size: 20)
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  _WizardTextField(
+                    controller: _vcController,
+                    label: 'VC Number',
+                    colors: colors,
+                    enabled: !_stbVerified,
+                    prefixIcon: LucideIcons.creditCard,
+                    suffixIcon: _stbVerified
+                        ? Icon(LucideIcons.checkCircle,
+                            color: colors.green, size: 20)
+                        : null,
+                  ),
+                  if (_stbError != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colors.redSoft,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(LucideIcons.alertCircle,
+                              color: colors.red, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _stbError!,
+                              style: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                fontSize: 13,
+                                color: colors.red,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (!_stbVerified)
+                    SizedBox(
+                      height: 44,
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _stbVerifying ? null : _verifyStb,
+                        icon: _stbVerifying
+                            ? SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  color: colors.card,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(LucideIcons.shieldCheck, size: 18),
+                        label: Text(
+                          _stbVerifying ? 'Verifying...' : 'Verify STB',
+                          style: const TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colors.red,
+                          foregroundColor: colors.card,
+                          disabledBackgroundColor: colors.red.withAlpha(128),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      height: 44,
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          setState(() {
+                            _stbVerified = false;
+                            _stbError = null;
+                            _stbInfo = null;
+                            _stbController.clear();
+                            _vcController.clear();
+                          });
+                        },
+                        icon: const Icon(LucideIcons.refreshCw, size: 16),
+                        label: const Text(
+                          'Reset STB',
+                          style: TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: colors.ink60,
+                          side: BorderSide(color: colors.ink20),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_stbInfo != null && _stbVerified) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: colors.greenSoft,
+                        borderRadius: BorderRadius.circular(8),
+                        border:
+                            Border.all(color: colors.green.withAlpha(60)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'STB Information',
+                            style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: colors.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          _InfoRow(
+                            label: 'Serial',
+                            value: _stbController.text.trim(),
+                            colors: colors,
+                          ),
+                          _InfoRow(
+                            label: 'VC Number',
+                            value: _vcController.text.trim(),
+                            colors: colors,
+                          ),
+                          if (_stbInfo!['stb_type'] != null)
+                            _InfoRow(
+                              label: 'Type',
+                              value: _stbInfo!['stb_type'].toString(),
+                              colors: colors,
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            const SizedBox(height: 24),
+
             // ── Identity / Type ──────────────────────────────────────
             _SectionHeader(title: 'Customer Type', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1358,12 +1805,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ],
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── CAF / LCO Customer ID ────────────────────────────────
             if (showCaf || lcoIdMandatory) ...[
               _SectionHeader(title: 'Reference Numbers', colors: colors),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _SectionCard(
                 colors: colors,
                 children: [
@@ -1401,12 +1848,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
             ],
 
             // ── Personal Information ─────────────────────────────────
             _SectionHeader(title: 'Personal Information', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1465,11 +1912,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Contact Information ──────────────────────────────────
             _SectionHeader(title: 'Contact Information', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1514,11 +1961,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Identity Documents ───────────────────────────────────
             _SectionHeader(title: 'Identity', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1552,12 +1999,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Account Number (conditional: useAccountNumber==0) ────
             if (showAcctNum) ...[
               _SectionHeader(title: 'Account', colors: colors),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               _SectionCard(
                 colors: colors,
                 children: [
@@ -1580,12 +2027,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
             ],
 
             // ── Billing Address ──────────────────────────────────────
             _SectionHeader(title: 'Billing Address', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1651,7 +2098,12 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                   isLoading: md.isLoadingStates,
                   displayName: (s) => s.name,
                   onChanged: (s) {
-                    if (s != null) ref.read(masterDataProvider.notifier).selectState(s);
+                    debugPrint('[STATE-DBG] onChanged called, s=${s?.name}, mounted=$mounted');
+                    if (s != null) {
+                      debugPrint('[STATE-DBG] calling selectState...');
+                      ref.read(masterDataProvider.notifier).selectState(s);
+                      debugPrint('[STATE-DBG] selectState returned');
+                    }
                   },
                   emptyMessage: 'Please select a Country first',
                   prefixIcon: LucideIcons.map,
@@ -1719,11 +2171,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Installation Address ─────────────────────────────────
             _SectionHeader(title: 'Installation Address', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1787,11 +2239,11 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ],
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Group / Billing / Discount ────────────────────────────
             _SectionHeader(title: 'Group & Billing', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1838,14 +2290,14 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ],
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
 
             // ── Other ────────────────────────────────────────────────
             if (!showCaf && !lcoIdMandatory) ...[
               // Show LCO ID and CAF in Other section if not shown above
             ],
             _SectionHeader(title: 'Other', colors: colors),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             _SectionCard(
               colors: colors,
               children: [
@@ -1874,6 +2326,39 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
                 ),
                 const SizedBox(height: 12),
                 // GPS coordinates
+                SizedBox(
+                  height: 44,
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _isGettingLocation ? null : _getLocation,
+                    icon: _isGettingLocation
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: colors.ink40,
+                            ),
+                          )
+                        : Icon(LucideIcons.mapPin, size: 18),
+                    label: Text(
+                      _isGettingLocation ? 'Getting Location...' : 'Get Location',
+                      style: const TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: colors.ink60,
+                      side: BorderSide(color: colors.ink20),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
@@ -1903,64 +2388,341 @@ class _NewCustomerScreenState extends ConsumerState<NewCustomerScreen> {
             ),
             const SizedBox(height: 24),
 
-            // ── Navigation buttons ───────────────────────────────────
+            // ── Documents Section ────────────────────────────────────
             Row(
               children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _back,
-                    icon: const Icon(LucideIcons.arrowLeft, size: 16),
-                    label: const Text(
-                      'Back',
-                      style: TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.ink60,
-                      side: BorderSide(color: colors.ink20),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      minimumSize: const Size(0, 50),
+                SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: Checkbox(
+                    value: _uploadDocs,
+                    onChanged: (v) => setState(() => _uploadDocs = v ?? false),
+                    activeColor: colors.red,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  flex: 2,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      if (_validateForm()) _next();
-                    },
-                    icon: const Icon(LucideIcons.arrowRight, size: 18),
-                    label: const Text(
-                      'Next: Package',
-                      style: TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colors.red,
-                      foregroundColor: colors.card,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                      minimumSize: const Size(0, 50),
-                    ),
+                const SizedBox(width: 8),
+                Text(
+                  'Upload Photo, ID Proof and Signature',
+                  style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 14,
+                    color: colors.ink80,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            if (_uploadDocs) ...[
+              const SizedBox(height: 12),
+              _buildImageUploadTile(
+                label: 'Upload Photo',
+                icon: LucideIcons.camera,
+                file: _customerPhoto,
+                onPick: () => _pickImage((f, b64) {
+                  setState(() {
+                    _customerPhoto = f;
+                    _customerPhotoBase64 = b64;
+                  });
+                }),
+                colors: colors,
+              ),
+              const SizedBox(height: 12),
+              _buildImageUploadTile(
+                label: 'Upload ID Proof',
+                icon: LucideIcons.creditCard,
+                file: _idProofPhoto,
+                onPick: () => _pickImage((f, b64) {
+                  setState(() {
+                    _idProofPhoto = f;
+                    _idProofPhotoBase64 = b64;
+                  });
+                }),
+                colors: colors,
+              ),
+              const SizedBox(height: 12),
+              _buildImageUploadTile(
+                label: 'Signature',
+                icon: LucideIcons.penTool,
+                file: _signaturePhoto,
+                onPick: () => _pickImage((f, b64) {
+                  setState(() {
+                    _signaturePhoto = f;
+                    _signaturePhotoBase64 = b64;
+                  });
+                }),
+                colors: colors,
+              ),
+            ],
+            const SizedBox(height: 24),
+
+            // ── Package Selection (inline) ───────────────────────────
+            if (_hasVc) ...[
+              Text(
+                'PACKAGE',
+                style: TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: colors.ink60,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              if (_packagesLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: LinearProgressIndicator(),
+                ),
+
+              if (_packagesError != null && !_packagesLoading)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _packagesError!,
+                      style: TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.red,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _loadPackages,
+                      icon: const Icon(LucideIcons.refreshCw, size: 16),
+                      label: const Text('Retry Packages'),
+                    ),
+                  ],
+                ),
+
+              if (!_packagesLoading && _packagesError == null)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _packages.isEmpty
+                        ? null
+                        : () async {
+                            final result = await _openSelectorDialog<CasPackage>(
+                              context: context,
+                              title: 'SELECT PACKAGE',
+                              items: _packages,
+                              displayName: (p) =>
+                                  '${p.productName} (₹${p.price.toStringAsFixed(2)})',
+                              colors: colors,
+                              current: _selectedPackage,
+                              prefixIcon: LucideIcons.package2,
+                            );
+                            if (result != null) {
+                              setState(() {
+                                _selectedPackage = result.item;
+                                if (_selectedPackage != null) {
+                                  if (_selectedPackage!.pricingStructureType == '1') {
+                                    _cycle = 1;
+                                  } else {
+                                    _cycle = 2;
+                                  }
+                                }
+                              });
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colors.blue,
+                      foregroundColor: colors.card,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      _selectedPackage?.productName ?? 'Select Package',
+                      style: const TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+
+              if (_selectedPackage != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: colors.red.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: colors.red.withValues(alpha: 0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _selectedPackage!.productName,
+                        style: TextStyle(
+                          fontFamily: 'Plus Jakarta Sans',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: colors.ink,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'ID: ${_selectedPackage!.productId}  |  '
+                        '${_selectedPackage!.pricingStructureType == '1' ? 'One-time' : 'Recurring'}  |  '
+                        '₹${_selectedPackage!.price.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontFamily: 'JetBrains Mono',
+                          fontSize: 12,
+                          color: colors.ink60,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      Text('Cycle', style: TextStyle(
+                        fontFamily: 'Plus Jakarta Sans',
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: colors.ink60,
+                      )),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          _cycleChip('Year', 2, colors),
+                          const SizedBox(width: 8),
+                          if (_selectedPackage!.pricingStructureType == '1') ...[
+                            _cycleChip('Month', 1, colors),
+                            const SizedBox(width: 8),
+                            _cycleChip('Day', 3, colors),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+
+                      Row(
+                        children: [
+                          Text('Quantity: ', style: TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.ink60,
+                          )),
+                          SizedBox(
+                            width: 60,
+                            child: TextFormField(
+                              initialValue: _quantity.toString(),
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              style: const TextStyle(
+                                fontFamily: 'JetBrains Mono',
+                                fontSize: 14,
+                              ),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(6),
+                                  borderSide: BorderSide(color: colors.ink20),
+                                ),
+                              ),
+                              onChanged: (v) {
+                                _quantity = int.tryParse(v) ?? 1;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      if (_cycle == 3) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Text('Validity (days): ', style: TextStyle(
+                              fontFamily: 'Plus Jakarta Sans',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: colors.ink60,
+                            )),
+                            SizedBox(
+                              width: 80,
+                              child: TextFormField(
+                                initialValue: _validityDays.toString(),
+                                keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                ],
+                                style: const TextStyle(
+                                  fontFamily: 'JetBrains Mono',
+                                  fontSize: 14,
+                                ),
+                                decoration: InputDecoration(
+                                  isDense: true,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 8,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(6),
+                                    borderSide: BorderSide(color: colors.ink20),
+                                  ),
+                                ),
+                                onChanged: (v) {
+                                  _validityDays = int.tryParse(v) ?? 30;
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+            ],
+
+            // ── Navigation button ─────────────────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  if (_validateForm()) _next();
+                },
+                icon: const Icon(LucideIcons.arrowRight, size: 18),
+                label: const Text(
+                  'Review & Create',
+                  style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colors.red,
+                  foregroundColor: colors.card,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
           ],
         ),
       ),
-    );
+      );
   }
 }
 
@@ -2159,26 +2921,26 @@ class _WizardTextField extends StatelessWidget {
                 : null,
             suffixIcon: suffixIcon,
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.ink10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.ink10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.red),
+              borderSide: BorderSide(color: colors.red, width: 1.5),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.red),
+              borderSide: BorderSide(color: colors.red, width: 1.5),
             ),
             disabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.ink05),
+              borderSide: BorderSide(color: colors.ink05, width: 1.5),
             ),
             filled: true,
             fillColor: enabled ? colors.card : colors.ink05,
@@ -2214,63 +2976,97 @@ class _WizardDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      value: value != null && items.contains(value) ? value : null,
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(
-          fontFamily: 'Plus Jakarta Sans',
-          fontSize: 14,
-          color: colors.ink40,
-        ),
-        prefixIcon: isLoading
-            ? Padding(
-                padding: const EdgeInsets.all(12),
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.ink40,
+    final hasRequired = label.endsWith(' *');
+    final baseLabel = hasRequired ? label.substring(0, label.length - 2) : label;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: baseLabel,
+                style: TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: 14,
+                  color: colors.ink40,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (hasRequired)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 14,
+                    color: colors.red,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              )
-            : prefixIcon != null
-                ? Icon(prefixIcon, size: 18, color: colors.ink40)
-                : null,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.ink10),
+            ],
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.ink10),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<T>(
+          value: value != null && items.contains(value) ? value : null,
+          isExpanded: true,
+          decoration: InputDecoration(
+            hintText: 'Select $baseLabel',
+            hintStyle: TextStyle(
+              fontFamily: 'Plus Jakarta Sans',
+              fontSize: 13,
+              color: colors.ink20,
+            ),
+            prefixIcon: isLoading
+                ? Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: colors.ink40,
+                      ),
+                    ),
+                  )
+                : prefixIcon != null
+                    ? Icon(prefixIcon, size: 18, color: colors.ink40)
+                    : null,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: colors.red, width: 1.5),
+            ),
+            filled: true,
+            fillColor: colors.card,
+          ),
+          style: TextStyle(
+            fontFamily: 'Plus Jakarta Sans',
+            fontSize: 14,
+            color: colors.ink,
+          ),
+          items: items
+              .map((item) => DropdownMenuItem<T>(
+                    value: item,
+                    child: Text(
+                      displayName(item),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: onChanged,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: colors.red),
-        ),
-        filled: true,
-        fillColor: colors.card,
-      ),
-      style: TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 14,
-        color: colors.ink,
-      ),
-      items: items
-          .map((item) => DropdownMenuItem<T>(
-                value: item,
-                child: Text(
-                  displayName(item),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ))
-          .toList(),
-      onChanged: onChanged,
+      ],
     );
   }
 }
@@ -2310,128 +3106,166 @@ class _WizardDialogSelector<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: isLoading
-          ? null
-          : () async {
-              if (items.isEmpty) {
-                showDialog(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    title: Row(
-                      children: [
-                        Icon(LucideIcons.info, color: colors.blue, size: 22),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            label,
-                            style: const TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
+    final hasRequired = label.endsWith(' *');
+    final baseLabel = hasRequired ? label.substring(0, label.length - 2) : label;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: baseLabel,
+                style: TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: 14,
+                  color: colors.ink40,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (hasRequired)
+                TextSpan(
+                  text: ' *',
+                  style: TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 14,
+                    color: colors.red,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: isLoading
+              ? null
+              : () async {
+                  if (items.isEmpty) {
+                    showDialog(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        title: Row(
+                          children: [
+                            Icon(LucideIcons.info, color: colors.blue, size: 22),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                baseLabel,
+                                style: const TextStyle(
+                                  fontFamily: 'Plus Jakarta Sans',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        content: Text(
+                          emptyMessage ?? 'No $baseLabel data available.',
+                          style: const TextStyle(
+                            fontFamily: 'Plus Jakarta Sans',
+                            fontSize: 14,
+                          ),
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text(
+                              'OK',
+                              style: TextStyle(
+                                fontFamily: 'Plus Jakarta Sans',
+                                fontWeight: FontWeight.w700,
+                                color: colors.red,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    content: Text(
-                      emptyMessage ?? 'No $label data available.',
-                      style: const TextStyle(
-                        fontFamily: 'Plus Jakarta Sans',
-                        fontSize: 14,
+                        ],
                       ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text(
-                          'OK',
-                          style: TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            fontWeight: FontWeight.w700,
-                            color: colors.red,
-                          ),
+                    );
+                    return;
+                  }
+                  final result = await _openSelectorDialog<T>(
+                    context: context,
+                    title: baseLabel,
+                    items: items,
+                    displayName: displayName,
+                    colors: colors,
+                    current: value,
+                    prefixIcon: prefixIcon,
+                    allowDeselect: allowDeselect,
+                  );
+                  debugPrint('[SELECTOR-DBG] dialog returned for $baseLabel, result=$result, context.mounted=${context.mounted}');
+                  if (result != null) {
+                    debugPrint('[SELECTOR-DBG] calling onChanged for $baseLabel');
+                    onChanged(result.item);
+                    debugPrint('[SELECTOR-DBG] onChanged returned for $baseLabel');
+                  }
+                },
+          borderRadius: BorderRadius.circular(10),
+          child: InputDecorator(
+            isEmpty: value == null && !isLoading,
+            decoration: InputDecoration(
+              hintText: 'Select $baseLabel',
+              hintStyle: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 13,
+                color: colors.ink20,
+              ),
+              prefixIcon: isLoading
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.ink40,
                         ),
                       ),
-                    ],
-                  ),
-                );
-                return;
-              }
-              final result = await _openSelectorDialog<T>(
-                context: context,
-                title: label,
-                items: items,
-                displayName: displayName,
-                colors: colors,
-                current: value,
-                prefixIcon: prefixIcon,
-                allowDeselect: allowDeselect,
-              );
-              if (result != null) {
-                onChanged(result.item);
-              }
-            },
-      borderRadius: BorderRadius.circular(10),
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
-            fontSize: 14,
-            color: colors.ink40,
+                    )
+                  : prefixIcon != null
+                      ? Icon(prefixIcon, size: 18, color: colors.ink40)
+                      : null,
+              suffixIcon:
+                  Icon(LucideIcons.chevronDown, size: 18, color: colors.ink40),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.ink10, width: 1.5),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.ink10, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: colors.red, width: 1.5),
+              ),
+              filled: true,
+              fillColor: colors.card,
+            ),
+            child: Text(
+              isLoading
+                  ? 'Loading...'
+                  : value != null
+                      ? displayName(value as T)
+                      : '',
+              style: TextStyle(
+                fontFamily: 'Plus Jakarta Sans',
+                fontSize: 14,
+                color: value != null ? colors.ink : colors.ink20,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
-          prefixIcon: isLoading
-              ? Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: colors.ink40,
-                    ),
-                  ),
-                )
-              : prefixIcon != null
-                  ? Icon(prefixIcon, size: 18, color: colors.ink40)
-                  : null,
-          suffixIcon:
-              Icon(LucideIcons.chevronDown, size: 18, color: colors.ink40),
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: colors.ink10),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: colors.ink10),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: colors.red),
-          ),
-          filled: true,
-          fillColor: colors.card,
         ),
-        child: Text(
-          isLoading
-              ? 'Loading...'
-              : value != null
-                  ? displayName(value as T)
-                  : '',
-          style: TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
-            fontSize: 14,
-            color: value != null ? colors.ink : colors.ink20,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
+      ],
     );
   }
 }
@@ -2446,194 +3280,252 @@ Future<_Selected<T>?> _openSelectorDialog<T>({
   IconData? prefixIcon,
   bool allowDeselect = false,
 }) async {
-  final searchCtrl = TextEditingController();
-  try {
-    return await showDialog<_Selected<T>>(
-      context: context,
-      builder: (ctx) {
-        var filtered = List<T>.from(items);
-        return StatefulBuilder(
-          builder: (ctx, setLocalState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              titlePadding: EdgeInsets.zero,
-              contentPadding: EdgeInsets.zero,
-              title: Container(
-                padding:
-                    const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: colors.blueSoft,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
+  return showDialog<_Selected<T>>(
+    context: context,
+    builder: (ctx) {
+      return _SelectorDialogContent<T>(
+        title: title,
+        items: items,
+        displayName: displayName,
+        colors: colors,
+        current: current,
+        prefixIcon: prefixIcon,
+        allowDeselect: allowDeselect,
+      );
+    },
+  );
+}
+
+// ── Selector dialog content (StatefulWidget — owns its own TextEditingController lifecycle) ──
+
+class _SelectorDialogContent<T> extends StatefulWidget {
+  final String title;
+  final List<T> items;
+  final String Function(T) displayName;
+  final AppColors colors;
+  final T? current;
+  final IconData? prefixIcon;
+  final bool allowDeselect;
+
+  const _SelectorDialogContent({
+    required this.title,
+    required this.items,
+    required this.displayName,
+    required this.colors,
+    this.current,
+    this.prefixIcon,
+    this.allowDeselect = false,
+  });
+
+  @override
+  State<_SelectorDialogContent<T>> createState() =>
+      _SelectorDialogContentState<T>();
+}
+
+class _SelectorDialogContentState<T>
+    extends State<_SelectorDialogContent<T>> {
+  late TextEditingController _searchCtrl;
+  late List<T> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl = TextEditingController();
+    _filtered = List<T>.from(widget.items);
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = widget.colors;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      titlePadding: EdgeInsets.zero,
+      contentPadding: EdgeInsets.zero,
+      title: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+        decoration: BoxDecoration(
+          color: colors.blueSoft,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        child: Row(
+          children: [
+            if (widget.prefixIcon != null) ...[
+              Icon(widget.prefixIcon, size: 18, color: colors.blue),
+              const SizedBox(width: 8),
+            ],
+            Expanded(
+              child: Text(
+                'Select ${widget.title}',
+                style: TextStyle(
+                  fontFamily: 'Plus Jakarta Sans',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: colors.ink,
                 ),
-                child: Row(
-                  children: [
-                    if (prefixIcon != null) ...[
-                      Icon(prefixIcon, size: 18, color: colors.blue),
-                      const SizedBox(width: 8),
-                    ],
-                    Expanded(
+              ),
+            ),
+            GestureDetector(
+              onTap: () => Navigator.of(context).pop(),
+              child: Icon(LucideIcons.x, size: 20, color: colors.ink40),
+            ),
+          ],
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: MediaQuery.of(context).size.height * 0.5,
+        child: Column(
+          children: [
+            if (widget.items.length > 5)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                child: TextField(
+                  controller: _searchCtrl,
+                  autofocus: true,
+                  style: const TextStyle(
+                    fontFamily: 'Plus Jakarta Sans',
+                    fontSize: 14,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search ${widget.title}...',
+                    hintStyle: TextStyle(
+                      fontFamily: 'Plus Jakarta Sans',
+                      fontSize: 13,
+                      color: colors.ink20,
+                    ),
+                    prefixIcon: Icon(LucideIcons.search,
+                        size: 18, color: colors.ink40),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: colors.ink10),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: colors.ink10),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      borderSide: BorderSide(color: colors.red),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    filled: true,
+                    fillColor: colors.card,
+                  ),
+                  onChanged: (q) {
+                    final s = q.trim().toLowerCase();
+                    setState(() {
+                      _filtered = widget.items
+                          .where((item) => widget.displayName(item)
+                              .toLowerCase()
+                              .contains(s))
+                          .toList();
+                    });
+                  },
+                ),
+              ),
+            const SizedBox(height: 4),
+            Expanded(
+              child: _filtered.isEmpty
+                  ? Center(
                       child: Text(
-                        'Select $title',
+                        'No results found',
                         style: TextStyle(
                           fontFamily: 'Plus Jakarta Sans',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: colors.ink,
+                          fontSize: 14,
+                          color: colors.ink40,
                         ),
                       ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.of(ctx).pop(),
-                      child:
-                          Icon(LucideIcons.x, size: 20, color: colors.ink40),
-                    ),
-                  ],
-                ),
-              ),
-              content: SizedBox(
-                width: double.maxFinite,
-                height: MediaQuery.of(context).size.height * 0.5,
-                child: Column(
-                  children: [
-                    if (items.length > 5)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                        child: TextField(
-                          controller: searchCtrl,
-                          autofocus: true,
-                          style: const TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            fontSize: 14,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search $title...',
-                            hintStyle: TextStyle(
-                              fontFamily: 'Plus Jakarta Sans',
-                              fontSize: 13,
-                              color: colors.ink20,
-                            ),
-                            prefixIcon: Icon(LucideIcons.search,
-                                size: 18, color: colors.ink40),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: colors.ink10),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: colors.ink10),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(color: colors.red),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 10),
-                            filled: true,
-                            fillColor: colors.card,
-                          ),
-                          onChanged: (q) {
-                            final s = q.trim().toLowerCase();
-                            setLocalState(() {
-                              filtered = items
-                                  .where((item) => displayName(item)
-                                      .toLowerCase()
-                                      .contains(s))
-                                  .toList();
-                            });
-                          },
-                        ),
-                      ),
-                    const SizedBox(height: 4),
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No results found',
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount:
+                          _filtered.length + (widget.allowDeselect ? 1 : 0),
+                      itemBuilder: (_, i) {
+                        if (widget.allowDeselect && i == 0) {
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                dense: true,
+                                contentPadding:
+                                    const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 2),
+                                title: Text(
+                                  '— None —',
+                                  style: TextStyle(
+                                    fontFamily: 'Plus Jakarta Sans',
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: colors.ink40,
+                                  ),
+                                ),
+                                onTap: () => Navigator.of(context)
+                                    .pop(_Selected<T>(null)),
+                              ),
+                              Divider(height: 1, color: colors.ink05),
+                            ],
+                          );
+                        }
+                        final item =
+                            _filtered[i - (widget.allowDeselect ? 1 : 0)];
+                        final isSelected = widget.current != null &&
+                            widget.displayName(item) ==
+                                widget.displayName(widget.current as T);
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ListTile(
+                              dense: true,
+                              selected: isSelected,
+                              selectedTileColor: colors.blueSoft,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 2),
+                              title: Text(
+                                widget.displayName(item),
                                 style: TextStyle(
                                   fontFamily: 'Plus Jakarta Sans',
                                   fontSize: 14,
-                                  color: colors.ink40,
+                                  fontWeight: isSelected
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                                  color: colors.ink,
                                 ),
                               ),
-                            )
-                          : ListView.builder(
-                              padding: EdgeInsets.zero,
-                              itemCount: filtered.length + (allowDeselect ? 1 : 0),
-                              itemBuilder: (_, i) {
-                                if (allowDeselect && i == 0) {
-                                  return Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      ListTile(
-                                        dense: true,
-                                        contentPadding: const EdgeInsets.symmetric(
-                                            horizontal: 16, vertical: 2),
-                                        title: Text(
-                                          '— None —',
-                                          style: TextStyle(
-                                            fontFamily: 'Plus Jakarta Sans',
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w500,
-                                            color: colors.ink40,
-                                          ),
-                                        ),
-                                        onTap: () => Navigator.of(ctx)
-                                            .pop(_Selected<T>(null)),
-                                      ),
-                                      Divider(height: 1, color: colors.ink05),
-                                    ],
-                                  );
-                                }
-                                final item = filtered[i - (allowDeselect ? 1 : 0)];
-                                final isSelected = current != null &&
-                                    displayName(item) == displayName(current as T);
-                                return Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ListTile(
-                                      dense: true,
-                                      selected: isSelected,
-                                      selectedTileColor: colors.blueSoft,
-                                      contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 2),
-                                      title: Text(
-                                        displayName(item),
-                                        style: TextStyle(
-                                          fontFamily: 'Plus Jakarta Sans',
-                                          fontSize: 14,
-                                          fontWeight: isSelected
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                          color: colors.ink,
-                                        ),
-                                      ),
-                                      trailing: isSelected
-                                          ? Icon(LucideIcons.check,
-                                              size: 16, color: colors.blue)
-                                          : null,
-                                      onTap: () => Navigator.of(ctx)
-                                          .pop(_Selected(item)),
-                                    ),
-                                    if (i < filtered.length - 1 + (allowDeselect ? 1 : 0))
-                                      Divider(height: 1, color: colors.ink05),
-                                  ],
-                                );
+                              trailing: isSelected
+                                  ? Icon(LucideIcons.check,
+                                      size: 16, color: colors.blue)
+                                  : null,
+                              onTap: () {
+                                Navigator.of(context)
+                                    .pop(_Selected(item));
                               },
                             ),
+                            if (i <
+                                _filtered.length -
+                                    1 +
+                                    (widget.allowDeselect ? 1 : 0))
+                              Divider(height: 1, color: colors.ink05),
+                          ],
+                        );
+                      },
                     ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
-  } finally {
-    searchCtrl.dispose();
   }
 }
 
@@ -2689,14 +3581,14 @@ class _DatePickerField extends StatelessWidget {
             suffixIcon:
                 Icon(LucideIcons.chevronDown, size: 18, color: colors.ink40),
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.ink10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
-              borderSide: BorderSide(color: colors.ink10),
+              borderSide: BorderSide(color: colors.ink10, width: 1.5),
             ),
             filled: true,
             fillColor: colors.card,
@@ -2729,8 +3621,8 @@ class _SectionHeader extends StatelessWidget {
       title,
       style: TextStyle(
         fontFamily: 'Plus Jakarta Sans',
-        fontSize: 16,
-        fontWeight: FontWeight.w700,
+        fontSize: 15,
+        fontWeight: FontWeight.w800,
         color: colors.ink,
       ),
     );
@@ -2745,17 +3637,9 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.card,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.ink10),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
     );
   }
 }

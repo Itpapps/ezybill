@@ -20,6 +20,11 @@ sealed class InvoiceItem with _$InvoiceItem {
     @JsonKey(name: 'pendingAmount') @Default(0.0) double pendingAmount,
     @JsonKey(name: 'discountAmount') @Default(0.0) double discountAmount,
     @JsonKey(name: 'isAdhoc') @Default(0) int isAdhoc,
+    @JsonKey(name: 'billAmount') @Default(0.0) double billAmount,
+    @JsonKey(name: 'msoShare') @Default(0.0) double msoShare,
+    @JsonKey(name: 'billPeriodStartDate') @Default('') String billPeriodStartDate,
+    @JsonKey(name: 'billPeriodEndDate') @Default('') String billPeriodEndDate,
+    @JsonKey(name: 'remarks') @Default('') String remarks,
   }) = _InvoiceItem;
 
   factory InvoiceItem.fromJson(Map<String, dynamic> json) =>
@@ -41,6 +46,10 @@ sealed class InvoiceItem with _$InvoiceItem {
       'pending_amount': 'pendingAmount',
       'discount_amount': 'discountAmount',
       'is_adhoc': 'isAdhoc',
+      'bill_amount': 'billAmount',
+      'mso_share': 'msoShare',
+      'bill_period_start_date': 'billPeriodStartDate',
+      'bill_period_end_date': 'billPeriodEndDate',
     };
     for (final entry in keyMap.entries) {
       if (r.containsKey(entry.key) && !r.containsKey(entry.value)) {
@@ -50,6 +59,7 @@ sealed class InvoiceItem with _$InvoiceItem {
     const doubleFields = [
       'totalAmount', 'basePrice', 'setupPrice',
       'taxAmount', 'pendingAmount', 'discountAmount',
+      'billAmount', 'msoShare',
     ];
     const intFields = ['quantity', 'isAdhoc'];
     for (final key in doubleFields) {
@@ -61,6 +71,11 @@ sealed class InvoiceItem with _$InvoiceItem {
       final v = r[key];
       if (v is String) r[key] = int.tryParse(v) ?? 0;
       if (v == null) r[key] = 0;
+    }
+    // remarks may arrive as a JSON object — coerce to String for display.
+    final rem = r['remarks'];
+    if (rem is Map || rem is List) {
+      r['remarks'] = rem.toString();
     }
     return r;
   }

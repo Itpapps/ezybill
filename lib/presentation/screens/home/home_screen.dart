@@ -277,6 +277,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   ) {
     var filtered = customers;
 
+    debugPrint('--- _filterCustomers CALLED ---');
+    debugPrint('  input size: ${customers.length}');
+    debugPrint('  _searchQuery: "$_searchQuery"');
+    debugPrint('  _activeLetter: $_activeLetter');
+    for (final c in customers) {
+      debugPrint('  INPUT → id=${c.customerId} name="${c.customerName}" status=${c.status}');
+    }
+
     if (_activeLetter != null && _activeLetter != '#') {
       filtered = filtered.where((c) {
         final name = c.customerName.trim().toUpperCase();
@@ -300,6 +308,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }).toList();
     }
 
+    debugPrint('  output size after filter: ${filtered.length}');
     return filtered;
   }
 
@@ -519,8 +528,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   placeholder: l.searchPlaceholder,
                   onChanged: (v) => setState(() => _searchQuery = v),
                   onSubmitted: (_) {
-                    // Trigger API search when user submits
                     final query = _searchController.text.trim();
+                    debugPrint('=== AppSearchBar onSubmitted FIRED ===');
+                    debugPrint('  raw controller text: "${_searchController.text}"');
+                    debugPrint('  trimmed query: "$query"');
+                    debugPrint('  will call searchByQuery: ${query.isNotEmpty}');
                     if (query.isNotEmpty) {
                       ref
                           .read(dashboardCustomerListProvider.notifier)
@@ -781,6 +793,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final letters = _lettersWithItems(baseList);
     final isActive = listState.selectedTab == CustomerFilterTab.active;
 
+    debugPrint('=== _buildSubscriberSection RENDER ===');
+    debugPrint('  selected tab: ${listState.selectedTab}');
+    debugPrint('  _searchQuery: "$_searchQuery"');
+    debugPrint('  showPager (using page slice): $showPager');
+    debugPrint('  allCustomers (full state): ${allCustomers.length}');
+    debugPrint('  baseList (input to filter): ${baseList.length}');
+    debugPrint('  filtered (shown to user): ${filtered.length}');
+    debugPrint('  isActive flag for ALL cards: $isActive');
+    for (final c in filtered) {
+      debugPrint('  SHOW → id=${c.customerId} name="${c.customerName}" '
+          'model.status=${c.status} card_isActive=$isActive');
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -896,16 +921,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Derive status from the actual customer model data
     final modelStatus = customer.status;
     final String status;
+    final String _branchTaken;
     if (modelStatus == '1' || modelStatus.toLowerCase() == 'active') {
       status = 'active';
+      _branchTaken = 'B1_model_1_or_active';
     } else if (modelStatus.toLowerCase() == 'fresh' || modelStatus.toLowerCase() == 'new') {
       status = 'fresh';
+      _branchTaken = 'B2_fresh';
     } else if (isActive) {
       // Fallback to tab-based status
       status = 'active';
+      _branchTaken = 'B3_FALLBACK_tab_override';
     } else {
       status = 'deactivated';
+      _branchTaken = 'B4_deactivated';
     }
+    debugPrint('[BADGE] id=$customerId modelStatus="$modelStatus" '
+        'isActive=$isActive branch=$_branchTaken → badge=$status');
 
     // Determine due text
     String? dueText;

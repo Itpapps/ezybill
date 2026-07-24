@@ -49,6 +49,9 @@ class _AppSearchBarState extends State<AppSearchBar> {
   }
 
   void _submit() {
+    debugPrint('=== AppSearchBar._submit() CALLED ===');
+    debugPrint('  _controller.text: "${_controller.text}"');
+    debugPrint('  onSubmitted wired: ${widget.onSubmitted != null}');
     widget.onSubmitted?.call(_controller.text);
   }
 

@@ -52,6 +52,11 @@ class CustomerRemoteDatasource {
     int startValue = 0,
     int endValue = 20,
   }) async {
+    debugPrint('=== getCustomerDetails REQUEST ===');
+    debugPrint('  endpoint: ${ApiConstants.customerDetails}');
+    debugPrint('  customerName=$customerName mobileNumber=$mobileNumber');
+    debugPrint('  NOTE: no status/from_dashboard in payload');
+
     final response = await _dio.post(
       ApiConstants.customerDetails,
       data: {
@@ -79,8 +84,20 @@ class CustomerRemoteDatasource {
     //   PHP indexed Map → {"0":{customer_obj}} → unwrapped to [{customer_obj}]
     //   SOAP bare Map   → {customer_id:1413,...} → wrapped to [{customer_id:1413,...}]
     final list = parseMapList(rawListVal);
-    debugPrint('[CUST-DS] list type: ${rawListVal.runtimeType}, '
-        'length: ${list is List ? list.length : 'N/A'}');
+    debugPrint('=== getCustomerDetails RESPONSE ===');
+    debugPrint('  total records: ${list is List ? list.length : 0}');
+    if (list is List) {
+      for (final item in list) {
+        if (item is Map) {
+          debugPrint('  RAW → id=${item['customer_id'] ?? item['customerId']}'
+              ' name=${item['customer_name'] ?? item['customerName']}'
+              ' status=${item['status']}'
+              ' is_active=${item['is_active']}'
+              ' act_dct=${item['act_dct']}'
+              ' active_deactive=${item['active_deactive'] ?? item['activeDeactive']}');
+        }
+      }
+    }
 
     if (list is List && list.isNotEmpty && list.first is Map) {
       final first = list.first as Map;
@@ -135,6 +152,24 @@ class CustomerRemoteDatasource {
       data: {
         'authtoken': authtoken,
         'mobileNumber': mobileNumber,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  /// [DEBUG PROBE — investigation only, no behaviour change]
+  /// Calls existingCustomerRest with accountNumber (Android-correct param).
+  /// Used to capture the real field names returned when a customer is found.
+  /// Remove once profile fix is finalised.
+  Future<Map<String, dynamic>> probeExistingCustomerByAccountNumber({
+    required String authtoken,
+    required String accountNumber,
+  }) async {
+    final response = await _dio.post(
+      ApiConstants.existingCustomer,
+      data: {
+        'authtoken': authtoken,
+        'accountNumber': accountNumber,
       },
     );
     return response.data as Map<String, dynamic>;

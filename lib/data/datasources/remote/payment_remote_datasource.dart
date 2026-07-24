@@ -150,7 +150,6 @@ class PaymentRemoteDatasource {
       data: {
         'authtoken': authtoken,
         'dealer_id': dealerId.toString(),
-        'payment_status': paymentStatus,
       },
     );
     return response.data as Map<String, dynamic>;

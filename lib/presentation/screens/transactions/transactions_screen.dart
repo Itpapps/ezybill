@@ -122,7 +122,7 @@ class _DealerPgTransactionNotifier
         paymentStatus: paymentStatus,
       );
       final list = parseList<PgTransaction>(
-        data['transactionList'],
+        data['paymentresult'],
         PgTransaction.fromJson,
       );
       state = state.copyWith(isLoading: false, items: list);

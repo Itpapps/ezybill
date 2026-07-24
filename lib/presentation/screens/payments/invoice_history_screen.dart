@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import '../../../application/providers/payment_provider.dart';
@@ -39,21 +38,19 @@ class _InvoiceHistoryState {
       );
 }
 
-class _InvoiceHistoryNotifier extends ChangeNotifier {
-  _InvoiceHistoryState _state = const _InvoiceHistoryState();
-  _InvoiceHistoryState get state => _state;
-
-  final Ref _ref;
+class _InvoiceHistoryNotifier extends Notifier<_InvoiceHistoryState> {
   final String customerId;
 
-  _InvoiceHistoryNotifier(this._ref, this.customerId);
+  _InvoiceHistoryNotifier(this.customerId);
+
+  @override
+  _InvoiceHistoryState build() => const _InvoiceHistoryState();
 
   Future<void> load() async {
-    _state = _state.copyWith(isLoading: true, error: null);
-    notifyListeners();
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final session = _ref.read(appSessionProvider);
-      final ds = _ref.read(paymentRemoteDatasourceProvider);
+      final session = ref.read(appSessionProvider);
+      final ds = ref.read(paymentRemoteDatasourceProvider);
       final data = await ds.getInvoiceHistory(
         authtoken: session?.token ?? '',
         customerId: customerId,
@@ -63,25 +60,19 @@ class _InvoiceHistoryNotifier extends ChangeNotifier {
         data['invoice_details'],
         InvoiceItem.fromJson,
       );
-      _state = _state.copyWith(isLoading: false, items: list);
-      notifyListeners();
+      state = state.copyWith(isLoading: false, items: list);
     } catch (e) {
-      _state = _state.copyWith(
+      state = state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('ApiException: ', ''),
       );
-      notifyListeners();
     }
   }
 }
 
-final _invoiceHistoryProvider =
-    Provider.autoDispose.family<_InvoiceHistoryNotifier, String>(
-  (ref, customerId) {
-    final notifier = _InvoiceHistoryNotifier(ref, customerId);
-    ref.onDispose(notifier.dispose);
-    return notifier;
-  },
+final _invoiceHistoryProvider = NotifierProvider.autoDispose
+    .family<_InvoiceHistoryNotifier, _InvoiceHistoryState, String>(
+  _InvoiceHistoryNotifier.new,
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +94,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(_invoiceHistoryProvider(widget.customerId)).load();
+      ref.read(_invoiceHistoryProvider(widget.customerId).notifier).load();
     });
   }
 
@@ -111,8 +102,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<AppColors>()!;
     final tt = Theme.of(context).textTheme;
-    final notifier = ref.watch(_invoiceHistoryProvider(widget.customerId));
-    final historyState = notifier.state;
+    final historyState = ref.watch(_invoiceHistoryProvider(widget.customerId));
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -146,7 +136,7 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
             const SizedBox(height: 16),
             TextButton(
               onPressed: () =>
-                  ref.read(_invoiceHistoryProvider(widget.customerId)).load(),
+                  ref.read(_invoiceHistoryProvider(widget.customerId).notifier).load(),
               child: Text(AppLocalizations.of(context)!.retry),
             ),
           ],
@@ -168,73 +158,148 @@ class _InvoiceHistoryScreenState extends ConsumerState<InvoiceHistoryScreen> {
       );
     }
 
+    final session = ref.read(appSessionProvider);
+    final hideBoxPending = (session?.enableBoxWisePayment ?? 0) == 1;
+
     return RefreshIndicator(
       onRefresh: () =>
-          ref.read(_invoiceHistoryProvider(widget.customerId)).load(),
+          ref.read(_invoiceHistoryProvider(widget.customerId).notifier).load(),
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.fromLTRB(
+          16, 16, 16,
+          16 + 56 + MediaQuery.of(context).padding.bottom,
+        ),
         itemCount: historyState.items.length,
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final item = historyState.items[index];
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: c.card,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: c.ink10),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.pname,
-                        style: tt.bodyMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    Text(
-                      formatCurrency(item.totalAmount),
-                      style: tt.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: c.red,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(LucideIcons.calendar, size: 14, color: c.ink40),
-                    const SizedBox(width: 4),
-                    Text(
-                      formatApiDateForDisplay(item.billDate),
-                      style: tt.bodySmall?.copyWith(color: c.ink60),
-                    ),
-                    const SizedBox(width: 16),
-                    Text('Due: ${formatApiDateForDisplay(item.dueDate)}',
-                        style: tt.bodySmall?.copyWith(color: c.ink40)),
-                  ],
-                ),
-                if (item.pendingAmount > 0) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    'Pending: ${formatCurrency(item.pendingAmount)}',
-                    style: tt.bodySmall?.copyWith(
-                      color: c.amber,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+          final isAdhoc = item.isAdhoc == 1;
+          return _InvoiceCard(
+            item: item,
+            isAdhoc: isAdhoc,
+            hideBoxPending: hideBoxPending,
+            colors: c,
+            textTheme: tt,
           );
         },
       ),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Invoice Card — matches Android InvoiceAdapter field order
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _InvoiceCard extends StatelessWidget {
+  final InvoiceItem item;
+  final bool isAdhoc;
+  final bool hideBoxPending;
+  final AppColors colors;
+  final TextTheme textTheme;
+
+  const _InvoiceCard({
+    required this.item,
+    required this.isAdhoc,
+    required this.hideBoxPending,
+    required this.colors,
+    required this.textTheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.ink10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header: Package name + Total amount
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    isAdhoc ? 'NA' : item.pname,
+                    style: textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Text(
+                  formatCurrency(item.totalAmount),
+                  style: textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: colors.red,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: colors.ink10),
+          // Detail rows — Android field order
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
+            child: Column(
+              children: [
+                _row('Serial Number', isAdhoc ? 'NA' : item.serialNumber),
+                _row('VC Number', isAdhoc ? 'NA' : item.macVcNumber),
+                _row('Invoice Number', item.billingId),
+                _row('Invoice Date', formatApiDateForDisplay(item.billDate)),
+                _row('Quantity', item.quantity.toString()),
+                _row('Due Date', formatApiDateForDisplay(item.dueDate)),
+                _row('Base Price', formatCurrency(item.basePrice)),
+                _row('Bill Amount', formatCurrency(item.billAmount)),
+                _row('Tax Amount', formatCurrency(item.taxAmount)),
+                if (!hideBoxPending)
+                  _row('Pending Amount', formatCurrency(item.pendingAmount)),
+                _row('Pending MSO Share', formatCurrency(item.msoShare)),
+                _row('Discount Amount', formatCurrency(item.discountAmount)),
+                _row('Bill Start Date',
+                    _formatDatetime(item.billPeriodStartDate)),
+                _row('Bill End Date', _formatDatetime(item.billPeriodEndDate)),
+                _row('Remarks', item.remarks),
+                _row('Adhoc Bills', isAdhoc ? 'Yes' : 'No'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 140,
+            child: Text(
+              label,
+              style: textTheme.bodySmall?.copyWith(color: colors.ink40),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              style: textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w500, color: colors.ink80),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDatetime(String value) {
+    if (value.isEmpty) return '-';
+    final dateOnly = value.contains(' ') ? value.split(' ').first : value;
+    return formatApiDateForDisplay(dateOnly);
   }
 }

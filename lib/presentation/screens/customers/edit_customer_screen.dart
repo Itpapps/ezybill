@@ -839,88 +839,17 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
     required String Function(T) displayName,
     bool enableSearch = true,
   }) async {
-    final queryCtrl = TextEditingController();
-    try {
-      return await showDialog<T>(
-        context: context,
-        builder: (ctx) {
-          List<T> filtered = List<T>.from(items);
-          return StatefulBuilder(
-            builder: (ctx, setLocalState) {
-              return AlertDialog(
-                shape: RoundedRectangleBorder(borderRadius: AppRadius.cardBR),
-                titlePadding: EdgeInsets.zero,
-                contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                title: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).extension<AppColors>()!.blueSoft,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                  ),
-                  child: Center(
-                    child: Text(
-                      title,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                content: SizedBox(
-                  width: double.maxFinite,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (enableSearch) ...[
-                        TextField(
-                          controller: queryCtrl,
-                          onChanged: (q) {
-                            final s = q.trim().toLowerCase();
-                            setLocalState(() {
-                              filtered = items
-                                  .where((item) => displayName(item)
-                                      .toLowerCase()
-                                      .contains(s))
-                                  .toList();
-                            });
-                          },
-                          decoration: const InputDecoration(
-                            hintText: 'Search',
-                            border: UnderlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                      Flexible(
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, i) {
-                            final item = filtered[i];
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                displayName(item),
-                                style: GoogleFonts.plusJakartaSans(fontSize: 14),
-                              ),
-                              onTap: () => Navigator.of(ctx).pop(item),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-    } finally {
-      queryCtrl.dispose();
-    }
+    return showDialog<T>(
+      context: context,
+      builder: (ctx) {
+        return _SelectionDialogContent<T>(
+          title: title,
+          items: items,
+          displayName: displayName,
+          enableSearch: enableSearch,
+        );
+      },
+    );
   }
 
   List<T> _parseModelList<T>(
@@ -2117,6 +2046,119 @@ class _EditCustomerScreenState extends ConsumerState<EditCustomerScreen> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+// ── Selection dialog content (StatefulWidget — owns its own TextEditingController lifecycle) ──
+
+class _SelectionDialogContent<T> extends StatefulWidget {
+  final String title;
+  final List<T> items;
+  final String Function(T) displayName;
+  final bool enableSearch;
+
+  const _SelectionDialogContent({
+    required this.title,
+    required this.items,
+    required this.displayName,
+    this.enableSearch = true,
+  });
+
+  @override
+  State<_SelectionDialogContent<T>> createState() =>
+      _SelectionDialogContentState<T>();
+}
+
+class _SelectionDialogContentState<T>
+    extends State<_SelectionDialogContent<T>> {
+  late TextEditingController _queryCtrl;
+  late List<T> _filtered;
+
+  @override
+  void initState() {
+    super.initState();
+    _queryCtrl = TextEditingController();
+    _filtered = List<T>.from(widget.items);
+  }
+
+  @override
+  void dispose() {
+    _queryCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).extension<AppColors>()!;
+
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.cardBR),
+      titlePadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      title: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: colors.blueSoft,
+          borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        child: Center(
+          child: Text(
+            widget.title,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.enableSearch) ...[
+              TextField(
+                controller: _queryCtrl,
+                onChanged: (q) {
+                  final s = q.trim().toLowerCase();
+                  setState(() {
+                    _filtered = widget.items
+                        .where((item) => widget.displayName(item)
+                            .toLowerCase()
+                            .contains(s))
+                        .toList();
+                  });
+                },
+                decoration: const InputDecoration(
+                  hintText: 'Search',
+                  border: UnderlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Flexible(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _filtered.length,
+                separatorBuilder: (_, __) => const Divider(height: 1),
+                itemBuilder: (_, i) {
+                  final item = _filtered[i];
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      widget.displayName(item),
+                      style: GoogleFonts.plusJakartaSans(fontSize: 14),
+                    ),
+                    onTap: () => Navigator.of(context).pop(item),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

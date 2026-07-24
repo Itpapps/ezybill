@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/datasources/remote/master_data_remote_datasource.dart';
@@ -350,6 +351,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
   }
 
   void selectState(StateModel? st) {
+    debugPrint('[PROVIDER-DBG] selectState: ${st?.name}, clearing districts/cities/mandals');
     state = state.copyWith(
       selectedState: st,
       clearSelectedDistrict: true,
@@ -359,6 +361,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
       cities: const [],
       mandals: const [],
     );
+    debugPrint('[PROVIDER-DBG] selectState: state updated, starting loadDistricts');
     if (st != null) {
       loadDistricts(st.id.toString());
     }
@@ -367,6 +370,7 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
   // ── Districts ────────────────────────────────────────────────────────────
 
   Future<void> loadDistricts(String stateId) async {
+    debugPrint('[PROVIDER-DBG] loadDistricts: starting for stateId=$stateId');
     state = state.copyWith(isLoadingDistricts: true, clearError: true);
     try {
       final data = await _remoteDs.getDistricts(
@@ -378,8 +382,11 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
         District.fromJson,
         ['districtList', 'districtsList', 'districts', 'data'],
       );
+      debugPrint('[PROVIDER-DBG] loadDistricts: SUCCESS, ${list.length} districts loaded');
       state = state.copyWith(isLoadingDistricts: false, districts: list);
+      debugPrint('[PROVIDER-DBG] loadDistricts: state updated with districts');
     } catch (e) {
+      debugPrint('[PROVIDER-DBG] loadDistricts: ERROR $e');
       state = state.copyWith(
         isLoadingDistricts: false,
         errorMessage: e.toString(),
