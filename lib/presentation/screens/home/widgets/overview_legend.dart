@@ -115,14 +115,32 @@ class _LegendCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<AppColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: c.card,
-          borderRadius: BorderRadius.circular(8),
+          // Glass read on a flat ground: top-edge highlight + hairline rim.
+          // Paint-only — no padding or size change.
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              isDark ? Color.lerp(c.card, Colors.white, 0.05)! : c.card,
+              isDark
+                  ? Color.lerp(c.card, Colors.black, 0.10)!
+                  : Color.lerp(c.card, c.ink, 0.03)!,
+            ],
+          ),
+          border: Border.all(
+            color: isDark
+                ? c.ink.withValues(alpha: 0.09)
+                : c.ink10.withValues(alpha: 0.60),
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: AppShadow.card,
         ),
         child: Row(

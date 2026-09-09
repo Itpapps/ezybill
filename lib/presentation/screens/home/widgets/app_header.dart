@@ -10,7 +10,7 @@ import '../../../common/widgets/wallet_bar.dart';
 /// Sticky header matching the POC design:
 ///
 /// - Avatar (initials, red gradient) + LCO name + business code
-/// - Action buttons: theme toggle, language, notifications (with badge)
+/// - Action buttons: theme toggle, language
 /// - Wallet bar below
 class AppHeader extends StatelessWidget {
   const AppHeader({
@@ -19,10 +19,8 @@ class AppHeader extends StatelessWidget {
     required this.walletBalance,
     this.lastRechargeText,
     this.showWallet = true,
-    this.notificationCount = 0,
     this.onThemeToggle,
     this.onLanguage,
-    this.onNotifications,
     this.onWalletTopUp,
     this.onWalletHistory,
     this.onRefresh,
@@ -32,10 +30,8 @@ class AppHeader extends StatelessWidget {
   final String walletBalance;
   final String? lastRechargeText;
   final bool showWallet;
-  final int notificationCount;
   final VoidCallback? onThemeToggle;
   final VoidCallback? onLanguage;
-  final VoidCallback? onNotifications;
   final VoidCallback? onWalletTopUp;
   final VoidCallback? onWalletHistory;
   final VoidCallback? onRefresh;
@@ -127,18 +123,15 @@ class AppHeader extends StatelessWidget {
 
               // Action buttons
               _ActionButton(
-                icon: isDark ? LucideIcons.sun : LucideIcons.moon,
+                // Shows the CURRENT theme, not the pending action:
+                // light -> sun, dark -> moon.
+                icon: isDark ? LucideIcons.moon : LucideIcons.sun,
                 onTap: onThemeToggle,
               ),
               const SizedBox(width: 6),
               _ActionButton(
                 icon: LucideIcons.globe,
                 onTap: onLanguage,
-              ),
-              const SizedBox(width: 6),
-              _NotificationButton(
-                count: notificationCount,
-                onTap: onNotifications,
               ),
             ],
           ),
@@ -189,56 +182,6 @@ class _ActionButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Icon(icon, size: 18, color: c.ink40),
-      ),
-    );
-  }
-}
-
-// ── Notification Button with Badge ───────────────────────────────────────────
-
-class _NotificationButton extends StatelessWidget {
-  const _NotificationButton({required this.count, this.onTap});
-
-  final int count;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = Theme.of(context).extension<AppColors>()!;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 36,
-        height: 36,
-        child: Stack(
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: c.bg,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              alignment: Alignment.center,
-              child: Icon(LucideIcons.bell, size: 18, color: c.ink40),
-            ),
-            if (count > 0)
-              Positioned(
-                top: 4,
-                right: 4,
-                child: Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: c.red,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: c.card, width: 2),
-                  ),
-                ),
-              ),
-          ],
-        ),
       ),
     );
   }

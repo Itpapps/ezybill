@@ -7,41 +7,50 @@ class ApiConstants {
   // ENVIRONMENT TOGGLE — Comment/uncomment to switch between LIVE and LOCAL
   // ═══════════════════════════════════════════════════════════════════════════
   //
-  // LIVE:  _forceLocal = false. After BMS registration, server returns the
-  //        client IP which becomes baseUrl automatically. _apiBaseUrl is unused.
+  // Switch environments by commenting/uncommenting ONE constant: bmsUrl.
+  // Everything downstream follows from the BMS response — there is no second
+  // flag and no code-level API host to keep in sync.
   //
-  // LOCAL: _forceLocal = true + uncomment local _apiBaseUrl below.
-  //        Ignores SharedPreferences override — uses _apiBaseUrl directly.
-  //        (Same as Android Java app: just switch one flag, no need to clear data)
+  //   bmsUrl (LIVE or LOCAL)
+  //     -> BMS registration returns ipAddress + version
+  //     -> bms_provider derives the API base (strips /wsController for V2)
+  //     -> setBaseUrl() -> _overrideBaseUrl -> baseUrl
+  //     -> isWsController drives restBase, SOAP/REST login and encryption
+  //
+  // This mirrors the native Android app, where NAMESPACE_BMS selects which BMS
+  // is asked and the operational host always comes from the BMS response.
+  //
+  // NOTE: switching environments needs a fresh registration state, since the
+  // previous BMS-supplied URL persists in login_url/api_base_url.
   // ═══════════════════════════════════════════════════════════════════════════
 
-  // LIVE
-  static const bool _forceLocal = false;
-  // LOCAL
-  // static const bool _forceLocal = true;
-
   // ── BMS URL (device registration + version check) ─────────────────────────
+  // THE ONLY ENVIRONMENT SWITCH. Comment/uncomment one of the two below and
+  // rebuild — same model as the native Android app's NAMESPACE_BMS.
+  // The selected BMS returns `ipAddress` + `version`; bms_provider derives the
+  // API base from those and calls setBaseUrl(). Nothing else needs changing.
   // LIVE
-  static const String bmsUrl =
-      'http://ezybms.itpworld.com/index.php/validateAuthentication';
-  // LOCAL
   // static const String bmsUrl =
-  //     'http://183.83.216.66:9090/ezybms_m8/app/index.php/validateAuthentication';
+  //     'http://ezybms.itpworld.com/index.php/validateAuthentication';
+  //LOCAL
+  static const String bmsUrl =
+       'http://183.82.159.51:9090/ezybms_m8/app/index.php/validateAuthentication';
+  //LOCAL
+  // static const String bmsUrl =
+  //     'http://192.168.1.98/ezybms_m8/app/index.php/validateAuthentication';
 
   // ── Fallback API base URL (only used when _overrideBaseUrl is null) ────────
-  // In LIVE mode this is never reached because BMS sets _overrideBaseUrl.
-  // In LOCAL mode this is your dev server.
-  // LIVE (safe fallback — won't accidentally hit local server)
+  // Never reached once BMS registration has run — BMS sets _overrideBaseUrl.
+  // Kept as an unroutable sentinel so a pre-registration call fails loudly
+  // instead of silently reaching a real host. Also backs defaultBaseUrl,
+  // which the "Reset to default" affordances read.
   static const String _apiBaseUrl = 'http://0.0.0.0';
-  // LOCAL
-  // static const String _apiBaseUrl =
-  //     'http://192.168.1.143/v2_release_aakshya/index.php';
 
-  // ── CORS proxy for Flutter Web development only ────────────────────────────
+  // ── CORS proxy for Flutter Web development only ──
   // LOCAL (web dev)
-  // static const String _proxyBaseUrl =
-  //     'http://localhost:3199/v2_release_aakshya/index.php';
-  static const String _proxyBaseUrl = 'http://0.0.0.0';
+  static const String _proxyBaseUrl =
+      'http://localhost:3199/v2_release_aakshya/index.php';
+  // static const String _proxyBaseUrl = 'http://0.0.0.0';
 
   /// Override base URL set at runtime from SharedPreferences
   static String? _overrideBaseUrl;
@@ -56,17 +65,10 @@ class ApiConstants {
     _overrideBaseUrl = null;
   }
 
-  /// Whether the app is forced to use the local code-level URL.
-  /// Used by router to skip BMS registration in local dev mode.
-  static bool get forceLocal => _forceLocal;
-
-  /// Base URL - when _forceLocal is true, uses _apiBaseUrl directly
-  /// (ignores SharedPreferences). Otherwise checks override first.
+  /// Base URL — the BMS-supplied override wins, exactly as the native Android
+  /// app prefers its persisted `login_url` over any compiled constant.
+  /// Falls back to the sentinel only before registration has run.
   static String get baseUrl {
-    // In local mode, always use the code-level URL (like Android Java app)
-    if (_forceLocal) {
-      return (kIsWeb && kDebugMode) ? _proxyBaseUrl : _apiBaseUrl;
-    }
     if (_overrideBaseUrl != null && _overrideBaseUrl!.isNotEmpty) {
       return _overrideBaseUrl!;
     }

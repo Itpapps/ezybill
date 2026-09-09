@@ -10,6 +10,7 @@ import '../../../application/providers/stb_provider.dart';
 import '../../../data/models/customer/customer_model.dart';
 import '../../../application/providers/dashboard_customer_list_provider.dart';
 import '../../../application/providers/dashboard_provider.dart';
+import '../../../application/providers/theme_provider.dart';
 import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
@@ -351,10 +352,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 lastRechargeText: 'Last: ₹5,000 on 22 Mar 2026',  // TODO: fetch from wallet history API
                 showWallet: session?.showWallet ?? false,
                 onThemeToggle: () {
-                  // Theme toggle — no provider yet
+                  // Toggle off the RENDERED brightness, not the stored mode, so
+                  // the first tap resolves ThemeMode.system to an explicit
+                  // choice matching what the user is currently looking at.
+                  // Persisted by ThemeNotifier under 'ezyquick-theme'; the
+                  // settings screen's 3-way selector stays authoritative for
+                  // returning to system.
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
+                  ref.read(themeProvider.notifier).setThemeMode(
+                        isDark ? ThemeMode.light : ThemeMode.dark,
+                      );
                 },
                 onLanguage: () => showLanguageSelector(context, ref),
-                onNotifications: () {},
                 onWalletTopUp: () {
                   context.push(RouteNames.lcoTopup);
                 },

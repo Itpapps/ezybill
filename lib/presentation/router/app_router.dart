@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../application/providers/auth_provider.dart';
-import '../../core/constants/api_constants.dart';
 import '../../application/providers/bms_provider.dart';
 import '../../application/providers/core_providers.dart';
 import '../common/widgets/app_shell.dart';
@@ -95,13 +94,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       // If not registered with BMS, go to registration (unless already there)
-      // In local mode (_forceLocal), skip BMS — go straight to login.
-      if (!kIsWeb && !hasRegistration && !isRegistering && !ApiConstants.forceLocal) {
+      if (!kIsWeb && !hasRegistration && !isRegistering) {
         return RouteNames.registration;
       }
 
-      // If registered with BMS (or in local mode) but not logged in, go to login
-      if ((hasRegistration || ApiConstants.forceLocal) && !isLoggedIn && !isLoggingIn && !isRegistering) {
+      // If registered with BMS but not logged in, go to login
+      if (hasRegistration && !isLoggedIn && !isLoggingIn && !isRegistering) {
         return RouteNames.login;
       }
 

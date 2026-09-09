@@ -144,11 +144,32 @@ class _BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: colors.card,
-        border: Border(top: BorderSide(color: colors.ink05, width: 1)),
+        // Glass cues, not literal transparency: extendBody is true, so the
+        // customer list scrolls behind this bar. Real translucency without
+        // blur would show sharp rows through it, and BackdropFilter would
+        // re-blur on every scroll frame — the one thing to avoid here.
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            isDark ? Color.lerp(colors.card, Colors.white, 0.05)! : colors.card,
+            isDark
+                ? Color.lerp(colors.card, Colors.black, 0.12)!
+                : Color.lerp(colors.card, colors.ink, 0.02)!,
+          ],
+        ),
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? colors.ink.withValues(alpha: 0.10)
+                : colors.ink05,
+            width: 1,
+          ),
+        ),
         boxShadow: const [
           BoxShadow(
             color: Color(0x0A000000), // rgba(0,0,0,0.04)
@@ -213,15 +234,26 @@ class _NavItem extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Icon container: 28x28, border-radius 8
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: containerBg,
-              borderRadius: BorderRadius.circular(8),
+          // AnimatedScale owns its controller in its OWN State, so ticks
+          // rebuild only this subtree — never AppShell, and therefore never
+          // navigationShell / the customer list. Driven by the existing
+          // isActive flag, so no new state and nothing to dispose.
+          // Transform-based: paint-only, so bar height, item width and the
+          // opaque hit area of the parent GestureDetector are unaffected.
+          AnimatedScale(
+            scale: isActive ? 1.08 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            child: Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: containerBg,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Icon(icon, size: 18, color: iconColor),
             ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 18, color: iconColor),
           ),
           const SizedBox(height: 2),
           // Label: 9px

@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Modify this file to customize your launch splash screen -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="?android:colorBackground" />
+    <!-- Hardcoded white rather than ?android:colorBackground.
+         The theme-resolved value is BLACK on devices in dark mode, because
+         values-night/styles.xml bases LaunchTheme on Theme.Black.NoTitleBar.
+         The EzyBill mark is a white-ground logo, so the splash stays white in
+         both system modes. This is the NATIVE window background shown before
+         Flutter's first frame — it is independent of themeProvider/AppColors
+         and does not affect in-app theme selection. -->
+    <item android:drawable="@android:color/white" />
 
     <!-- You can insert your own image assets here -->
     <!-- <item>

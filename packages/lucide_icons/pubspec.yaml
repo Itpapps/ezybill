@@ -1,0 +1,26 @@
+name: lucide_icons
+description: >-
+  Vendored copy of lucide_icons 0.257.0, patched for Dart 3 / Flutter 3.44+.
+  Upstream declared `class LucideIconData extends IconData`, which stopped
+  compiling once Flutter made `IconData` a final class. The generated constants
+  were already typed as `IconData`, so the subclass was removed and each
+  constructor call now builds an `IconData` directly with the same fontFamily
+  and fontPackage. Icon names, code points and the font asset are unchanged.
+version: 0.257.0
+publish_to: 'none'
+homepage: https://lucide.dev
+repository: https://github.com/lucide-icons/lucide
+
+environment:
+  sdk: ^3.11.1
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  fonts:
+    - family: Lucide
+      fonts:
+        - asset: assets/lucide.ttf

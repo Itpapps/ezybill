@@ -196,15 +196,13 @@ class BmsNotifier extends Notifier<BmsState> {
     String deviceId, {
     String? smsCode,
   }) async {
-    // Store smsKey (marks device as registered)
+    // Store smsKey (marks device as registered).
+    // Only a real BMS-supplied smsCode may mark a device registered. The old
+    // 'auto_registered' marker satisfied the router's `smsKey.length > 1` gate
+    // (app_router.dart) without any BMS approval; when no smsCode is supplied
+    // any existing key is simply left untouched.
     if (smsCode != null && smsCode.isNotEmpty) {
       await _prefs.setString(kSmsKey, smsCode);
-    } else {
-      // For auto-login check, preserve existing smsKey or set a marker
-      final existing = _prefs.getString(kSmsKey);
-      if (existing == null || existing.isEmpty) {
-        await _prefs.setString(kSmsKey, 'auto_registered');
-      }
     }
 
     await _prefs.setBool(kBmsAuth, true);

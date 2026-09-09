@@ -66,7 +66,10 @@ class BmsRemoteDatasource {
     required int imeiValidNumber,
     String? bmsUrl,
   }) async {
-    final url = bmsUrl ?? defaultBmsUrl;
+    // The source-level constant in api_constants.dart is authoritative, as
+    // NAMESPACE_BMS is in the native Android app. A persisted `bms_url` must
+    // not silently outrank a comment/uncomment environment switch.
+    final url = defaultBmsUrl;
     final namespace = _namespaceFromUrl(url);
 
     // Build SOAP XML envelope

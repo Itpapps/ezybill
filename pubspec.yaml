@@ -67,6 +67,13 @@ dependencies:
   freezed_annotation: ^3.0.0
   json_annotation: ^4.9.0
 
+# Upstream lucide_icons 0.257.0 subclasses IconData, which Flutter 3.44 made a
+# final class — it no longer compiles. packages/lucide_icons is that package with
+# the subclass removed; icon names and code points are unchanged.
+dependency_overrides:
+  lucide_icons:
+    path: ./packages/lucide_icons
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -77,6 +84,22 @@ dev_dependencies:
   riverpod_generator: ^4.0.0+1
   custom_lint:
   riverpod_lint: ^3.1.0
+  flutter_launcher_icons: ^0.14.4
+
+# App launcher icons. Sources live in assets/icon/ and are BUILD-TIME only —
+# deliberately not listed under flutter.assets, so they are not bundled into
+# the app. Regenerate after changing them with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  # Opaque, no alpha channel — required by the App Store.
+  image_path: "assets/icon/ios_icon_1024.png"
+  # Adaptive icon (Android 8+): logo sits inside the 66% safe zone so the
+  # system circle/squircle mask cannot clip it.
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "assets/icon/android_foreground_1024.png"
+  remove_alpha_ios: true
 
 flutter:
   generate: true

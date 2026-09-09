@@ -96,8 +96,40 @@ class AuthLocalDatasource {
     return jsonDecode(json) as Map<String, dynamic>;
   }
 
+  /// Clears application login/session state only.
+  ///
+  /// BMS/device registration state is deliberately preserved, matching the
+  /// native Android app where logout clears no preferences at all. The keys
+  /// left intact — smsKey, bmsAuth, login_url, api_base_url, bms_url,
+  /// bms_version, device_uuid, bms_emp_id and the BMS-supplied
+  /// theme/dashboard/logo config — are what the registration and environment
+  /// lifecycle depend on; wiping them forced a full BMS re-registration on
+  /// every logout.
+  ///
+  /// Secure storage holds only jwt_token and auth_token, both session-scoped,
+  /// so it is still cleared wholesale.
   Future<void> clearAll() async {
     await _secureStorage.deleteAll();
-    await _prefs.clear();
+
+    // Exactly the keys written by saveLoginData().
+    const sessionKeys = <String>[
+      AppConstants.prefKeyDealerId,
+      AppConstants.prefKeyEmployeeId,
+      AppConstants.prefKeyUserType,
+      AppConstants.prefKeyFirstName,
+      AppConstants.prefKeyLastName,
+      AppConstants.prefKeyEmail,
+      AppConstants.prefKeyPhone,
+      AppConstants.prefKeyLcoCode,
+      AppConstants.prefKeyBusinessName,
+      AppConstants.prefKeyParentType,
+      AppConstants.prefKeyParentId,
+      AppConstants.prefKeyEmployeeName,
+      AppConstants.prefKeyIsLoggedIn,
+      AppConstants.prefKeyLoginResponse,
+    ];
+    for (final key in sessionKeys) {
+      await _prefs.remove(key);
+    }
   }
 }

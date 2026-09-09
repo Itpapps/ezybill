@@ -131,6 +131,7 @@ class _AlertChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<AppColors>()!;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // Scale sizes for expanded (tablet) vs compact (phone)
     final iconBoxSize = expanded ? 24.0 : 18.0;
@@ -145,8 +146,25 @@ class _AlertChip extends StatelessWidget {
       child: Container(
         padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
         decoration: BoxDecoration(
-          color: c.card,
-          borderRadius: BorderRadius.circular(8),
+          // Same glass recipe as the Overview legend tiles, so the two rows
+          // read as one system. Paint-only — padding is unchanged.
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              isDark ? Color.lerp(c.card, Colors.white, 0.05)! : c.card,
+              isDark
+                  ? Color.lerp(c.card, Colors.black, 0.10)!
+                  : Color.lerp(c.card, c.ink, 0.03)!,
+            ],
+          ),
+          border: Border.all(
+            color: isDark
+                ? c.ink.withValues(alpha: 0.09)
+                : c.ink10.withValues(alpha: 0.60),
+            width: 1,
+          ),
+          borderRadius: BorderRadius.circular(10),
           boxShadow: AppShadow.card,
         ),
         child: Row(
