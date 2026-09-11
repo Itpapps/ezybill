@@ -293,76 +293,89 @@ class _HeaderBar extends StatelessWidget {
       color: const Color(0xFF1E2537),
       child: Row(
         children: [
-          // Lightning icon + title
+          // Lightning icon + title + LCO badge.
+          //
+          // The title is the ONLY element in this Row allowed to shrink: it is
+          // the sole Flexible inside the Expanded group, so it absorbs the
+          // whole shortfall and ellipsises, while the wallet / TOP UP / close
+          // controls always lay out at their natural size. Previously the
+          // wallet was the only Flexible here and a Spacer competed with it
+          // for the leftover space, so on phone widths the balance was scaled
+          // away to nothing — it only survived on tablets.
           const Icon(LucideIcons.zap, size: 18, color: Color(0xFFF5A623)),
           const SizedBox(width: 6),
-          Text(
-            l.quickAction,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    l.quickAction,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                // LCO badge
+                if (lcoCode.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      lcoCode,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white70,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           const SizedBox(width: 10),
 
-          // LCO badge
-          if (lcoCode.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                lcoCode,
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white70,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-          const Spacer(),
-
           // Wallet balance (tappable → opens ledger)
-          Flexible(
-            child: GestureDetector(
-              onTap: onLedger,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(100),
-                ),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(LucideIcons.wallet,
-                          size: 12, color: Color(0xFF2ECC71)),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$currencySymbol${walletBalance.toStringAsFixed(0)}',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                      ),
-                      if (onLedger != null) ...[
-                        const SizedBox(width: 2),
-                        const Icon(LucideIcons.history,
-                            size: 10, color: Colors.white54),
-                      ],
-                    ],
+          GestureDetector(
+            onTap: onLedger,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.wallet,
+                      size: 12, color: Color(0xFF2ECC71)),
+                  const SizedBox(width: 4),
+                  Text(
+                    '$currencySymbol${walletBalance.toStringAsFixed(0)}',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
+                  if (onLedger != null) ...[
+                    const SizedBox(width: 2),
+                    const Icon(LucideIcons.history,
+                        size: 10, color: Colors.white54),
+                  ],
+                ],
               ),
             ),
           ),

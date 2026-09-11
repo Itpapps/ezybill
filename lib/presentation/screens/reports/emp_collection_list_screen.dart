@@ -9,6 +9,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
 import '../../../data/models/report/emp_collection_summary.dart';
+import '../../common/widgets/app_shell.dart';
 import '../../router/route_names.dart';
 
 /// Employee Collection Summary list.
@@ -213,7 +214,16 @@ class EmpCollectionListScreen extends ConsumerWidget {
 
         // ── Print button ───────────────────────────────────────────────
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          // The shell hosts this route with extendBody:true, so the Column's
+          // last child would otherwise sit behind the nav bar and AI button.
+          // This is not a scroll view, so the reserve also shortens the
+          // ListView above it rather than adding scrollable slack.
+          padding: EdgeInsets.fromLTRB(
+            20,
+            0,
+            20,
+            20 + shellBottomClearance(context),
+          ),
           child: SizedBox(
             width: double.infinity,
             height: 48,

@@ -10,6 +10,43 @@ import '../../../l10n/app_localizations.dart';
 import '../../screens/quick_action/quick_action_sheet.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Shell layout contract
+//
+// The shell Scaffold uses `extendBody: true`, so every screen hosted inside it
+// paints underneath the bottom nav bar and the floating AI button. Screens with
+// scrollable content must reserve that band themselves — see
+// [shellBottomClearance].
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Height of the bottom nav bar's content row, excluding the system gesture
+/// inset the bar adds underneath it.
+const double kShellBottomNavHeight = 56;
+
+/// Vertical space the floating AI button occupies *above* the nav bar: the
+/// 52px button in [_AiFab], its 4px lift, and Flutter's standard FAB margin.
+/// Keep in sync with [_AiFab] if that button is ever resized.
+const double kShellFabClearance = 52 + 4 + kFloatingActionButtonMargin;
+
+/// Bottom padding a shell-hosted screen should append to its scrollable content
+/// so the last item is not left behind the shell's floating chrome.
+///
+/// Everything here is derived from the shell's own layout constants plus the
+/// device-reported system inset — no device-specific heights. Pass
+/// `forFab: false` for content that does not extend under the button's column
+/// (the FAB is bottom-end aligned), e.g. a narrow left-aligned footer.
+///
+/// While the keyboard is open the hosting Scaffold has already lifted its body
+/// clear of the bar, so the clearance tapers off as the keyboard rises.
+double shellBottomClearance(BuildContext context, {bool forFab = true}) {
+  final mq = MediaQuery.of(context);
+  final total =
+      kShellBottomNavHeight +
+      mq.viewPadding.bottom +
+      (forFab ? kShellFabClearance : 0);
+  return (total - mq.viewInsets.bottom).clamp(0.0, total);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Tab definition
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -180,7 +217,7 @@ class _BottomNavBar extends StatelessWidget {
       ),
       padding: EdgeInsets.only(bottom: bottomPadding),
       child: SizedBox(
-        height: 56,
+        height: kShellBottomNavHeight,
         child: Row(
           children: List.generate(visibleTabs.length, (i) {
             final tabIdx = visibleTabs[i];
@@ -286,7 +323,8 @@ class _AiFab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Position above the bottom nav (~70px from bottom of screen).
+      // Lift above the bottom nav. The 52px button below plus this lift plus
+      // Flutter's FAB margin is what [kShellFabClearance] reserves for screens.
       padding: const EdgeInsets.only(bottom: 4),
       child: SizedBox(
         width: 52,

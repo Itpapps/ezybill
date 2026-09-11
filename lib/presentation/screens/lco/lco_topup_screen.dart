@@ -10,6 +10,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/utils/currency_formatter.dart';
+import '../../common/widgets/app_shell.dart';
 import '../../common/widgets/app_toast.dart';
 import '../../router/route_names.dart';
 
@@ -93,7 +94,15 @@ class _LcoTopupScreenState extends ConsumerState<LcoTopupScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        // The shell hosts this route with extendBody:true, so the content
+        // paints under the nav bar and the AI button. Reserve that band or the
+        // Add to Wallet button below is left behind them.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          16 + shellBottomClearance(context),
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [

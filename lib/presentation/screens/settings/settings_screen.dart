@@ -70,20 +70,37 @@ class SettingsScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        authLocal.employeeName,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                      // Centred and kept to one line. Without textAlign a name
+                      // long enough to wrap rendered its lines start-aligned,
+                      // which read as left-aligned against the centred avatar;
+                      // the extra line also pushed this Column past the
+                      // SliverAppBar's 200px expandedHeight.
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          authLocal.employeeName,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        'LCO: ${authLocal.lcoCode}  |  ${authLocal.userType}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.white.withValues(alpha: 0.7),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: Text(
+                          'LCO: ${authLocal.lcoCode}  |  ${authLocal.userType}',
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
                         ),
                       ),
                     ],
