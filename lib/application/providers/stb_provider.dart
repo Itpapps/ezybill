@@ -180,6 +180,7 @@ class StbNotifier extends Notifier<StbState> {
     String? stockId,
     String? deviceId,
     String? backEndSetupId,
+    int? resellerId,
   }) async {
     state = state.copyWith(
         isLoading: true, errorMessage: null, successMessage: null);
@@ -202,6 +203,9 @@ class StbNotifier extends Notifier<StbState> {
         backEndSetupId: backEndSetupId,
         remarks: fullRemarks,
         dealerId: _dealerId,
+        // Server marks resellerId isRequired; Android sends the customer's
+        // reseller id from its box bundle (Box_Operations_Fragment:1021).
+        resellerId: resellerId,
       );
 
       final code = _statusCode(data);

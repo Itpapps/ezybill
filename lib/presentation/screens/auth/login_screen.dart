@@ -11,6 +11,7 @@ import '../../../application/providers/auth_provider.dart';
 import '../../../application/providers/bms_provider.dart';
 import '../../../application/providers/core_providers.dart';
 import '../../../core/constants/api_constants.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
@@ -1112,10 +1113,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
               ),
             ),
 
-            const SizedBox(height: 12),
-
-            // ── API URL indicator ───────────────────────────────────
-            _buildApiUrlIndicator(colors, isDark),
+            // ── API URL indicator (debug/profile builds only) ─────────
+            // Absent from release: end users never set the URL by hand — BMS
+            // registration supplies it programmatically via setBaseUrl().
+            if (kDevToolsEnabled) ...[
+              const SizedBox(height: 12),
+              _buildApiUrlIndicator(colors, isDark),
+            ],
           ],
         ),
       ),

@@ -17,6 +17,20 @@ sealed class ComplaintSubcategory with _$ComplaintSubcategory {
 
 Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
   final r = Map<String, dynamic>.from(json);
+
+  // The server's getComplaintsubCategory_post emits each row as
+  //   {complaint_category_id, complaint_category_name}
+  // — the same keys Android reads in GetSubcategoriesRest. Map them onto the
+  // model's camelCase fields when those are absent, so the generated fromJson
+  // (which only knows subCategoryId / subCategoryName) sees populated values.
+  if (!r.containsKey('subCategoryId') && r.containsKey('complaint_category_id')) {
+    r['subCategoryId'] = r['complaint_category_id'];
+  }
+  if (!r.containsKey('subCategoryName') &&
+      r.containsKey('complaint_category_name')) {
+    r['subCategoryName'] = r['complaint_category_name'];
+  }
+
   const intFields = ['subCategoryId', 'categoryId'];
   for (final key in intFields) {
     final v = r[key];
@@ -26,5 +40,8 @@ Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
       r[key] = null;
     }
   }
+  // The server may emit the name as a number when the row is malformed
+  // (`isset(...) ? ... : 0`); keep the String cast in fromJson safe.
+  if (r['subCategoryName'] is num) r['subCategoryName'] = r['subCategoryName'].toString();
   return r;
 }

@@ -66,7 +66,12 @@ class ComplaintRepositoryImpl implements ComplaintRepository {
   Future<Result<List<ComplaintCategory>>> getComplaintCategories() async {
     try {
       final data = await _remoteDatasource.getComplaintCategories();
-      final list = data['data'] as List? ?? data['categories'] as List? ?? [];
+      // Server key is `complaintCategories` (complaintCategoriesRest_post). The
+      // generic fallbacks are kept for any other tenant shape.
+      final list = data['complaintCategories'] as List? ??
+          data['data'] as List? ??
+          data['categories'] as List? ??
+          [];
       final categories =
           list.cast<Map<String, dynamic>>().map((e) => ComplaintCategory.fromJson(e)).toList();
       return Success(categories);
@@ -85,7 +90,12 @@ class ComplaintRepositoryImpl implements ComplaintRepository {
       final data = await _remoteDatasource.getComplaintSubCategories(
         categoryId: categoryId,
       );
-      final list = data['data'] as List? ?? data['subCategories'] as List? ?? [];
+      // Server key is `complaintSubCategories` (getComplaintsubCategory_post).
+      // Android reads the same key (GetSubcategoriesRest).
+      final list = data['complaintSubCategories'] as List? ??
+          data['data'] as List? ??
+          data['subCategories'] as List? ??
+          [];
       final subcategories =
           list.cast<Map<String, dynamic>>().map((e) => ComplaintSubcategory.fromJson(e)).toList();
       return Success(subcategories);

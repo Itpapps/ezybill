@@ -242,74 +242,79 @@ class SettingsScreen extends ConsumerWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // ── Developer Tools section ─────────────────────────────
-                _SectionHeader(title: l.developerTools, colors: colors),
-                _SettingsCard(
-                  colors: colors,
-                  children: [
-                    _SettingsTile(
-                      colors: colors,
-                      icon: LucideIcons.terminal,
-                      title: l.debugConsole,
-                      subtitle: '${debugLog.entries.length} entries',
-                      onTap: () =>
-                          context.push(RouteNames.debugConsole),
-                    ),
-                    _SettingsTile(
-                      colors: colors,
-                      icon: LucideIcons.server,
-                      title: l.apiBaseUrl,
-                      subtitle: ApiConstants.baseUrl,
-                      onTap: () => _showServerUrlDialog(context, ref, colors),
-                    ),
-                    _SettingsTile(
-                      colors: colors,
-                      icon: LucideIcons.bug,
-                      title: l.enableDebugLogging,
-                      subtitle: ref.watch(debugEnabledProvider) ? l.debugOn : l.debugOff,
-                      trailing: Switch(
-                        value: ref.watch(debugEnabledProvider),
-                        activeThumbColor: colors.green,
-                        inactiveTrackColor: colors.ink10,
-                        onChanged: (value) {
-                          debugLog.enabled = value;
-                          ref.invalidate(debugEnabledProvider);
-                          ref
-                              .read(sharedPreferencesProvider)
-                              .setBool('debug_logging_enabled', value);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Row(
-                                children: [
-                                  Icon(
-                                    value ? LucideIcons.bug : LucideIcons.shieldOff,
-                                    color: Colors.white,
-                                    size: 16,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    value
-                                        ? l.debugEnabled
-                                        : l.debugDisabled,
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                ],
-                              ),
-                              backgroundColor: value ? colors.green : colors.ink60,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
+                // ── Developer Tools section (debug/profile builds only) ──
+                // Absent from release. The Debug Console holds pre-encryption
+                // request bodies (including login credentials) and decrypted
+                // responses (including tokens), so it must not ship.
+                if (kDevToolsEnabled) ...[
+                  _SectionHeader(title: l.developerTools, colors: colors),
+                  _SettingsCard(
+                    colors: colors,
+                    children: [
+                      _SettingsTile(
+                        colors: colors,
+                        icon: LucideIcons.terminal,
+                        title: l.debugConsole,
+                        subtitle: '${debugLog.entries.length} entries',
+                        onTap: () =>
+                            context.push(RouteNames.debugConsole),
                       ),
-                      showDivider: false,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
+                      _SettingsTile(
+                        colors: colors,
+                        icon: LucideIcons.server,
+                        title: l.apiBaseUrl,
+                        subtitle: ApiConstants.baseUrl,
+                        onTap: () => _showServerUrlDialog(context, ref, colors),
+                      ),
+                      _SettingsTile(
+                        colors: colors,
+                        icon: LucideIcons.bug,
+                        title: l.enableDebugLogging,
+                        subtitle: ref.watch(debugEnabledProvider) ? l.debugOn : l.debugOff,
+                        trailing: Switch(
+                          value: ref.watch(debugEnabledProvider),
+                          activeThumbColor: colors.green,
+                          inactiveTrackColor: colors.ink10,
+                          onChanged: (value) {
+                            debugLog.enabled = value;
+                            ref.invalidate(debugEnabledProvider);
+                            ref
+                                .read(sharedPreferencesProvider)
+                                .setBool('debug_logging_enabled', value);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Row(
+                                  children: [
+                                    Icon(
+                                      value ? LucideIcons.bug : LucideIcons.shieldOff,
+                                      color: Colors.white,
+                                      size: 16,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      value
+                                          ? l.debugEnabled
+                                          : l.debugDisabled,
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                backgroundColor: value ? colors.green : colors.ink60,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
+                        ),
+                        showDivider: false,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                ],
 
                 // ── App section ─────────────────────────────────────────
                 _SectionHeader(title: 'App', colors: colors),

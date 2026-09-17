@@ -35,6 +35,10 @@ class ApiConstants {
   //LOCAL
   static const String bmsUrl =
        'http://183.82.159.51:9090/ezybms_m8/app/index.php/validateAuthentication';
+
+  //LOCAL
+  // static const String bmsUrl =
+  //      'http://183.82.159.51:9090/ezybms_m8/app/index.php/validateAuthentication';     
   //LOCAL
   // static const String bmsUrl =
   //     'http://192.168.1.98/ezybms_m8/app/index.php/validateAuthentication';

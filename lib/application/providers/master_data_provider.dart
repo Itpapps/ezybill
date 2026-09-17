@@ -754,7 +754,16 @@ class MasterDataNotifier extends Notifier<MasterDataState> {
     try {
       final data = await _remoteDs.getDynamicFormValidations(
         authtoken: _token(),
-        tableName: 'customer_details',
+        // 'customer' — NOT 'customer_details'. This is the table_name the
+        // native Android app sends (Edit_Customer_Info.java:6191) and, more
+        // importantly, the one the SERVER itself validates against on save
+        // (LcoRestServices.php prepare_customer_post_data →
+        // getCustomerFormValidation('customer', ...)). Asking for any other
+        // name returns no rows, so every server-driven mandatory flag
+        // (baid / LCO Customer ID, last_name, email, id_type, id_number,
+        // gender, mobile_no, mandal_id) silently reads as optional: no red
+        // star, no client-side check, and the server rejects the submit.
+        tableName: 'customer',
         dealerId: _dealerId(),
       );
       final list = _parseList(

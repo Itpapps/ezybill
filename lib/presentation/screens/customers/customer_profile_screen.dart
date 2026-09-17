@@ -808,6 +808,7 @@ class _CustomerProfileScreenState
           extra: {
             'customerId': widget.customerId,
             'customerName': _name,
+            'resellerId': _fm(['reseller_id', 'resellerId']),
           },
         ),
       ));
@@ -826,6 +827,7 @@ class _CustomerProfileScreenState
           extra: {
             'customerId': widget.customerId,
             'customerName': _name,
+            'resellerId': _fm(['reseller_id', 'resellerId']),
           },
         ),
       ));

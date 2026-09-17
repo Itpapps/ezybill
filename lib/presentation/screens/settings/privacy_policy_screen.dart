@@ -7,7 +7,7 @@ class PrivacyPolicyScreen extends StatefulWidget {
   const PrivacyPolicyScreen({super.key});
 
   static const String _privacyPolicyUrl =
-      'https://www.itpworld.com/privacy-policy';
+      'https://www.itpworld.com/news/category/privacy-policy/';
 
   @override
   State<PrivacyPolicyScreen> createState() => _PrivacyPolicyScreenState();

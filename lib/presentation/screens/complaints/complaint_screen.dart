@@ -47,10 +47,17 @@ class ComplaintScreen extends ConsumerStatefulWidget {
   final String? custId;
   final String? custName;
 
+  /// The customer's reseller id. Android carries this in the fragment bundle
+  /// (`reseller_id`) and sends it as `employee_id` on getLcoEmployeeList so the
+  /// server filters the assignable-employee list. Optional: the Home quick
+  /// action opens this screen without a customer.
+  final int? resellerId;
+
   const ComplaintScreen({
     super.key,
     this.custId,
     this.custName,
+    this.resellerId,
   });
 
   @override
@@ -75,10 +82,11 @@ class _ComplaintScreenState extends ConsumerState<ComplaintScreen>
       );
       notifier.loadCategories();
 
-      // Employee list: only load when patch_information gate allows it
-      if (isPatchGated(session.patchInformation)) {
-        notifier.loadEmployees(session.dealerId);
-      }
+      // Employee list: Android loads this unconditionally on screen open
+      // (Complaint_NewComplint_Fragment.onCreateView → Getemployeelistrest;
+      // the patch_information check around it is commented out) and passes
+      // the customer's reseller id so the server filters the list.
+      notifier.loadEmployees(session.dealerId, resellerId: widget.resellerId);
     });
   }
 
@@ -642,7 +650,9 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
               customerId: customerId,
               complaint: description,
               category: category,
-              assignedTo: _selectedEmployeeId,
+              // Android always sends assignedTo — 0 when "select" is chosen.
+              // Omitting it makes the server assign the creator (see datasource).
+              assignedTo: _selectedEmployeeId ?? 0,
               error: '0',
             );
 
@@ -752,14 +762,8 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
     final cState = ref.watch(complaintProvider);
-    final session = ref.watch(appSessionProvider);
     final c = widget.colors;
     final isPreFilled = widget.custId != null && widget.custId!.isNotEmpty;
-
-    // patch_information gating for subcategory and employee fields
-    final patchInfo = session?.patchInformation ?? '';
-    final showSubcategory = isPatchGated(patchInfo);
-    final showEmployeeField = isEmployeePatchGated(patchInfo);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -844,20 +848,28 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
                 _selectedCategoryId = val;
                 _selectedSubcategoryId = null;
               });
-              // On category select, load subcategories (only if patch gated)
-              if (val != null && showSubcategory) {
-                ref
-                    .read(complaintProvider.notifier)
-                    .loadSubcategories(val.toString());
-              }
+              if (val == null) return;
+              // Android category listener (Complaint_NewComplint_Fragment
+              // GetComplaintsCategoriesRest → onItemSelected):
+              //   1. et_entercomplint.setText(CategoriesName)
+              //   2. selstateid = 0            (done in setState above)
+              //   3. GetSubcategoriesRest()    (no patch_information gate —
+              //      that check is commented out in the source)
+              final cat = cState.categories
+                  .where((c) => c.categoryId == val)
+                  .firstOrNull;
+              if (cat != null) _descriptionController.text = cat.categoryName;
+              ref
+                  .read(complaintProvider.notifier)
+                  .loadSubcategories(val.toString());
             },
           ),
           const SizedBox(height: 16),
 
-          // Subcategory dropdown — only visible when patch_information
-          // matches "1.4.13.2", "1.4.13.3", or "1.4.13.4"
-          if (showSubcategory &&
-              _selectedCategoryId != null &&
+          // Subcategory dropdown. Android shows this whenever the API returns
+          // rows and hides it on status_code 1 — its patch_information gate is
+          // commented out, so there is no tenant condition here either.
+          if (_selectedCategoryId != null &&
               cState.subcategories.isNotEmpty) ...[
             DropdownButtonFormField<int>(
               value: _selectedSubcategoryId,
@@ -888,6 +900,16 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
               }).toList(),
               onChanged: (val) {
                 setState(() => _selectedSubcategoryId = val);
+                // Android: selecting a sub-category with id > 0 overwrites
+                // the complaint text with the sub-category name
+                // (Complaint_NewComplint_Fragment sub-category listener:
+                // `if (selstateid > 0) et_entercomplint.setText(selestate)`).
+                if (val != null && val > 0) {
+                  final sub = cState.subcategories
+                      .where((s) => s.subCategoryId == val)
+                      .firstOrNull;
+                  if (sub != null) _descriptionController.text = sub.subCategoryName;
+                }
               },
             ),
             const SizedBox(height: 16),
@@ -917,11 +939,12 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
           ),
           const SizedBox(height: 16),
 
-          // Employee assignment dropdown — patch_information "1.4.13.3"
-          // gates visibility of employee field.
-          if (showEmployeeField && cState.employees.isNotEmpty) ...[
+          // Employee assignment dropdown. Android shows this whenever the
+          // list loads (its patch_information gate is commented out) and
+          // prepends a literal "select" item that maps to assignedTo = 0.
+          if (cState.employees.isNotEmpty) ...[
             DropdownButtonFormField<int>(
-              value: _selectedEmployeeId,
+              value: _selectedEmployeeId ?? 0,
               isExpanded: true,
               decoration: InputDecoration(
                 labelText: 'Assign to Employee',
@@ -937,24 +960,34 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
               ),
               style: TextStyle(
                   fontFamily: 'DM Sans', fontSize: 14, color: c.ink),
-              items: cState.employees.map((emp) {
-                final id = int.tryParse(
-                        emp['employeeId']?.toString() ??
-                        emp['lco_employee_id']?.toString() ?? '') ??
-                    0;
-                final name = emp['employeeName']?.toString() ??
-                    emp['lco_employee_name']?.toString() ??
-                    emp['firstName']?.toString() ??
-                    'Employee $id';
-                return DropdownMenuItem<int>(
-                  value: id,
-                  child: Text(name,
+              items: [
+                DropdownMenuItem<int>(
+                  value: 0,
+                  child: Text('select',
                       style: TextStyle(
                           fontFamily: 'DM Sans',
                           fontSize: 14,
-                          color: c.ink)),
-                );
-              }).toList(),
+                          color: c.ink40)),
+                ),
+                ...cState.employees.map((emp) {
+                  final id = int.tryParse(
+                          emp['employeeId']?.toString() ??
+                          emp['lco_employee_id']?.toString() ?? '') ??
+                      0;
+                  final name = emp['employeeName']?.toString() ??
+                      emp['lco_employee_name']?.toString() ??
+                      emp['firstName']?.toString() ??
+                      'Employee $id';
+                  return DropdownMenuItem<int>(
+                    value: id,
+                    child: Text(name,
+                        style: TextStyle(
+                            fontFamily: 'DM Sans',
+                            fontSize: 14,
+                            color: c.ink)),
+                  );
+                }),
+              ],
               onChanged: (val) {
                 setState(() => _selectedEmployeeId = val);
               },

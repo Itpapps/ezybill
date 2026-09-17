@@ -71,6 +71,7 @@ class _CustomerSearchScreenState extends ConsumerState<CustomerSearchScreen> {
     final extra = {
       'customerId': customer.customerId,
       'customerName': customer.customerName,
+      'resellerId': customer.resellerId ?? '',
       'mobileNumber': customer.mobileNumber ?? '',
       'address': customer.billingAddress ?? customer.installationAddress ?? '',
       'accountNumber': customer.accountNumber ?? '',

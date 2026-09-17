@@ -180,10 +180,15 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
 
   // ── Load employees ───────────────────────────────────────────────────────
 
-  Future<void> loadEmployees(int dealerId) async {
+  Future<void> loadEmployees(int dealerId, {int? resellerId}) async {
     try {
       final ds = ref.read(complaintRemoteDatasourceProvider);
-      final data = await ds.getLcoEmployeeList(dealerId: dealerId);
+      // Android passes the customer's reseller id as `employee_id` and the
+      // server filters the list on it; pass it through when the caller has it.
+      final data = await ds.getLcoEmployeeList(
+        dealerId: dealerId,
+        employeeId: resellerId,
+      );
       final list =
           (data['data'] as List?)?.cast<Map<String, dynamic>>() ??
           (data['lcoEmployeelist'] as List?)?.cast<Map<String, dynamic>>() ??

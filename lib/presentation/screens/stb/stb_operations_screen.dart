@@ -15,10 +15,17 @@ class StbOperationsScreen extends ConsumerStatefulWidget {
   final String? customerId;
   final String? customerName;
 
+  /// The customer's reseller id. Android carries it in the box bundle
+  /// (`resellerid`) and sends it as `resellerId` on deactivateBoxRest, where
+  /// the server marks it isRequired. Optional: the search entry point may
+  /// not have it, in which case the request goes out without it as before.
+  final int? resellerId;
+
   const StbOperationsScreen({
     super.key,
     this.customerId,
     this.customerName,
+    this.resellerId,
   });
 
   @override
@@ -528,6 +535,7 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
                             stockId: box.stockId,
                             deviceId: box.deviceId,
                             backEndSetupId: box.backendSetupId,
+                            resellerId: widget.resellerId,
                           );
                     },
               style: ElevatedButton.styleFrom(

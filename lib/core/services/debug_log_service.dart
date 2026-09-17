@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../constants/app_constants.dart';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DebugLogEntry
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,7 +97,17 @@ class DebugLogService extends ChangeNotifier {
   static const int _maxEntries = 100;
 
   final List<DebugLogEntry> _entries = [];
-  bool enabled = false;
+  bool _enabled = false;
+
+  /// Whether requests and responses are being captured.
+  ///
+  /// Can never be switched on in a release build: the setter drops `true`
+  /// there. This matters because main.dart restores the flag from
+  /// SharedPreferences at startup — without this guard, a tester who enabled
+  /// logging on a debug install would have capture silently re-armed after
+  /// upgrading to release, with no UI left to turn it off.
+  bool get enabled => _enabled;
+  set enabled(bool value) => _enabled = value && kDevToolsEnabled;
 
   List<DebugLogEntry> get entries => List.unmodifiable(_entries);
 

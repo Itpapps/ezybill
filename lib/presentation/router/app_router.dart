@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../application/providers/auth_provider.dart';
 import '../../application/providers/bms_provider.dart';
 import '../../application/providers/core_providers.dart';
+import '../../core/constants/app_constants.dart';
 import '../common/widgets/app_shell.dart';
 import '../screens/auth/login_screen.dart';
 import '../screens/auth/registration_screen.dart';
@@ -74,7 +75,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: RouteNames.home,
-    debugLogDiagnostics: true,
+    // Route logging to the system console — debug/profile only, so release
+    // builds do not write every navigation (with params) to logcat.
+    debugLogDiagnostics: kDevToolsEnabled,
 
     // ── Auth redirect ──────────────────────────────────────────────────────
     redirect: (context, state) {
@@ -232,9 +235,17 @@ final routerProvider = Provider<GoRouter>((ref) {
                     name: RouteNames.complaintsName,
                     builder: (context, state) {
                       final extra = state.extra as Map<String, dynamic>?;
+                      // Callers (customer profile, customer search) send
+                      // `customerId` / `customerName` / `resellerId`; the
+                      // short `custId` / `custName` forms are accepted too.
+                      final resellerRaw =
+                          extra?['resellerId'] ?? extra?['reseller_id'];
                       return ComplaintScreen(
-                        custId: extra?['custId']?.toString(),
-                        custName: extra?['custName']?.toString(),
+                        custId: (extra?['custId'] ?? extra?['customerId'])
+                            ?.toString(),
+                        custName: (extra?['custName'] ?? extra?['customerName'])
+                            ?.toString(),
+                        resellerId: int.tryParse(resellerRaw?.toString() ?? ''),
                       );
                     },
                   ),
@@ -267,6 +278,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                       return StbOperationsScreen(
                         customerId: extra?['customerId']?.toString(),
                         customerName: extra?['customerName']?.toString(),
+                        // Customer's reseller id — required by deactivateBoxRest.
+                        resellerId: int.tryParse(
+                          extra?['resellerId']?.toString() ?? '',
+                        ),
                       );
                     },
                   ),
@@ -493,12 +508,16 @@ final routerProvider = Provider<GoRouter>((ref) {
                     builder: (context, state) =>
                         const PrivacyPolicyScreen(),
                   ),
-                  GoRoute(
-                    path: 'debug-console',
-                    name: RouteNames.debugConsoleName,
-                    builder: (context, state) =>
-                        const DebugConsoleScreen(),
-                  ),
+                  // Debug/profile builds only. Gating the ROUTE (not just the
+                  // Settings tile) means the console cannot be reached by deep
+                  // link in release either — the screen is tree-shaken out.
+                  if (kDevToolsEnabled)
+                    GoRoute(
+                      path: 'debug-console',
+                      name: RouteNames.debugConsoleName,
+                      builder: (context, state) =>
+                          const DebugConsoleScreen(),
+                    ),
                 ],
               ),
             ],

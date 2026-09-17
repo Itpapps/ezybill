@@ -39,7 +39,16 @@ class StbRemoteDatasource {
   }
 
   /// Deactivate a box/STB
-  /// Requires from_mobileapp: '1' per spec
+  /// Server: deactivateBoxRest_post (LcoRestServices.php)
+  ///
+  /// Key names are the server's, verified against its validator:
+  /// `customerId`, `reasonId` and `resellerId` are all `isRequired` and are
+  /// read in that exact camelCase form. They used to go out as `customer_id`,
+  /// `reason_id` and `reseller_id`, which the server ignores — every deactivate
+  /// was rejected with status_code 1 before it reached the model. Android
+  /// (Box_Operations_Fragment.DeactiveBoxRest) sends the same camelCase keys.
+  /// `dealer_id` is not read by the server (dealer comes from the token) but
+  /// Android sends it, so it is kept.
   Future<Map<String, dynamic>> deactivateBox({
     required String authtoken,
     required String customerId,
@@ -59,8 +68,8 @@ class StbRemoteDatasource {
       ApiConstants.deactivateBox,
       data: {
         'authtoken': authtoken,
-        'customer_id': customerId,
-        'reason_id': reasonId,
+        'customerId': customerId,
+        'reasonId': reasonId,
         'from_mobileapp': '1',
         if (serialNumber != null) 'serialNumber': serialNumber,
         if (vcNumber != null) 'vcNumber': vcNumber,
@@ -71,7 +80,7 @@ class StbRemoteDatasource {
         if (backEndSetupId != null) 'backEndSetupId': backEndSetupId,
         if (remarks != null) 'remarks': remarks,
         if (dealerId != null) 'dealer_id': dealerId,
-        if (resellerId != null) 'reseller_id': resellerId,
+        if (resellerId != null) 'resellerId': resellerId,
       },
     );
     return response.data as Map<String, dynamic>;
@@ -154,6 +163,18 @@ class StbRemoteDatasource {
   }
 
   /// STB Pair
+  /// Server: stbPairRest_post (LcoRestServices.php)
+  ///
+  /// The server reads exactly two keys — `serialNumber` and `vcNumber` — and
+  /// derives stock_id / backend_setup_id from the serial; everything else
+  /// comes from the token. Android (StbPairUnpair.GetStbPairRest, and the V1
+  /// SOAP StbPairInfo) sends the same two keys. These used to go out as
+  /// `stb_no` / `vc_no`, which the server never reads: because it only
+  /// validates keys that are present, the request passed validation with an
+  /// empty serial and then failed inside the pair library.
+  ///
+  /// [customerId] is kept on the signature so the provider is untouched, but
+  /// it is not sent — the server does not read it and Android never sends it.
   Future<Map<String, dynamic>> stbPair({
     required String authtoken,
     required String customerId,
@@ -164,15 +185,17 @@ class StbRemoteDatasource {
       ApiConstants.stbPair,
       data: {
         'authtoken': authtoken,
-        'customer_id': customerId,
-        'stb_no': stbNo,
-        'vc_no': vcNo,
+        'serialNumber': stbNo,
+        'vcNumber': vcNo,
       },
     );
     return response.data as Map<String, dynamic>;
   }
 
   /// STB Unpair
+  /// Server: stbUnpairRest_post (LcoRestServices.php)
+  ///
+  /// Reads only `serialNumber`. Same history as [stbPair]: was `stb_no`.
   Future<Map<String, dynamic>> stbUnpair({
     required String authtoken,
     required String customerId,
@@ -182,8 +205,7 @@ class StbRemoteDatasource {
       ApiConstants.stbUnpair,
       data: {
         'authtoken': authtoken,
-        'customer_id': customerId,
-        'stb_no': stbNo,
+        'serialNumber': stbNo,
       },
     );
     return response.data as Map<String, dynamic>;

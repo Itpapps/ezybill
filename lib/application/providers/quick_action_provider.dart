@@ -37,6 +37,11 @@ class QuickActionState {
   // Customer info
   final String? customerId;
   final String? customerName;
+
+  /// The customer's reseller id, read from the same getCustomerDetailsRest
+  /// row as [customerId]. Required by deactivateBoxRest (`resellerId`);
+  /// Android sends it from its box bundle.
+  final String? resellerId;
   final String? mobileNumber;
   final String? accountNumber;
 
@@ -78,6 +83,7 @@ class QuickActionState {
     this.searchField = QuickSearchField.stbNo,
     this.customerId,
     this.customerName,
+    this.resellerId,
     this.mobileNumber,
     this.accountNumber,
     this.serialNumber,
@@ -109,6 +115,7 @@ class QuickActionState {
     QuickSearchField? searchField,
     String? customerId,
     String? customerName,
+    String? resellerId,
     String? mobileNumber,
     String? accountNumber,
     String? serialNumber,
@@ -138,6 +145,7 @@ class QuickActionState {
       searchField: searchField ?? this.searchField,
       customerId: customerId ?? this.customerId,
       customerName: customerName ?? this.customerName,
+      resellerId: resellerId ?? this.resellerId,
       mobileNumber: mobileNumber ?? this.mobileNumber,
       accountNumber: accountNumber ?? this.accountNumber,
       serialNumber: serialNumber ?? this.serialNumber,
@@ -289,6 +297,7 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
       final customer = customerList.first as Map<String, dynamic>;
       final custId = _str(customer['customer_id']);
       final custName = _str(customer['customer_name'] ?? customer['customerName']);
+      final custResellerId = _str(customer['reseller_id'] ?? customer['resellerId']);
       final mobile = _str(customer['mobile_number'] ?? customer['mobileNumber']);
       final accNo = _str(customer['customer_number'] ?? customer['customerNumber']);
       final custDueDate = _str(customer['due_date'] ?? customer['dueDate']);
@@ -316,6 +325,7 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
           searchField: state.searchField,
           customerId: custId,
           customerName: custName,
+          resellerId: custResellerId,
           mobileNumber: mobile,
           accountNumber: accNo,
           dueDate: custDueDate,
@@ -405,6 +415,7 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
         searchField: state.searchField,
         customerId: custId,
         customerName: custName,
+        resellerId: custResellerId,
         mobileNumber: mobile,
         accountNumber: accNo,
         serialNumber: serial,
@@ -460,6 +471,7 @@ class QuickActionNotifier extends Notifier<QuickActionState> {
         backEndSetupId: state.backendSetupId,
         remarks: fullRemarks,
         dealerId: session.dealerId,
+        resellerId: int.tryParse(state.resellerId ?? ''),
       );
 
       final code = (data['status_code'] ?? data['statusCode'])?.toString();

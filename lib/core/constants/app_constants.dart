@@ -1,3 +1,14 @@
+import 'package:flutter/foundation.dart' show kReleaseMode;
+
+/// Developer surfaces — the Debug Console, the API/BMS URL editors, request
+/// capture and router diagnostics — are compiled in for DEBUG and PROFILE
+/// builds only.
+///
+/// `kReleaseMode` is a compile-time constant, so in a release build every
+/// `if (kDevToolsEnabled)` block is tree-shaken out of the binary entirely;
+/// the gated widgets and screens do not merely hide, they are absent.
+const bool kDevToolsEnabled = !kReleaseMode;
+
 class AppConstants {
   AppConstants._();
 

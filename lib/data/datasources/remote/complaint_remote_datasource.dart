@@ -74,6 +74,12 @@ class ComplaintRemoteDatasource {
 
   /// Get complaint sub-categories
   /// Server: getComplaintsubCategory_post
+  ///
+  /// The server reads `$this->payload->complaintcategory` (LcoRestServices.php
+  /// getComplaintsubCategory_post); anything else is ignored and it answers
+  /// status_code 1 "Please Enter Category". Android sends exactly this key on
+  /// both its REST and V1 paths (Complaint_NewComplint_Fragment
+  /// GetSubcategoriesRest / complaintsubcategory).
   Future<Map<String, dynamic>> getComplaintSubCategories({
     required String categoryId,
   }) async {
@@ -81,7 +87,7 @@ class ComplaintRemoteDatasource {
       ApiConstants.complaintSubCategories,
       data: {
         'authtoken': _authtoken,
-        'categoryId': categoryId,
+        'complaintcategory': categoryId,
       },
     );
     return response.data as Map<String, dynamic>;
@@ -101,6 +107,12 @@ class ComplaintRemoteDatasource {
 
   /// Create a new complaint
   /// Server: createComplaintRest_post
+  ///
+  /// `assignedTo` is ALWAYS sent, as `0` when no employee was chosen. Android
+  /// does the same (CreateComplaintRest: `payload.put("assignedTo",
+  /// String.valueOf(selempid))`, selempid = 0 for "select"). Omitting it is
+  /// not neutral: createComplaintRest_post falls back to the LOGGED-IN
+  /// employee, so the complaint would be silently assigned to its creator.
   Future<Map<String, dynamic>> createComplaint({
     required String customerId,
     required String complaint,
@@ -116,7 +128,7 @@ class ComplaintRemoteDatasource {
         'complaint': complaint,
         'category': category,
         if (error != null) 'error': error,
-        if (assignedTo != null) 'assignedTo': assignedTo,
+        'assignedTo': assignedTo ?? 0,
       },
     );
 
@@ -171,14 +183,22 @@ class ComplaintRemoteDatasource {
 
   /// Get LCO employee list (used for assignment dropdowns)
   /// Server: getLcoEmployeeList_post
+  ///
+  /// [employeeId] is the customer's reseller id. Android always sends it
+  /// (Complaint_NewComplint_Fragment.Getemployeelistrest:
+  /// `payload.put("employee_id", reseller_id)`), and the server passes it to
+  /// getLcoEmployeeList($dealer_id, $lco_employee_id) to FILTER the list.
+  /// Optional so existing callers that only know the dealer keep working.
   Future<Map<String, dynamic>> getLcoEmployeeList({
     required int dealerId,
+    int? employeeId,
   }) async {
     final response = await _dio.post(
       ApiConstants.lcoEmployeeList,
       data: {
         'authtoken': _authtoken,
         'dealer_id': dealerId,
+        'employee_id': ?employeeId,
       },
     );
     return response.data as Map<String, dynamic>;

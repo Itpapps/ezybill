@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../../../application/providers/bms_provider.dart';
 import '../../../application/providers/core_providers.dart';
 import '../../../application/providers/locale_provider.dart';
+import '../../../core/constants/app_constants.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/datasources/remote/bms_remote_datasource.dart';
@@ -681,36 +682,39 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
                         overflow: TextOverflow.ellipsis,
                       ),
 
-                      const SizedBox(height: 8),
-
-                      // ── BMS URL indicator ──────────────────────────────
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              bmsUrl,
-                              style: TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 9,
+                      // ── BMS URL indicator (debug/profile builds only) ──
+                      // Absent from release: the BMS endpoint is a build
+                      // constant end users must not be able to redirect.
+                      if (kDevToolsEnabled) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                bmsUrl,
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 9,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: _showBmsUrlDialog,
+                              child: Icon(
+                                LucideIcons.pencil,
+                                size: 12,
                                 color: Colors.white.withValues(alpha: 0.4),
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: _showBmsUrlDialog,
-                            child: Icon(
-                              LucideIcons.pencil,
-                              size: 12,
-                              color: Colors.white.withValues(alpha: 0.4),
-                            ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
 
                       const SizedBox(height: 12),
 
