@@ -1,0 +1,61 @@
+# Flutter's Podfile template (flutter_tools/templates/cocoapods/Podfile-ios)
+# with two deliberate changes, both for Xcode 27 / Xcode Cloud, whose minimum
+# deployment target is iOS 15.0:
+#
+#   1. `platform :ios, '15.0'` is declared (the template ships it commented
+#      out). Without it CocoaPods uses each pod's own minimum, and Xcode 27
+#      rejects google_maps_flutter_ios (14.0), the Flutter pod (13.0) and the
+#      *_privacy resource bundles (9.0).
+#   2. post_install pins IPHONEOS_DEPLOYMENT_TARGET = 15.0 on every pod
+#      target, resource bundles included. flutter_additional_ios_build_settings
+#      only makes pods BELOW 13 inherit Runner's value (podhelper.rb:49), so
+#      13.0 and 14.0 would otherwise survive.
+#
+# Must match IPHONEOS_DEPLOYMENT_TARGET in Runner.xcodeproj (15.0).
+platform :ios, '15.0'
+
+# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    # Pin AFTER Flutter's settings so nothing below 15.0 survives — including
+    # the *_privacy resource-bundle targets, which are in pods_project.targets.
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+    end
+  end
+end
