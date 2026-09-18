@@ -30,7 +30,13 @@
     <application
         android:label="ezybill"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
+        <!-- usesCleartextTraffic: the payment gateway page is served over plain
+             http (the API base itself is http). Android 9+ blocks cleartext in
+             the system WebView by default (net::ERR_CLEARTEXT_NOT_PERMITTED);
+             dio's own HttpClient is not subject to that policy, which is why
+             only the WebView failed. Matches the native app's manifest. -->
         <activity
             android:name=".MainActivity"
             android:exported="true"

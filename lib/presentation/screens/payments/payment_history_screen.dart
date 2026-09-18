@@ -39,21 +39,28 @@ class _PaymentHistoryState {
       );
 }
 
-class _PaymentHistoryNotifier extends ChangeNotifier {
-  _PaymentHistoryState _state = const _PaymentHistoryState();
-  _PaymentHistoryState get state => _state;
-
-  final Ref _ref;
+/// Riverpod Notifier, mirroring invoice_history_screen.dart.
+///
+/// This used to be a ChangeNotifier handed out through a plain `Provider`.
+/// `ref.watch` on a plain Provider subscribes to the provider's VALUE — the
+/// notifier object, which never changes — not to `notifyListeners()`. So the
+/// screen never rebuilt when the request completed: it rendered the initial
+/// empty state, the data arrived silently, and the list only appeared once
+/// something else (a tab switch) happened to rebuild the widget. With a
+/// Notifier, `ref.watch` returns the STATE and every `state = …` rebuilds.
+class _PaymentHistoryNotifier extends Notifier<_PaymentHistoryState> {
   final String customerId;
 
-  _PaymentHistoryNotifier(this._ref, this.customerId);
+  _PaymentHistoryNotifier(this.customerId);
+
+  @override
+  _PaymentHistoryState build() => const _PaymentHistoryState();
 
   Future<void> load({String? fromDate, String? toDate}) async {
-    _state = _state.copyWith(isLoading: true, error: null);
-    notifyListeners();
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final session = _ref.read(appSessionProvider);
-      final ds = _ref.read(paymentRemoteDatasourceProvider);
+      final session = ref.read(appSessionProvider);
+      final ds = ref.read(paymentRemoteDatasourceProvider);
       final data = await ds.getPaymentHistory(
         authtoken: session?.token ?? '',
         customerId: customerId,
@@ -65,25 +72,19 @@ class _PaymentHistoryNotifier extends ChangeNotifier {
         data['payment_details'],
         PaymentHistoryItem.fromJson,
       );
-      _state = _state.copyWith(isLoading: false, items: list);
-      notifyListeners();
+      state = state.copyWith(isLoading: false, items: list);
     } catch (e) {
-      _state = _state.copyWith(
+      state = state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('ApiException: ', ''),
       );
-      notifyListeners();
     }
   }
 }
 
-final _paymentHistoryProvider =
-    Provider.autoDispose.family<_PaymentHistoryNotifier, String>(
-  (ref, customerId) {
-    final notifier = _PaymentHistoryNotifier(ref, customerId);
-    ref.onDispose(notifier.dispose);
-    return notifier;
-  },
+final _paymentHistoryProvider = NotifierProvider.autoDispose
+    .family<_PaymentHistoryNotifier, _PaymentHistoryState, String>(
+  _PaymentHistoryNotifier.new,
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -107,7 +108,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(_paymentHistoryProvider(widget.customerId)).load();
+      ref.read(_paymentHistoryProvider(widget.customerId).notifier).load();
     });
   }
 
@@ -115,8 +116,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<AppColors>()!;
     final tt = Theme.of(context).textTheme;
-    final historyNotifier = ref.watch(_paymentHistoryProvider(widget.customerId));
-    final historyState = historyNotifier.state;
+    final historyState = ref.watch(_paymentHistoryProvider(widget.customerId));
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -142,7 +142,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
       return _ErrorView(
         message: historyState.error!,
         onRetry: () => ref
-            .read(_paymentHistoryProvider(widget.customerId))
+            .read(_paymentHistoryProvider(widget.customerId).notifier)
             .load(),
         colors: c,
         textTheme: tt,
@@ -168,7 +168,7 @@ class _PaymentHistoryScreenState extends ConsumerState<PaymentHistoryScreen> {
         Expanded(
           child: RefreshIndicator(
             onRefresh: () => ref
-                .read(_paymentHistoryProvider(widget.customerId))
+                .read(_paymentHistoryProvider(widget.customerId).notifier)
                 .load(),
             child: ListView.separated(
               padding: const EdgeInsets.all(16),

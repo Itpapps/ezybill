@@ -702,31 +702,44 @@ class _CustomerProfileScreenState
   }
 
   List<Widget> _buildGridRows(List<_GridCell> cells, AppColors c) {
-    final rows = <Widget>[];
+    // Table, not IntrinsicHeight + stretched Row. RenderTable measures each
+    // row from the cells' REAL layout, and lays cells out with a tight width
+    // only — so a cell is not a relayout boundary. When a GoogleFonts variant
+    // finishes loading after the first frame (jetBrainsMono w700 is first
+    // used on this screen), the text relayout reaches the Table and row
+    // heights are recomputed. With IntrinsicHeight the row height was an
+    // estimate taken in the fallback font; the stretched cells (tight width
+    // AND height) were relayout boundaries, so the estimate was never
+    // refreshed and the re-wrapped address overflowed the stale height.
+    //
+    // Row decoration paints the card colour across the full row, and
+    // TableBorder draws the same 1px ink05 hairlines the old divider
+    // Containers did — same look, no forced cell height.
+    final rows = <TableRow>[];
     for (int i = 0; i < cells.length; i += 2) {
       final left = cells[i];
       final right = (i + 1 < cells.length) ? cells[i + 1] : null;
       rows.add(
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(child: _buildGridCell(left, c)),
-              Container(width: 1, color: c.ink05),
-              Expanded(
-                child: right != null
-                    ? _buildGridCell(right, c)
-                    : Container(color: c.card),
-              ),
-            ],
-          ),
+        TableRow(
+          decoration: BoxDecoration(color: c.card),
+          children: [
+            _buildGridCell(left, c),
+            right != null ? _buildGridCell(right, c) : const SizedBox.shrink(),
+          ],
         ),
       );
-      if (i + 2 < cells.length) {
-        rows.add(Container(height: 1, color: c.ink05));
-      }
     }
-    return rows;
+    return [
+      Table(
+        columnWidths: const {0: FlexColumnWidth(), 1: FlexColumnWidth()},
+        defaultVerticalAlignment: TableCellVerticalAlignment.top,
+        border: TableBorder(
+          horizontalInside: BorderSide(color: c.ink05, width: 1),
+          verticalInside: BorderSide(color: c.ink05, width: 1),
+        ),
+        children: rows,
+      ),
+    ];
   }
 
   Widget _buildGridCell(_GridCell cell, AppColors c) {

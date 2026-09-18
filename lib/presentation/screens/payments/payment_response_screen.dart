@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -8,6 +10,7 @@ import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
+import '../../../core/utils/parse_utils.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider
@@ -56,21 +59,28 @@ class _PaymentResponseState {
       );
 }
 
-class _PaymentResponseNotifier extends ChangeNotifier {
-  _PaymentResponseState _state = const _PaymentResponseState();
-  _PaymentResponseState get state => _state;
-
-  final Ref _ref;
+/// Riverpod Notifier, mirroring payment_history_screen.dart.
+///
+/// This used to be a ChangeNotifier handed out through a plain `Provider`.
+/// `ref.watch` on a plain Provider subscribes to the provider's VALUE — the
+/// notifier object, which never changes — not to `notifyListeners()`. The
+/// screen therefore never repainted when the transaction lookup completed:
+/// the first frame's card (isSuccess == null → "Payment Failed") stayed on
+/// screen regardless of what the server returned. With a Notifier,
+/// `ref.watch` returns the STATE and every `state = …` rebuilds.
+class _PaymentResponseNotifier extends Notifier<_PaymentResponseState> {
   final String customerId;
 
-  _PaymentResponseNotifier(this._ref, this.customerId);
+  _PaymentResponseNotifier(this.customerId);
+
+  @override
+  _PaymentResponseState build() => const _PaymentResponseState();
 
   Future<void> load() async {
-    _state = _state.copyWith(isLoading: true, error: null);
-    notifyListeners();
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final session = _ref.read(appSessionProvider);
-      final ds = _ref.read(paymentRemoteDatasourceProvider);
+      final session = ref.read(appSessionProvider);
+      final ds = ref.read(paymentRemoteDatasourceProvider);
       final data = await ds.getCustomerTransactionResponse(
         authtoken: session?.token ?? '',
         employeeId: session?.employeeId.toString() ?? '',
@@ -78,37 +88,64 @@ class _PaymentResponseNotifier extends ChangeNotifier {
         customerId: customerId,
       );
 
-      final statusCode = data['status_code'];
-      final isOk = statusCode == 0 || statusCode == '0';
+      // Parsed the way Android's PaymentResponseActivity does (REST path,
+      // :137-186). Top-level status_code only says whether a transaction
+      // RECORD exists: 0 = found, 1 = "No details Found". Whether the payment
+      // succeeded is decided solely by response_details.status, which the
+      // gateway sets to one of three success strings.
+      final statusCode = data['status_code']?.toString();
+      final details = _detailsOf(data['response_details']);
 
-      _state = _state.copyWith(
+      if (statusCode != '0' || details == null) {
+        // Android: dialog "No  Details Found" titled status_msg.
+        state = state.copyWith(
+          isLoading: false,
+          error: data['status_msg']?.toString() ?? 'No details found',
+        );
+        return;
+      }
+
+      final status = details['status']?.toString() ?? '';
+      const successStatuses = {'TXN_SUCCESS', 'success', 'Txn Success'};
+      final firstName = details['first_name']?.toString() ?? '';
+      final lastName = details['last_name']?.toString() ?? '';
+      // Empty → null so the card's existing fallback chain still applies.
+      final fullName = '$firstName $lastName'.trim();
+
+      state = state.copyWith(
         isLoading: false,
-        isSuccess: isOk,
-        transactionId: data['transactionId']?.toString() ?? '--',
-        amount: data['amount']?.toString() ?? '0',
-        customerName: data['customerName']?.toString() ?? '--',
-        date: data['transactionDate']?.toString(),
-        statusMessage: data['status_msg']?.toString() ??
-            (isOk ? 'Payment Successful' : 'Payment Failed'),
+        isSuccess: successStatuses.contains(status),
+        transactionId: details['transactionno']?.toString() ?? '--',
+        amount: details['amount']?.toString() ?? '0',
+        customerName: fullName.isEmpty ? null : fullName,
+        statusMessage: details['responsemsg']?.toString(),
       );
-      notifyListeners();
     } catch (e) {
-      _state = _state.copyWith(
+      state = state.copyWith(
         isLoading: false,
         error: e.toString().replaceAll('ApiException: ', ''),
       );
-      notifyListeners();
     }
+  }
+
+  /// response_details is a JSON object; Android parses it with
+  /// `new JSONObject(getString("response_details"))`, which also accepts the
+  /// double-encoded (string) form. Handle both, mirroring that tolerance.
+  Map<String, dynamic>? _detailsOf(dynamic raw) {
+    if (raw is String) {
+      try {
+        return parseMap(jsonDecode(raw));
+      } catch (_) {
+        return null;
+      }
+    }
+    return parseMap(raw);
   }
 }
 
-final _paymentResponseProvider =
-    Provider.autoDispose.family<_PaymentResponseNotifier, String>(
-  (ref, customerId) {
-    final notifier = _PaymentResponseNotifier(ref, customerId);
-    ref.onDispose(notifier.dispose);
-    return notifier;
-  },
+final _paymentResponseProvider = NotifierProvider.autoDispose
+    .family<_PaymentResponseNotifier, _PaymentResponseState, String>(
+  _PaymentResponseNotifier.new,
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +173,7 @@ class _PaymentResponseScreenState
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(_paymentResponseProvider(widget.customerId)).load();
+      ref.read(_paymentResponseProvider(widget.customerId).notifier).load();
     });
   }
 
@@ -144,9 +181,7 @@ class _PaymentResponseScreenState
   Widget build(BuildContext context) {
     final c = Theme.of(context).extension<AppColors>()!;
     final tt = Theme.of(context).textTheme;
-    final respNotifier =
-        ref.watch(_paymentResponseProvider(widget.customerId));
-    final respState = respNotifier.state;
+    final respState = ref.watch(_paymentResponseProvider(widget.customerId));
 
     return Scaffold(
       backgroundColor: c.bg,
@@ -202,7 +237,7 @@ class _PaymentResponseScreenState
                 children: [
                   OutlinedButton.icon(
                     onPressed: () => ref
-                        .read(_paymentResponseProvider(widget.customerId))
+                        .read(_paymentResponseProvider(widget.customerId).notifier)
                         .load(),
                     icon: const Icon(LucideIcons.refreshCw, size: 16),
                     label: const Text('Retry'),
