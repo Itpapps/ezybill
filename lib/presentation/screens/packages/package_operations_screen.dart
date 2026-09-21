@@ -95,7 +95,10 @@ class _PackageOperationsScreenState
 
     if (widget.customerId != null) {
       _activeCustomerId = widget.customerId;
-      if (widget.stbNo != null) {
+      // deactivateServiceRest requires stockId, so only skip the box-details
+      // fetch when the caller supplied BOTH the serial and a stock id.
+      final hasStockId = (widget.customerStockId ?? '').trim().isNotEmpty;
+      if (widget.stbNo != null && hasStockId) {
         _activeStbNo = widget.stbNo;
         _activeDeviceId = widget.customerDeviceId;
         _activeStockId = widget.customerStockId;
@@ -104,7 +107,10 @@ class _PackageOperationsScreenState
           _loadData();
         });
       } else {
-        // No stbNo passed — fetch STB details first
+        // No stbNo (customer profile / search) or no stockId (STB Operations
+        // card) — resolve from box details first. Keep any serial we were
+        // given so _fetchStbAndLoad can select that exact box.
+        _activeStbNo = widget.stbNo;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _fetchStbAndLoad();
         });
@@ -112,7 +118,13 @@ class _PackageOperationsScreenState
     }
   }
 
-  /// Fetch STB box details when stbNo wasn't passed (e.g. from customer profile).
+  /// Fetch STB box details when stbNo or stockId wasn't passed (e.g. from
+  /// customer profile, STB Operations card, or manual search).
+  ///
+  /// When [_activeStbNo] is already known, the matching box is applied so
+  /// stock_id/device_id come from that same STB. If it cannot be resolved,
+  /// packages still load as before and stockId stays null — the submit guard
+  /// in [_executeDeactivation] then blocks the request.
   Future<void> _fetchStbAndLoad() async {
     if (_activeCustomerId == null || _fetchingStb) return;
     setState(() => _fetchingStb = true);
@@ -127,9 +139,24 @@ class _PackageOperationsScreenState
       if (!mounted) return;
       if (boxList.isEmpty) {
         setState(() => _fetchingStb = false);
+        _loadData(); // no-op unless a serial was supplied
         return;
       }
       final boxes = boxList.cast<Map<String, dynamic>>();
+      final wanted = _activeStbNo;
+      if (wanted != null && wanted.isNotEmpty) {
+        // Serial already supplied — use that exact box, never a different one.
+        final match = boxes
+            .where((b) => b['serial_number']?.toString() == wanted)
+            .firstOrNull;
+        if (match != null) {
+          _applyStb(match);
+        } else {
+          setState(() => _fetchingStb = false);
+          _loadData();
+        }
+        return;
+      }
       if (boxes.length == 1) {
         _applyStb(boxes.first);
       } else {
@@ -138,7 +165,10 @@ class _PackageOperationsScreenState
       }
     } catch (e) {
       debugPrint('[PackageOps] Failed to fetch STB: $e');
-      if (mounted) setState(() => _fetchingStb = false);
+      if (mounted) {
+        setState(() => _fetchingStb = false);
+        _loadData(); // no-op unless a serial was supplied
+      }
     }
   }
 
@@ -206,7 +236,10 @@ class _PackageOperationsScreenState
     if (custId.isNotEmpty && stbNo.isNotEmpty) {
       _activeCustomerId = custId;
       _activeStbNo = stbNo;
-      _loadData();
+      // Never carry a previous search's STB ids into a new one.
+      _activeStockId = null;
+      _activeDeviceId = null;
+      _fetchStbAndLoad();
     }
   }
 
@@ -350,7 +383,9 @@ class _PackageOperationsScreenState
                   SizedBox(
                     height: 44,
                     child: ElevatedButton(
-                      onPressed: _searchPackages,
+                      // Block re-entry while box details are in flight;
+                      // _fetchStbAndLoad would otherwise drop the new search.
+                      onPressed: _fetchingStb ? null : _searchPackages,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _c.red,
                         foregroundColor: _c.card,
@@ -507,7 +542,9 @@ class _PackageOperationsScreenState
 
           // Content
           Expanded(
-            child: pkgState.isLoading
+            // Also spin while box details are being resolved so a previous
+            // customer's list is never visible/tappable in that window.
+            child: (pkgState.isLoading || _fetchingStb)
                 ? Center(child: CircularProgressIndicator(color: _c.red))
                 : _mode == _OpMode.renew
                     ? _buildRenewList(pkgState)
@@ -1281,6 +1318,11 @@ class _PackageOperationsScreenState
                   TextField(
                     controller: _remarksController,
                     maxLines: 2,
+                    // The Deactivate button below is enabled from this
+                    // text at build time, so the dialog must rebuild as
+                    // the user types — otherwise "reason first, remarks
+                    // second" leaves the button disabled.
+                    onChanged: (_) => setDialogState(() {}),
                     style: const TextStyle(
                         fontFamily: 'DM Sans', fontSize: 14),
                     decoration: InputDecoration(
@@ -1396,6 +1438,20 @@ class _PackageOperationsScreenState
       return;
     }
 
+    // Validation: deactivateServiceRest requires stockId (Android always has
+    // it from box details). Never send the request without it.
+    final stockId = _activeStockId;
+    if (stockId == null || stockId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'STB details not loaded. Please reopen this customer and try again.'),
+          backgroundColor: _c.red,
+        ),
+      );
+      return;
+    }
+
     // Collect customer_service_id (comma-separated), NOT product_id per spec.
     // The selectedIds already contain customer_service_id values when in
     // deactivate mode (see _buildPackageTab selection key logic).
@@ -1406,7 +1462,7 @@ class _PackageOperationsScreenState
           serviceIds: serviceIds.join(','),
           reasonId: _selectedReasonId!.toString(),
           remarks: _remarksController.text.trim(),
-          stockId: _activeStockId,
+          stockId: stockId,
           resellerId: _activeResellerId,
         );
   }

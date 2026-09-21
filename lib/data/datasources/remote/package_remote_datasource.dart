@@ -134,7 +134,9 @@ class PackageRemoteDatasource {
         'dealer_id': dealerId,
         'resellerId': resellerId,
         'login_employee_id': loginEmployeeId,
-        if (stockId != null) 'stock_id': stockId,
+        // Backend reads `stockId` (isInteger|isRequired) — same key the
+        // Android app sends. `stock_id` is the SOAP V1 field name.
+        if (stockId != null) 'stockId': stockId,
       },
     );
     return response.data as Map<String, dynamic>;
