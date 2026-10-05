@@ -3,11 +3,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'application/providers/core_providers.dart';
 import 'application/providers/locale_provider.dart';
 import 'application/providers/theme_provider.dart';
 import 'core/constants/api_constants.dart';
+import 'core/constants/app_constants.dart';
 import 'core/services/debug_log_service.dart';
 import 'core/theme/app_theme.dart';
 import 'presentation/common/widgets/offline_banner.dart';
@@ -65,6 +67,8 @@ Future<void> main() async {
   final debugEnabled = prefs.getBool('debug_logging_enabled') ?? false;
   DebugLogService().enabled = debugEnabled;
 
+  await _purgeLegacySessionData(prefs);
+
   runApp(
     ProviderScope(
       overrides: [
@@ -73,6 +77,29 @@ Future<void> main() async {
       child: const EzyBillApp(),
     ),
   );
+}
+
+/// One-time cleanup for installs upgraded from builds that persisted the
+/// login session (token in secure storage, `login_response_json` /
+/// `is_logged_in` in prefs) and restored it on launch. Sessions are no longer
+/// written to disk or restored (native Android parity), so leftover copies
+/// are removed once. Runs before the first frame, awaited, and never blocks
+/// startup on a storage failure (e.g. a Keystore reset after a device
+/// restore); an unfinished purge simply retries on the next launch.
+Future<void> _purgeLegacySessionData(SharedPreferences prefs) async {
+  const purgedFlag = 'legacy_session_purged_v1';
+  if (prefs.getBool(purgedFlag) ?? false) return;
+  try {
+    // Same store the app's secureStorageProvider uses (default options).
+    const secure = FlutterSecureStorage();
+    await secure.delete(key: AppConstants.prefKeyToken);
+    await secure.delete(key: AppConstants.prefKeyJwtToken);
+    await prefs.remove(AppConstants.prefKeyLoginResponse);
+    await prefs.remove(AppConstants.prefKeyIsLoggedIn);
+    await prefs.setBool(purgedFlag, true);
+  } catch (e) {
+    debugPrint('[STARTUP] Legacy session purge deferred: $e');
+  }
 }
 
 class EzyBillApp extends ConsumerWidget {

@@ -29,6 +29,14 @@ class PackageState {
   final String? errorMessage;
   final String? successMessage;
 
+  /// Package-deactivation failure, kept apart from [errorMessage] so the
+  /// screen can present it the way native Android does (centered dialog,
+  /// raw server status_msg) while every other error keeps its SnackBar.
+  /// [deactivationErrorCode] is the server status_code (1 = failure, >1 =
+  /// "connectivity"/validation), or -1 when the request itself threw.
+  final String? deactivationError;
+  final int? deactivationErrorCode;
+
   // Assigned (active) packages by category
   final List<PackageModel> assignedBase;
   final List<PackageModel> assignedAddon;
@@ -47,6 +55,10 @@ class PackageState {
   // Deactivation
   final List<DeactivationReason> deactivationReasons;
 
+  /// Android parity (Frag_deact_pack): when the login response carries
+  /// enable_box_wise_payment == 1 the reason list is shown unfiltered.
+  final bool showAllReasons;
+
   // Bill details
   final BillDetail? billDetail;
   final bool billFetched;
@@ -58,6 +70,8 @@ class PackageState {
     this.isLoading = false,
     this.errorMessage,
     this.successMessage,
+    this.deactivationError,
+    this.deactivationErrorCode,
     this.assignedBase = const [],
     this.assignedAddon = const [],
     this.assignedAla = const [],
@@ -68,6 +82,7 @@ class PackageState {
     this.availableBroadcaster = const [],
     this.selectedIds = const {},
     this.deactivationReasons = const [],
+    this.showAllReasons = false,
     this.billDetail,
     this.billFetched = false,
     this.renewableServices = const [],
@@ -81,17 +96,23 @@ class PackageState {
   List<PackageModel> get allAvailable =>
       [...availableBase, ...availableAddon, ...availableAla, ...availableBroadcaster];
 
-  /// Filtered deactivation reasons per Android spec (Section 4.4):
-  /// Exclude reason ID 17, ID 21, and global_reason == 1.
-  List<DeactivationReason> get filteredReasons => deactivationReasons
-      .where((r) =>
-          r.reasonId != 17 && r.reasonId != 21 && r.globalReason != 1)
-      .toList();
+  /// Deactivation reasons per Android (Frag_deact_pack.java:2071-2093):
+  /// with enable_box_wise_payment == 1 every reason is offered; otherwise
+  /// reason ID 17, ID 21 and global_reason == 1 are excluded.
+  List<DeactivationReason> get filteredReasons {
+    if (showAllReasons) return List.unmodifiable(deactivationReasons);
+    return deactivationReasons
+        .where((r) =>
+            r.reasonId != 17 && r.reasonId != 21 && r.globalReason != 1)
+        .toList();
+  }
 
   PackageState copyWith({
     bool? isLoading,
     String? errorMessage,
     String? successMessage,
+    String? deactivationError,
+    int? deactivationErrorCode,
     List<PackageModel>? assignedBase,
     List<PackageModel>? assignedAddon,
     List<PackageModel>? assignedAla,
@@ -102,14 +123,19 @@ class PackageState {
     List<PackageModel>? availableBroadcaster,
     Set<String>? selectedIds,
     List<DeactivationReason>? deactivationReasons,
+    bool? showAllReasons,
     BillDetail? billDetail,
     bool? billFetched,
     List<PackageModel>? renewableServices,
   }) {
     return PackageState(
       isLoading: isLoading ?? this.isLoading,
+      // Message fields are one-shot: not carried across copies (same as
+      // errorMessage/successMessage), so a stale failure never re-fires.
       errorMessage: errorMessage,
       successMessage: successMessage,
+      deactivationError: deactivationError,
+      deactivationErrorCode: deactivationErrorCode,
       assignedBase: assignedBase ?? this.assignedBase,
       assignedAddon: assignedAddon ?? this.assignedAddon,
       assignedAla: assignedAla ?? this.assignedAla,
@@ -120,6 +146,7 @@ class PackageState {
       availableBroadcaster: availableBroadcaster ?? this.availableBroadcaster,
       selectedIds: selectedIds ?? this.selectedIds,
       deactivationReasons: deactivationReasons ?? this.deactivationReasons,
+      showAllReasons: showAllReasons ?? this.showAllReasons,
       billDetail: billDetail ?? this.billDetail,
       billFetched: billFetched ?? this.billFetched,
       renewableServices: renewableServices ?? this.renewableServices,
@@ -512,39 +539,55 @@ class PackageNotifier extends Notifier<PackageState> {
           selectedIds: const {},
         );
         return true;
-      } else if (code == 1) {
-        state = state.copyWith(
-          isLoading: false,
-          errorMessage: '$rawMsg Package deactivation failed',
-        );
-        return false;
       } else {
+        // Native Android (Frag_deact_pack.DeactivateServiceRest): status 1 →
+        // "Failed to deactivate Packages" dialog, >1 → "Connectivity Error"
+        // dialog, both showing the raw status_msg. Same decision here; only
+        // the presentation is delegated to the screen via deactivationError.
         state = state.copyWith(
           isLoading: false,
-          errorMessage:
-              '$rawMsg. Package deactivation failed. Please check and enter valid details',
+          deactivationError:
+              rawMsg.isNotEmpty ? rawMsg : 'Package deactivation failed',
+          deactivationErrorCode: code,
         );
         return false;
       }
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        deactivationError: e.toString(),
+        deactivationErrorCode: -1,
+      );
       return false;
     }
   }
 
   // ── Deactivation reasons (Section 4.4) ──────────────────────────────────
   //
-  // Filtering is done in PackageState.filteredReasons getter:
-  // Exclude reasonId == 17, reasonId == 21, global_reason == 1
+  // Android (Frag_deact_pack.DeactiveReasonsRest) sends stockId + CustomerId
+  // so the server can drop "Temporary Deactivation" / "Unpaid Customer"
+  // based on the box's due status. Filtering of the returned list is done in
+  // PackageState.filteredReasons (all reasons when enable_box_wise_payment
+  // == 1, else exclude reasonId 17 / 21 and global_reason == 1).
 
-  Future<void> loadDeactivationReasons() async {
+  Future<void> loadDeactivationReasons({
+    String? customerId,
+    String? stockId,
+  }) async {
     try {
-      final data = await _stbDs.getDeactivationReasons(authtoken: _token);
+      final data = await _stbDs.getDeactivationReasons(
+        authtoken: _token,
+        customerId: customerId,
+        stockId: stockId,
+      );
       final reasons = parseList<DeactivationReason>(
         data['reasonList'] ?? data['data'],
         DeactivationReason.fromJson,
       );
-      state = state.copyWith(deactivationReasons: reasons);
+      state = state.copyWith(
+        deactivationReasons: reasons,
+        showAllReasons: (_session?.enableBoxWisePayment ?? 0) == 1,
+      );
     } catch (e) {
       debugPrint('Failed to load deactivation reasons: $e');
     }
@@ -658,7 +701,12 @@ class PackageNotifier extends Notifier<PackageState> {
   // ── Clear messages ───────────────────────────────────────────────────────
 
   void clearMessages() {
-    state = state.copyWith(errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      errorMessage: null,
+      successMessage: null,
+      deactivationError: null,
+      deactivationErrorCode: null,
+    );
   }
 }
 

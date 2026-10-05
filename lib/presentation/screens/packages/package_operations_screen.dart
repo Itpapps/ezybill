@@ -82,6 +82,11 @@ class _PackageOperationsScreenState
   // Deactivation form
   int? _selectedReasonId;
   final _remarksController = TextEditingController();
+  // Focus of the remarks field inside the deactivation dialog. While it has
+  // focus (keyboard up) the Reason dropdown must not open: the dropdown menu
+  // is positioned from the field's rectangle at tap time, and the dialog
+  // slides down when the keyboard closes, leaving the menu stranded above.
+  final _remarksFocusNode = FocusNode();
 
   AppColors get _c =>
       Theme.of(context).extension<AppColors>() ?? AppColors.light;
@@ -217,7 +222,10 @@ class _PackageOperationsScreenState
     final notifier = ref.read(packageProvider.notifier);
     notifier.loadAssigned(_activeCustomerId!, _activeStbNo!);
     notifier.loadAvailable(_activeCustomerId!, _activeStbNo!);
-    notifier.loadDeactivationReasons();
+    notifier.loadDeactivationReasons(
+      customerId: _activeCustomerId,
+      stockId: _activeStockId,
+    );
   }
 
   @override
@@ -227,6 +235,7 @@ class _PackageOperationsScreenState
     _customerIdController.dispose();
     _stbNoController.dispose();
     _remarksController.dispose();
+    _remarksFocusNode.dispose();
     super.dispose();
   }
 
@@ -318,6 +327,16 @@ class _PackageOperationsScreenState
             content: Text(state.errorMessage!),
             backgroundColor: _c.red,
           ),
+        );
+        ref.read(packageProvider.notifier).clearMessages();
+      }
+      if (state.deactivationError != null) {
+        // Package deactivation failure: centered dialog like native Android
+        // (Frag_deact_pack.DeactivateServiceRest status 1 / >1 branches).
+        final code = state.deactivationErrorCode ?? 1;
+        _showDeactivationFailedDialog(
+          title: code == 1 ? 'Failed to deactivate Packages' : 'Connectivity Error',
+          message: state.deactivationError!,
         );
         ref.read(packageProvider.notifier).clearMessages();
       }
@@ -1213,12 +1232,20 @@ class _PackageOperationsScreenState
       total += pkg.price;
     }
 
+    // Rebuild the dialog whenever the remarks field gains/loses focus so the
+    // Reason dropdown's IgnorePointer follows the keyboard state.
+    void Function(void Function())? dialogSetState;
+    void onRemarksFocusChange() => dialogSetState?.call(() {});
+    _remarksFocusNode.addListener(onRemarksFocusChange);
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          // Filtered reasons: exclude ID 17, 21, global_reason == 1
+          dialogSetState = setDialogState;
+          // Reasons filtered per Android rule (see PackageState.filteredReasons)
           final reasons = pkgState.filteredReasons;
+          final keyboardUp = _remarksFocusNode.hasFocus;
           return AlertDialog(
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16)),
@@ -1287,36 +1314,46 @@ class _PackageOperationsScreenState
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // Reason dropdown
-                  DropdownButtonFormField<int>(
-                    value: _selectedReasonId,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'Reason *',
-                      labelStyle: TextStyle(
-                          fontFamily: 'DM Sans', color: _c.ink40),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    items: reasons.map((r) {
-                      return DropdownMenuItem<int>(
-                        value: r.reasonId,
-                        child: Text(
-                          r.reasonName,
-                          style: const TextStyle(
-                              fontFamily: 'DM Sans', fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
+                  // Reason dropdown. While the remarks keyboard is up the
+                  // tap only dismisses the keyboard (via the field's
+                  // onTapOutside); the dialog settles, then the next tap
+                  // opens the menu at the correct position.
+                  IgnorePointer(
+                    ignoring: keyboardUp,
+                    child: DropdownButtonFormField<int>(
+                      value: _selectedReasonId,
+                      isExpanded: true,
+                      decoration: InputDecoration(
+                        labelText: 'Reason *',
+                        labelStyle: TextStyle(
+                            fontFamily: 'DM Sans', color: _c.ink40),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      );
-                    }).toList(),
-                    onChanged: (val) =>
-                        setDialogState(() => _selectedReasonId = val),
+                      ),
+                      items: reasons.map((r) {
+                        return DropdownMenuItem<int>(
+                          value: r.reasonId,
+                          child: Text(
+                            r.reasonName,
+                            style: const TextStyle(
+                                fontFamily: 'DM Sans', fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }).toList(),
+                      onChanged: (val) =>
+                          setDialogState(() => _selectedReasonId = val),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   // Remarks field (mandatory per Section 4.5)
                   TextField(
                     controller: _remarksController,
+                    focusNode: _remarksFocusNode,
+                    // Any tap outside the field (Reason, Cancel, dialog body)
+                    // closes the keyboard first.
+                    onTapOutside: (_) => _remarksFocusNode.unfocus(),
                     maxLines: 2,
                     // The Deactivate button below is enabled from this
                     // text at build time, so the dialog must rebuild as
@@ -1371,7 +1408,11 @@ class _PackageOperationsScreenState
           );
         },
       ),
-    );
+    ).whenComplete(() {
+      // Dialog closed (any way): stop driving a dead StatefulBuilder.
+      dialogSetState = null;
+      _remarksFocusNode.removeListener(onRemarksFocusChange);
+    });
   }
 
   /// Second confirmation before deactivation (Section 4.7):
@@ -1419,6 +1460,57 @@ class _PackageOperationsScreenState
           ),
         ],
       ),
+    );
+  }
+
+  /// Package-deactivation failure popup — native Android parity
+  /// (Frag_deact_pack.java:3025-3059: AlertDialog, title + `status_msg!`,
+  /// single OK, user stays on the screen). Presentation only: the request,
+  /// status decision and success path are unchanged.
+  ///
+  /// Colours are resolved from the dialog's own [ctx] so the builder never
+  /// touches this State's context (see the unmounted-dialog issue).
+  void _showDeactivationFailedDialog({
+    required String title,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        final c = Theme.of(ctx).extension<AppColors>() ?? AppColors.light;
+        return AlertDialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            title,
+            style: TextStyle(
+              fontFamily: 'DM Sans',
+              fontWeight: FontWeight.w700,
+              color: c.red,
+            ),
+          ),
+          content: Text(
+            '$message!',
+            style: TextStyle(
+                fontFamily: 'DM Sans', fontSize: 14, color: c.ink80),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: c.red,
+                foregroundColor: c.card,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('OK',
+                  style: TextStyle(
+                      fontFamily: 'DM Sans', fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
   }
 

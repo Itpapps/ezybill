@@ -116,14 +116,23 @@ class StbRemoteDatasource {
     return response.data as Map<String, dynamic>;
   }
 
-  /// Get deactivation reasons
+  /// Get deactivation reasons.
+  ///
+  /// Android sends `stockId` and `CustomerId` (exact key casing) with this
+  /// call; the server uses stockId to trim due-dependent reasons and treats
+  /// both as optional. They are sent only when the caller has them.
   Future<Map<String, dynamic>> getDeactivationReasons({
     required String authtoken,
+    String? stockId,
+    String? customerId,
   }) async {
     final response = await _dio.post(
       ApiConstants.deactivationReasons,
       data: {
         'authtoken': authtoken,
+        if (stockId != null && stockId.isNotEmpty) 'stockId': stockId,
+        if (customerId != null && customerId.isNotEmpty)
+          'CustomerId': customerId,
       },
     );
     return response.data as Map<String, dynamic>;

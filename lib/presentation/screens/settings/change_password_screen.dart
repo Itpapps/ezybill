@@ -216,11 +216,13 @@ class _ChangePasswordScreenState extends ConsumerState<ChangePasswordScreen> {
     try {
       final dio = ref.read(dioClientProvider);
       final authLocal = ref.read(authLocalDatasourceProvider);
+      // The session token is held in memory only (never persisted).
+      final sessionToken = ref.read(appSessionProvider)?.token ?? '';
 
       await dio.post(
         ApiConstants.changePassword,
         data: {
-          'authToken': await authLocal.getAuthToken() ?? '',
+          'authToken': sessionToken,
           'dealerId': authLocal.dealerId.toString(),
           'employeeId': authLocal.employeeId.toString(),
           'oldPassword': _oldPasswordController.text.trim(),

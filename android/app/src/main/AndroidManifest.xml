@@ -31,12 +31,22 @@
         android:label="ezybill"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:enableOnBackInvokedCallback="false">
         <!-- usesCleartextTraffic: the payment gateway page is served over plain
              http (the API base itself is http). Android 9+ blocks cleartext in
              the system WebView by default (net::ERR_CLEARTEXT_NOT_PERMITTED);
              dio's own HttpClient is not subject to that policy, which is why
              only the WebView failed. Matches the native app's manifest. -->
+        <!-- enableOnBackInvokedCallback=false: keep the legacy back path
+             (onBackPressed -> Flutter popRoute). With predictive back (default
+             for targetSdk 36 on Android 16) a back SWIPE is handled by each
+             page route's PredictiveBackGestureDetector, which only checks
+             isCurrent inside its own navigator; with a dialog open on the root
+             navigator it pops the tab page underneath and leaves the dialog
+             orphaned ("widget has been unmounted"). The legacy path goes
+             through go_router, which closes the dialog first. -->
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

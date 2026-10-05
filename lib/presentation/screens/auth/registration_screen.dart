@@ -1,7 +1,8 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:device_info_plus/device_info_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -16,6 +17,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/datasources/remote/bms_remote_datasource.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../router/route_names.dart';
+
+/// Native device-identity channel (Android handler in MainActivity.kt).
+const MethodChannel _deviceChannel = MethodChannel('com.itp.ezybill/device');
 
 class RegistrationScreen extends ConsumerStatefulWidget {
   const RegistrationScreen({super.key});
@@ -72,6 +76,11 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
   }
 
   /// Load or generate the device ID.
+  ///
+  /// An already-stored `device_uuid` is always reused as-is (older installs
+  /// registered with BMS under that value; it must not change until a later
+  /// pass re-validates the device with BMS). A new id is derived only when
+  /// nothing is stored yet.
   Future<void> _loadDeviceId() async {
     final prefs = ref.read(sharedPreferencesProvider);
     String? deviceId = prefs.getString(kDeviceUuid);
@@ -82,9 +91,8 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
         deviceId = _generateSimpleUuid();
         await prefs.setString(kDeviceUuid, deviceId);
       } else {
-        // Try to get Android ID via device_info_plus
+        // Android: native ANDROID_ID via MethodChannel (see MainActivity.kt)
         try {
-          // Dynamically import to avoid web build issues
           deviceId = await _getAndroidId();
           if (deviceId != null && deviceId.isNotEmpty) {
             await prefs.setString(kDeviceUuid, deviceId);
@@ -104,13 +112,16 @@ class _RegistrationScreenState extends ConsumerState<RegistrationScreen>
     }
   }
 
-  /// Get Android ID using device_info_plus.
+  /// Android only: `Settings.Secure.ANDROID_ID` from the native side
+  /// (MainActivity.kt, channel `com.itp.ezybill/device`) — the same
+  /// identifier the native EzyBill app sends as `imei` on Android 10+.
+  /// Returns null on other platforms or when the value is unavailable, so
+  /// the caller keeps its existing fallback.
   Future<String?> _getAndroidId() async {
+    if (defaultTargetPlatform != TargetPlatform.android) return null;
     try {
-      final deviceInfo = DeviceInfoPlugin();
-      final androidInfo = await deviceInfo.androidInfo;
-      final id = androidInfo.id; // Android ID — stable across reinstalls
-      if (id.isNotEmpty) return id;
+      final id = await _deviceChannel.invokeMethod<String>('androidId');
+      if (id != null && id.isNotEmpty) return id;
       return null;
     } catch (_) {
       return null;

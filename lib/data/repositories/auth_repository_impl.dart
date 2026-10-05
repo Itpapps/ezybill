@@ -32,8 +32,10 @@ class AuthRepositoryImpl implements AuthRepository {
 
       // Per server docs: status_code == 0 means success for validateLogin.
       if (response.statusCode == 0 && response.token.isNotEmpty) {
-        // Persist session locally
-        await _localDatasource.saveAuthToken(response.token);
+        // Persist only the profile fields some screens read directly. The
+        // token is deliberately NOT written to disk: the active session is
+        // held in memory (appSessionProvider / DioClient) and is never
+        // restored on a later launch — native Android parity.
         await _localDatasource.saveUserData(
           dealerId: response.dealerId,
           employeeId: response.employeeId,
@@ -46,7 +48,6 @@ class AuthRepositoryImpl implements AuthRepository {
           businessName: response.businessName,
           parentType: response.employeeParentType,
           parentId: response.employeeParentId,
-          fullResponse: data,
         );
         return Success(response);
       }
@@ -98,25 +99,5 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<void> logout() async {
     await _localDatasource.clearAll();
-  }
-
-  @override
-  Future<Result<LoginResponse>> restoreSession() async {
-    try {
-      final token = await _localDatasource.getAuthToken();
-      if (token == null || token.isEmpty) {
-        return const Failure('No saved session');
-      }
-
-      final savedResponse = _localDatasource.loginResponse;
-      if (savedResponse == null) {
-        return const Failure('No saved session data');
-      }
-
-      final response = LoginResponse.fromJson(savedResponse);
-      return Success(response);
-    } catch (e) {
-      return Failure(e.toString());
-    }
   }
 }

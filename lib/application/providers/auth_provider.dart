@@ -60,46 +60,11 @@ class AuthNotifier extends Notifier<AuthState> {
     _authRepository = ref.watch(authRepositoryProvider);
     _dioClient = ref.watch(dioClientProvider);
 
-    // Attempt session restore on first build (non-blocking).
-    _restoreSession();
-
-    return const AuthState();
-  }
-
-  // ── Restore Session ──────────────────────────────────────────────────────
-
-  /// Checks local storage for a previously saved session.
-  /// If found, rebuilds [AppSession] and transitions to [authenticated].
-  /// If not found, transitions to [unauthenticated].
-  Future<void> _restoreSession() async {
-    final result = await _authRepository.restoreSession();
-
-    switch (result) {
-      case Success(data: final loginResponse):
-        final rawJson = _loginResponseToRawJson(loginResponse);
-
-        // Build session from persisted login data.
-        final session = AppSession.fromLoginResponse(rawJson);
-
-        // Set token on Dio client for subsequent API calls.
-        _dioClient.setTokens(
-          jwtToken: session.token,
-          authToken: session.token,
-        );
-
-        // Push session into the global provider.
-        ref.read(appSessionProvider.notifier).setSession(session);
-
-        state = const AuthState(status: AuthStatus.authenticated);
-
-      case Failure():
-        state = const AuthState(status: AuthStatus.unauthenticated);
-    }
-  }
-
-  /// Public entry point for manual session restore (e.g. on app cold start).
-  Future<void> restoreSession() async {
-    await _restoreSession();
+    // No session restore: like the native Android app, every cold start
+    // (or force-kill) begins unauthenticated and the user must log in again.
+    // The active session lives only in memory (appSessionProvider + DioClient)
+    // for the lifetime of the process.
+    return const AuthState(status: AuthStatus.unauthenticated);
   }
 
   // ── Login ────────────────────────────────────────────────────────────────

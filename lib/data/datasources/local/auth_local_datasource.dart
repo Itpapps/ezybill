@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_constants.dart';
@@ -34,6 +33,10 @@ class AuthLocalDatasource {
   }
 
   // User Data
+  //
+  // Profile fields only. No token, no "logged in" flag and no copy of the
+  // login response are written: a session is never restored from disk
+  // (native Android parity — see AuthNotifier.build).
   Future<void> saveUserData({
     required int dealerId,
     required int employeeId,
@@ -46,7 +49,6 @@ class AuthLocalDatasource {
     required String businessName,
     required String parentType,
     required String parentId,
-    required Map<String, dynamic> fullResponse,
   }) async {
     await _prefs.setInt(AppConstants.prefKeyDealerId, dealerId);
     await _prefs.setInt(AppConstants.prefKeyEmployeeId, employeeId);
@@ -61,13 +63,7 @@ class AuthLocalDatasource {
     await _prefs.setString(AppConstants.prefKeyParentId, parentId);
     await _prefs.setString(
         AppConstants.prefKeyEmployeeName, '$firstName $lastName');
-    await _prefs.setBool(AppConstants.prefKeyIsLoggedIn, true);
-    await _prefs.setString(
-        AppConstants.prefKeyLoginResponse, jsonEncode(fullResponse));
   }
-
-  bool get isLoggedIn =>
-      _prefs.getBool(AppConstants.prefKeyIsLoggedIn) ?? false;
 
   int get dealerId => _prefs.getInt(AppConstants.prefKeyDealerId) ?? 0;
   int get employeeId => _prefs.getInt(AppConstants.prefKeyEmployeeId) ?? 0;
@@ -90,12 +86,6 @@ class AuthLocalDatasource {
   String get parentId =>
       _prefs.getString(AppConstants.prefKeyParentId) ?? '';
 
-  Map<String, dynamic>? get loginResponse {
-    final json = _prefs.getString(AppConstants.prefKeyLoginResponse);
-    if (json == null) return null;
-    return jsonDecode(json) as Map<String, dynamic>;
-  }
-
   /// Clears application login/session state only.
   ///
   /// BMS/device registration state is deliberately preserved, matching the
@@ -111,7 +101,9 @@ class AuthLocalDatasource {
   Future<void> clearAll() async {
     await _secureStorage.deleteAll();
 
-    // Exactly the keys written by saveLoginData().
+    // The keys written by saveUserData(), plus the legacy is_logged_in /
+    // login_response_json keys that older builds persisted (kept here so an
+    // upgraded install is cleaned on its first logout).
     const sessionKeys = <String>[
       AppConstants.prefKeyDealerId,
       AppConstants.prefKeyEmployeeId,

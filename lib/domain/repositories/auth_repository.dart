@@ -30,8 +30,4 @@ abstract class AuthRepository {
 
   /// Clear all local session data and tokens.
   Future<void> logout();
-
-  /// Attempt to restore a previously saved session from local storage.
-  /// Returns [LoginResponse] if a valid session exists, or [Failure] otherwise.
-  Future<Result<LoginResponse>> restoreSession();
 }

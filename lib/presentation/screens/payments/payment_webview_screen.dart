@@ -9,6 +9,24 @@ import '../../../core/theme/app_colors.dart';
 import '../../router/route_names.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Gateway contract — mirrors the native Android app exactly
+// (Payment_Webview_Frag.java + assets/configg.properties).
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Gateway page the native app POSTs to (`payweb` in configg.properties:54,
+/// used at Payment_Webview_Frag.java:57/100).
+const String _kGatewayViewPath = '/mobile_paymentsview';
+
+/// URL the gateway redirects to once the payment finishes. The native app
+/// treats this exact URL as the completion signal
+/// (Payment_Webview_Frag.java:159, `url.equals(...)`).
+const String _kGatewayReturnPath = '/mobile_paymentsend';
+
+/// Static key the gateway page expects. The native app hardcodes it
+/// (Payment_Webview_Frag.java:76) and never sends the session token here.
+const String _kGatewayAuthKey = 'abcd1234abcd';
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Screen
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -75,7 +93,7 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   }
 
   void _loadPaymentPage() {
-    final pgUrl = '${ApiConstants.paymentGatewayBase}/initiate_payment';
+    final pgUrl = '${ApiConstants.paymentGatewayBase}$_kGatewayViewPath';
 
     // Load using POST via an auto-submitting HTML form
     final html = '''
@@ -83,12 +101,12 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
 <html>
 <body onload="document.getElementById('pgForm').submit();">
   <form id="pgForm" method="POST" action="$pgUrl">
-    <input type="hidden" name="auth_key" value="${_escapeHtml(widget.authKey)}" />
+    <input type="hidden" name="auth_key" value="$_kGatewayAuthKey" />
     <input type="hidden" name="employee_id" value="${_escapeHtml(widget.employeeId)}" />
     <input type="hidden" name="dealer_id" value="${_escapeHtml(widget.dealerId)}" />
-    <input type="hidden" name="customer_id" value="${_escapeHtml(widget.customerId)}" />
+    <input type="hidden" name="customer_id" value="${_escapeHtml(_gatewayCustomerId)}" />
     <input type="hidden" name="amount" value="${_escapeHtml(widget.amount)}" />
-    <input type="hidden" name="from_mobile_app" value="1" />
+    <input type="hidden" name="from_mobile_app" value="0" />
   </form>
   <p style="text-align:center;margin-top:40px;font-family:sans-serif;color:#666;">
     Redirecting to payment gateway...
@@ -99,6 +117,12 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
 
     _controller.loadHtmlString(html);
   }
+
+  /// The native app always posts `customer_id=0` from the LCO top-up path
+  /// (Payment_Webview_Frag.java:87-88); the top-up screen passes an empty
+  /// string, so fall back to "0" and keep any real customer id intact.
+  String get _gatewayCustomerId =>
+      widget.customerId.isEmpty ? '0' : widget.customerId;
 
   String _escapeHtml(String text) {
     return text
@@ -123,15 +147,29 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
       return NavigationDecision.prevent;
     }
 
-    // Detect redirect to response page
-    if (url.contains('payment_response') ||
-        url.contains('transaction_response') ||
-        url.contains('payment_status')) {
+    // Detect the gateway's completion redirect
+    if (_isCompletionUrl(url)) {
       _onPaymentComplete();
       return NavigationDecision.prevent;
     }
 
     return NavigationDecision.navigate;
+  }
+
+  /// True only for the gateway's completion redirect
+  /// `<base>/paymentgateway/mobile_paymentsend`.
+  ///
+  /// The native app compares the whole URL with `equals`
+  /// (Payment_Webview_Frag.java:159). Here the query/fragment is dropped
+  /// before comparing, which still matches nothing but that exact path —
+  /// substring matching is deliberately not used, because an intermediate
+  /// gateway page could contain such a fragment and end the session before
+  /// the payment is actually finished.
+  bool _isCompletionUrl(String url) {
+    final expected = '${ApiConstants.paymentGatewayBase}$_kGatewayReturnPath';
+    if (url == expected) return true;
+    final cut = url.indexOf(RegExp(r'[?#]'));
+    return cut != -1 && url.substring(0, cut) == expected;
   }
 
   Future<void> _launchUpiIntent(String url) async {
@@ -155,9 +193,7 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   }
 
   void _checkForCompletion(String url) {
-    if (url.contains('payment_response') ||
-        url.contains('transaction_response') ||
-        url.contains('payment_status')) {
+    if (_isCompletionUrl(url)) {
       _onPaymentComplete();
     }
   }
