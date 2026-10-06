@@ -9,6 +9,7 @@ import '../../../application/providers/dashboard_provider.dart';
 import '../../../application/providers/quick_action_provider.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../common/widgets/topup_confirm_dialog.dart';
 import '../../router/route_names.dart';
 
 /// Quick Action bottom sheet — a floating overlay that lets field operators
@@ -108,10 +109,19 @@ class _QuickActionSheetState extends ConsumerState<QuickActionSheet> {
             walletBalance: dashState.walletBalance,
             currencySymbol: session?.currencySymbol ?? '\u20B9',
             onClose: () => Navigator.of(context).pop(),
-            onTopUp: () {
-              Navigator.of(context).pop();
-              context.push(RouteNames.lcoTopup);
-            },
+            // Native parity: the LCO Topup entry exists only for
+            // RESELLER + allow_top_up==1 + is_direct_lco==0
+            // (MainActivity.java:380-396 → AppSession.showLcoTopUp).
+            onTopUp: session?.showLcoTopUp == true
+                ? () async {
+                    // Native parity: confirm before the form opens
+                    // (MainActivity.java:485-515).
+                    if (!await showTopUpConfirmDialog(context)) return;
+                    if (!context.mounted) return;
+                    Navigator.of(context).pop();
+                    context.push(RouteNames.lcoTopup);
+                  }
+                : null,
             onLedger: () {
               Navigator.of(context).pop();
               context.push(RouteNames.lcoWalletHistory);
@@ -272,7 +282,7 @@ class _HeaderBar extends StatelessWidget {
   final double walletBalance;
   final String currencySymbol;
   final VoidCallback onClose;
-  final VoidCallback onTopUp;
+  final VoidCallback? onTopUp;
   final VoidCallback? onLedger;
 
   const _HeaderBar({
@@ -282,7 +292,7 @@ class _HeaderBar extends StatelessWidget {
     required this.walletBalance,
     required this.currencySymbol,
     required this.onClose,
-    required this.onTopUp,
+    this.onTopUp,
     this.onLedger,
   });
 
@@ -379,9 +389,10 @@ class _HeaderBar extends StatelessWidget {
               ),
             ),
           ),
+          // TOPUP pill — hidden when the session may not top up, matching the
+          // native app's menu gating (MainActivity.java:380-396).
+          if (onTopUp != null) ...[
           const SizedBox(width: 6),
-
-          // TOPUP pill
           GestureDetector(
             onTap: onTopUp,
             child: Container(
@@ -417,6 +428,7 @@ class _HeaderBar extends StatelessWidget {
               ),
             ),
           ),
+          ],
           const SizedBox(width: 6),
 
           // Close button

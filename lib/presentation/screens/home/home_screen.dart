@@ -21,6 +21,7 @@ import '../../common/widgets/pill_tab_bar.dart';
 
 import '../../common/widgets/subscriber_card.dart';
 import '../../common/widgets/language_selector.dart';
+import '../../common/widgets/topup_confirm_dialog.dart';
 import '../../router/route_names.dart';
 import 'widgets/alert_chips.dart';
 import 'widgets/app_header.dart';
@@ -365,9 +366,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                 },
                 onLanguage: () => showLanguageSelector(context, ref),
-                onWalletTopUp: () {
-                  context.push(RouteNames.lcoTopup);
-                },
+                // Native parity: the LCO Topup entry exists only for
+                // RESELLER + allow_top_up==1 + is_direct_lco==0
+                // (MainActivity.java:380-396 → AppSession.showLcoTopUp).
+                onWalletTopUp: session?.showLcoTopUp == true
+                    ? () async {
+                        // Native parity: confirm before the form opens
+                        // (MainActivity.java:485-515).
+                        if (!await showTopUpConfirmDialog(context)) return;
+                        if (!context.mounted) return;
+                        context.push(RouteNames.lcoTopup);
+                      }
+                    : null,
                 onWalletHistory: () {
                   context.push(RouteNames.lcoWalletHistory);
                 },

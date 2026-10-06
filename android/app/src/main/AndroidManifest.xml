@@ -85,5 +85,33 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+
+        <!-- UPI hand-off from the payment gateway WebView. url_launcher asks
+             canLaunchUrl() first, and on API 30+ that probe resolves nothing
+             unless the scheme is declared here, so an installed UPI app would
+             be reported as missing. The native app needs no equivalent: it
+             passes the URL straight to Intent.createChooser(), which the
+             system resolves on its behalf
+             (Payment_Webview_Frag.java:115-135). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="upi"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="phonepe"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="paytmmp"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="tez"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="gpay"/>
+        </intent>
     </queries>
 </manifest>

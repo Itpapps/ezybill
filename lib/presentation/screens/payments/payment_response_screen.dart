@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import '../../../application/providers/dashboard_provider.dart';
 import '../../../application/providers/payment_provider.dart';
 import '../../../core/config/app_session.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../core/utils/date_formatters.dart';
 import '../../../core/utils/parse_utils.dart';
+import '../../common/widgets/app_toast.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Provider
@@ -19,6 +22,10 @@ import '../../../core/utils/parse_utils.dart';
 class _PaymentResponseState {
   final bool isLoading;
   final String? error;
+
+  /// Headline for the error panel. Mirrors the title of the native dialog
+  /// (`"<status_msg>!"`); null falls back to the generic headline.
+  final String? errorTitle;
   final bool? isSuccess;
   final String? transactionId;
   final String? amount;
@@ -29,6 +36,7 @@ class _PaymentResponseState {
   const _PaymentResponseState({
     this.isLoading = false,
     this.error,
+    this.errorTitle,
     this.isSuccess,
     this.transactionId,
     this.amount,
@@ -40,6 +48,7 @@ class _PaymentResponseState {
   _PaymentResponseState copyWith({
     bool? isLoading,
     String? error,
+    String? errorTitle,
     bool? isSuccess,
     String? transactionId,
     String? amount,
@@ -50,6 +59,7 @@ class _PaymentResponseState {
       _PaymentResponseState(
         isLoading: isLoading ?? this.isLoading,
         error: error,
+        errorTitle: errorTitle,
         isSuccess: isSuccess ?? this.isSuccess,
         transactionId: transactionId ?? this.transactionId,
         amount: amount ?? this.amount,
@@ -97,10 +107,16 @@ class _PaymentResponseNotifier extends Notifier<_PaymentResponseState> {
       final details = _detailsOf(data['response_details']);
 
       if (statusCode != '0' || details == null) {
-        // Android: dialog "No  Details Found" titled status_msg.
+        // Android raises a dialog titled "<status_msg>!" whose body is
+        // "No  Details Found" for status_code 1 and "Connectivity Error" for
+        // anything higher (PaymentResponseActivity.java:192-234).
+        final statusMsg = data['status_msg']?.toString();
+        final noDetails = statusCode == '1' || details == null;
         state = state.copyWith(
           isLoading: false,
-          error: data['status_msg']?.toString() ?? 'No details found',
+          errorTitle:
+              (statusMsg == null || statusMsg.isEmpty) ? null : '$statusMsg!',
+          error: noDetails ? 'No Details Found' : 'Connectivity Error',
         );
         return;
       }
@@ -112,14 +128,26 @@ class _PaymentResponseNotifier extends Notifier<_PaymentResponseState> {
       // Empty → null so the card's existing fallback chain still applies.
       final fullName = '$firstName $lastName'.trim();
 
+      final isSuccess = successStatuses.contains(status);
+
       state = state.copyWith(
         isLoading: false,
-        isSuccess: successStatuses.contains(status),
+        isSuccess: isSuccess,
         transactionId: details['transactionno']?.toString() ?? '--',
         amount: details['amount']?.toString() ?? '0',
         customerName: fullName.isEmpty ? null : fullName,
         statusMessage: details['responsemsg']?.toString(),
       );
+
+      if (isSuccess) {
+        // Native parity: a successful top-up returns through a freshly built
+        // MainActivity, so Dashboard_Fragment re-runs dashBoardDetailsRest()
+        // and lco_deposit_amountRest() and the wallet balance is current
+        // (Payment_Webview_Frag.java:160-163, PaymentResponseActivity.java:
+        // 168-176). The Flutter shell stays mounted, so refresh explicitly —
+        // otherwise the user returns to the pre-top-up balance.
+        unawaited(ref.read(dashboardProvider.notifier).loadDashboard());
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -183,14 +211,27 @@ class _PaymentResponseScreenState
     final tt = Theme.of(context).textTheme;
     final respState = ref.watch(_paymentResponseProvider(widget.customerId));
 
-    return Scaffold(
-      backgroundColor: c.bg,
-      appBar: AppBar(
-        title: Text('Payment Result',
-            style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-        automaticallyImplyLeading: false,
+    return PopScope(
+      // Native parity: PaymentResponseActivity.onBackPressed() deliberately
+      // does not call super — Back is swallowed and a toast points the user at
+      // the button instead (PaymentResponseActivity.java:456-460).
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) {
+          AppToast.show(context,
+              message: 'Click on Back to dashboard button !',
+              variant: ToastVariant.info);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.bg,
+        appBar: AppBar(
+          title: Text('Payment Result',
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          automaticallyImplyLeading: false,
+        ),
+        body: _buildBody(c, tt, respState),
       ),
-      body: _buildBody(c, tt, respState),
     );
   }
 
@@ -222,7 +263,8 @@ class _PaymentResponseScreenState
               Icon(LucideIcons.alertCircle, size: 64, color: c.red),
               const SizedBox(height: 16),
               Text(
-                'Unable to verify payment',
+                respState.errorTitle ?? 'Unable to verify payment',
+                textAlign: TextAlign.center,
                 style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
@@ -385,7 +427,9 @@ class _PaymentResponseScreenState
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: const Text('Done'),
+                // Native label (btn_backtodash) — also what the blocked-Back
+                // toast tells the user to tap.
+                child: const Text('Back to Dashboard'),
               ),
             ),
           ],

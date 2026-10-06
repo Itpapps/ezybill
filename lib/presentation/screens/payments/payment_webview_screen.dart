@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -6,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/constants/api_constants.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../common/widgets/app_toast.dart';
 import '../../router/route_names.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,7 +57,6 @@ class PaymentWebviewScreen extends StatefulWidget {
 class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   late final WebViewController _controller;
   bool _isLoading = true;
-  bool _transactionInProgress = true;
   double _loadingProgress = 0;
 
   @override
@@ -95,27 +98,36 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   void _loadPaymentPage() {
     final pgUrl = '${ApiConstants.paymentGatewayBase}$_kGatewayViewPath';
 
-    // Load using POST via an auto-submitting HTML form
-    final html = '''
-<!DOCTYPE html>
-<html>
-<body onload="document.getElementById('pgForm').submit();">
-  <form id="pgForm" method="POST" action="$pgUrl">
-    <input type="hidden" name="auth_key" value="$_kGatewayAuthKey" />
-    <input type="hidden" name="employee_id" value="${_escapeHtml(widget.employeeId)}" />
-    <input type="hidden" name="dealer_id" value="${_escapeHtml(widget.dealerId)}" />
-    <input type="hidden" name="customer_id" value="${_escapeHtml(_gatewayCustomerId)}" />
-    <input type="hidden" name="amount" value="${_escapeHtml(widget.amount)}" />
-    <input type="hidden" name="from_mobile_app" value="0" />
-  </form>
-  <p style="text-align:center;margin-top:40px;font-family:sans-serif;color:#666;">
-    Redirecting to payment gateway...
-  </p>
-</body>
-</html>
-''';
+    // Same six fields, same order, same encoding as the native app
+    // (Payment_Webview_Frag.java:73-93, URLEncoder.encode → '+' for spaces,
+    // which is what Uri.encodeQueryComponent produces too).
+    final body = <String, String>{
+      'auth_key': _kGatewayAuthKey,
+      'employee_id': widget.employeeId,
+      'dealer_id': widget.dealerId,
+      'customer_id': _gatewayCustomerId,
+      'amount': widget.amount,
+      'from_mobile_app': '0',
+    }
+        .entries
+        .map((e) =>
+            '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value)}')
+        .join('&');
 
-    _controller.loadHtmlString(html);
+    // Direct POST, exactly like the native WebView.postUrl()
+    // (Payment_Webview_Frag.java:100). webview_flutter maps this to postUrl on
+    // Android and to an NSURLRequest POST on iOS. The previous
+    // auto-submitting HTML form worked too, but it submitted from an
+    // about:blank document — the gateway saw `Origin: null`/no referer, and
+    // the blank page stayed in the WebView history.
+    _controller.loadRequest(
+      Uri.parse(pgUrl),
+      method: LoadRequestMethod.post,
+      // Android's postUrl implies this content type and drops custom headers;
+      // iOS needs it stated explicitly for the same wire format.
+      headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: Uint8List.fromList(utf8.encode(body)),
+    );
   }
 
   /// The native app always posts `customer_id=0` from the LCO top-up path
@@ -123,15 +135,6 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   /// string, so fall back to "0" and keep any real customer id intact.
   String get _gatewayCustomerId =>
       widget.customerId.isEmpty ? '0' : widget.customerId;
-
-  String _escapeHtml(String text) {
-    return text
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
-  }
 
   NavigationDecision _handleNavigation(NavigationRequest request) {
     final url = request.url;
@@ -199,8 +202,6 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
   }
 
   void _onPaymentComplete() {
-    setState(() => _transactionInProgress = false);
-
     // Navigate to payment response screen
     context.pushReplacementNamed(
       RouteNames.paymentResponseName,
@@ -210,34 +211,18 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
     );
   }
 
+  /// Native parity: the gateway WebView swallows Back while the page itself
+  /// can go back and shows a toast instead; on the first page Back is left to
+  /// the default handler and leaves the screen
+  /// (Payment_Webview_Frag.java:101-108). The native app never asks whether to
+  /// cancel the payment, so no confirmation dialog here either.
   Future<bool> _onWillPop() async {
-    if (_transactionInProgress) {
-      final shouldLeave = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) {
-          final c = Theme.of(context).extension<AppColors>()!;
-          return AlertDialog(
-            title: const Text('Cancel Payment?'),
-            content: const Text(
-              'A transaction is in progress. Are you sure you want to go back? '
-              'This may result in the payment not being completed.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Stay'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                style: TextButton.styleFrom(foregroundColor: c.red),
-                child: const Text('Leave'),
-              ),
-            ],
-          );
-        },
-      );
-      return shouldLeave ?? false;
+    if (await _controller.canGoBack()) {
+      if (mounted) {
+        AppToast.show(context,
+            message: 'Cannot go back!', variant: ToastVariant.info);
+      }
+      return false;
     }
     return true;
   }
@@ -248,7 +233,9 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
     final tt = Theme.of(context).textTheme;
 
     return PopScope(
-      canPop: !_transactionInProgress,
+      // Always intercept: whether Back may leave depends on an async
+      // canGoBack() probe, which `canPop` cannot await.
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (!didPop) {
           final shouldLeave = await _onWillPop();

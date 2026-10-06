@@ -43,6 +43,14 @@ class _LcoTopupScreenState extends ConsumerState<LcoTopupScreen> {
     return custom ?? 0;
   }
 
+  /// The literal string handed to the gateway. The native app forwards the
+  /// amount field's text untouched — getText() → bundle "gzs" → URL-encoded
+  /// POST body (LcoTopupFragment.java:82/94, Payment_Webview_Frag.java:55/90)
+  /// — so it must not be reformatted to two decimals here.
+  String get _amountText => _selectedPreset != null
+      ? _selectedPreset!.toString()
+      : _customAmountController.text.trim();
+
   void _selectPreset(int amount) {
     setState(() {
       _selectedPreset = amount;
@@ -59,8 +67,9 @@ class _LcoTopupScreenState extends ConsumerState<LcoTopupScreen> {
   void _onAddToWallet() {
     final amount = _selectedAmount;
     if (amount <= 0) {
+      // Native wording (LcoTopupFragment.java:99).
       AppToast.show(context,
-          message: 'Select or enter an amount.', variant: ToastVariant.info);
+          message: 'Enter Valid Amount', variant: ToastVariant.info);
       return;
     }
 
@@ -71,7 +80,7 @@ class _LcoTopupScreenState extends ConsumerState<LcoTopupScreen> {
       RouteNames.paymentWebviewName,
       extra: {
         'customerId': '', // LCO top-up — no customer ID needed
-        'amount': amount.toStringAsFixed(2),
+        'amount': _amountText,
         'authKey': session.token,
         'employeeId': session.employeeId.toString(),
         'dealerId': session.dealerId.toString(),

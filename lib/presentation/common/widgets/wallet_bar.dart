@@ -115,7 +115,10 @@ class WalletBar extends StatelessWidget {
             ),
           ),
 
-          // Top-up button
+          // Top-up button — hidden when the session may not top up, matching
+          // the native app where the "LCO Topup" entry is not shown at all
+          // (MainActivity.java:380-396).
+          if (onTopUp != null)
           GestureDetector(
             onTap: onTopUp,
             child: Container(

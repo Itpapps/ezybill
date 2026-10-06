@@ -1,6 +1,16 @@
+import 'package:dio/dio.dart';
+
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
+
+/// Static key the gateway/result endpoints expect on the V1 (selfcare) path.
+/// The native app hardcodes it (PaymentResponseActivity.java:97, :303).
+const String _kGatewayAuthKey = 'abcd1234abcd';
+
+/// Native Volley policy for the transaction-response call:
+/// DefaultRetryPolicy(100000, 1, 1.0f) (PaymentResponseActivity.java:112-115).
+const Duration _kTransactionResponseTimeout = Duration(milliseconds: 100000);
 
 class PaymentRemoteDatasource {
   final DioClient _dio;
@@ -195,23 +205,74 @@ class PaymentRemoteDatasource {
     return response.data as Map<String, dynamic>;
   }
 
-  /// Get customer transaction response (PG outcome)
-  /// Server: customer_transaction_reponseRest_post
+  /// Get customer transaction response (PG outcome).
+  ///
+  /// Mirrors the native PaymentResponseActivity, which picks the endpoint by
+  /// the BMS-supplied version (PaymentResponseActivity.java:77-82):
+  ///  * V1 (login_url still ends in /wsController) → plain JSON POST to
+  ///    `<base>/selfcare_rest_mobileapp/customer_transaction_reponse`
+  ///    (configg.properties:56), params employee_id, dealer_id,
+  ///    customer_id="0", auth_key="abcd1234abcd" (:293-306).
+  ///  * V2 → encrypted {payload,hash} POST to
+  ///    `/LcoRestServices/customer_transaction_reponseRest` with the Bearer
+  ///    header (configg.properties:133, :87-116).
+  ///
+  /// Without the V1 branch the generic routing would wrap this call into a
+  /// wsController SOAP envelope, which the native app never does.
+  ///
+  /// Timeout/retry follow the native Volley policy for this screen:
+  /// DefaultRetryPolicy(100000, 1, 1.0f) — 100 s, one transport retry.
   Future<Map<String, dynamic>> getCustomerTransactionResponse({
     required String authtoken,
     required String employeeId,
     required int dealerId,
     required String customerId,
   }) async {
-    final response = await _dio.post(
-      ApiConstants.customerTransaction,
-      data: {
-        'authtoken': authtoken,
-        'employee_id': employeeId,
-        'dealer_id': dealerId.toString(),
-        'customer_id': customerId,
-      },
+    final isV1 = ApiConstants.isWsController;
+    final options = Options(
+      receiveTimeout: _kTransactionResponseTimeout,
+      sendTimeout: _kTransactionResponseTimeout,
+      extra: isV1
+          // Bypasses the SOAP routing: the native V1 call is plain REST on a
+          // different controller.
+          ? {'customBaseUrl': ApiConstants.selfcareBase}
+          : null,
     );
+    final path = isV1
+        ? '/customer_transaction_reponse'
+        : ApiConstants.customerTransaction;
+    final data = isV1
+        ? {
+            'employee_id': employeeId,
+            'dealer_id': dealerId.toString(),
+            'customer_id': customerId.isEmpty ? '0' : customerId,
+            'auth_key': _kGatewayAuthKey,
+          }
+        : {
+            'authtoken': authtoken,
+            'employee_id': employeeId,
+            'dealer_id': dealerId.toString(),
+            'customer_id': customerId,
+          };
+
+    Future<Response<dynamic>> send() =>
+        _dio.post(path, data: data, options: options);
+
+    Response<dynamic> response;
+    try {
+      response = await send();
+    } on DioException catch (e) {
+      // One automatic retry on transport failure only — the native policy's
+      // maxNumRetries = 1. A server reply (badResponse) is not retried.
+      if (!_isTransportFailure(e)) rethrow;
+      response = await send();
+    }
     return response.data as Map<String, dynamic>;
   }
+
+  static bool _isTransportFailure(DioException e) =>
+      e.type == DioExceptionType.connectionTimeout ||
+      e.type == DioExceptionType.sendTimeout ||
+      e.type == DioExceptionType.receiveTimeout ||
+      e.type == DioExceptionType.connectionError;
 }
