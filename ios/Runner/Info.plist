@@ -16,6 +16,10 @@
 	<string>EzyBill needs Bluetooth to connect to your thermal printer and print payment receipts.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>EzyBill needs Bluetooth to communicate with your thermal printer.</string>
+	<!-- ── Camera required for customer photo capture (image_picker,
+	       ImageSource.camera) and STB/barcode scanning (mobile_scanner) ── -->
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to the camera to capture photos and videos.</string>
 	<!-- ── Location required for BLE scanning on iOS ───────────────── -->
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>EzyBill uses your location to scan for nearby Bluetooth printers.</string>
