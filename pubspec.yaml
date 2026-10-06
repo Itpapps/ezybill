@@ -2,7 +2,7 @@ name: ezybill
 description: "EzyBill - Cable TV Billing Management System"
 publish_to: 'none'
 
-version: 1.0.0+12
+version: 1.0.0+21
 
 
 environment:
