@@ -30,11 +30,11 @@ class ApiConstants {
   // The selected BMS returns `ipAddress` + `version`; bms_provider derives the
   // API base from those and calls setBaseUrl(). Nothing else needs changing.
   // LIVE
-  // static const String bmsUrl =
-  //     'https://ezybms.itpworld.com/index.php/validateAuthentication';
-  //LOCAL
   static const String bmsUrl =
-       'http://183.82.159.51:9090/ezybms_m8/app/index.php/validateAuthentication';
+      'https://ezybms.itpworld.com/index.php/validateAuthentication';
+  //LOCAL
+  // static const String bmsUrl =
+  //      'http://183.82.159.51:9090/ezybms_m8/app/index.php/validateAuthentication';
 
   //LOCAL
   // static const String bmsUrl =
