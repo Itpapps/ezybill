@@ -77,8 +77,11 @@ class _ComplaintScreenState extends ConsumerState<ComplaintScreen>
       if (session == null || !session.canAccessComplaints) return;
 
       final notifier = ref.read(complaintProvider.notifier);
+      // Opened for a customer: show only that customer's complaints, like
+      // native (Complaint_Operations_Fragment → getCustomerComplaintListRest).
       notifier.loadComplaints(
         loginUsersType: session.userType,
+        customerId: widget.custId,
       );
       notifier.loadCategories();
 
@@ -252,12 +255,8 @@ class _OpenComplaintsTabState extends ConsumerState<_OpenComplaintsTab> {
               const SizedBox(height: 16),
               TextButton.icon(
                 onPressed: () {
-                  final session = ref.read(appSessionProvider);
-                  if (session != null) {
-                    ref.read(complaintProvider.notifier).loadComplaints(
-                          loginUsersType: session.userType,
-                        );
-                  }
+                  // Same list the screen opened with (customer or all).
+                  ref.read(complaintProvider.notifier).reloadComplaints();
                 },
                 icon: Icon(LucideIcons.refreshCw, size: 16, color: c.red),
                 label: Text(AppLocalizations.of(context)!.retry,
@@ -340,14 +339,9 @@ class _OpenComplaintsTabState extends ConsumerState<_OpenComplaintsTab> {
           child: filtered.isEmpty
               ? _buildEmptyState(c)
               : RefreshIndicator(
-                  onRefresh: () async {
-                    final session = ref.read(appSessionProvider);
-                    if (session != null) {
-                      await ref
-                          .read(complaintProvider.notifier)
-                          .loadComplaints(loginUsersType: session.userType);
-                    }
-                  },
+                  onRefresh: () =>
+                      // Same list the screen opened with (customer or all).
+                      ref.read(complaintProvider.notifier).reloadComplaints(),
                   child: ListView.builder(
                     padding: const EdgeInsets.all(20),
                     itemCount: filtered.length,
@@ -666,12 +660,14 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
         _selectedSubcategoryId = null;
         _selectedEmployeeId = null;
       });
-      // Reload complaints
+      // Reload complaints — the same list the screen shows (this customer's
+      // when opened for one).
       final session = ref.read(appSessionProvider);
       if (session != null) {
-        ref
-            .read(complaintProvider.notifier)
-            .loadComplaints(loginUsersType: session.userType);
+        ref.read(complaintProvider.notifier).loadComplaints(
+              loginUsersType: session.userType,
+              customerId: widget.custId,
+            );
       }
     } else {
       final error =

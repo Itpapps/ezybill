@@ -22,10 +22,16 @@ class StbRemoteDatasource {
   }
 
   /// Get particular box details
+  ///
+  /// Server: getCustomerParticularBoxDetailsRest_post (LcoRestServices.php:1812)
+  /// reads `customerId`, `stockId` and `userType`; native sends all three
+  /// (Customer_STB_Select_Fragment.java:1138-1140). `userType` decides which
+  /// replacement reasons come back in `replacement_types`.
   Future<Map<String, dynamic>> getParticularBoxDetails({
     required String authtoken,
     required String customerId,
     required String stockId,
+    String? userType,
   }) async {
     final response = await _dio.post(
       ApiConstants.particularBoxDetails,
@@ -33,6 +39,7 @@ class StbRemoteDatasource {
         'authtoken': authtoken,
         'customerId': customerId,
         'stockId': stockId,
+        if (userType != null) 'userType': userType,
       },
     );
     return response.data as Map<String, dynamic>;
@@ -221,21 +228,45 @@ class StbRemoteDatasource {
   }
 
   /// STB Replacement
+  /// Server: stb_replacement_post (LcoRestServices.php:8604)
+  ///
+  /// Field names are the server's own, exactly as native sends them
+  /// (Box_Operations_Fragment.java:2311-2320) — including the server's
+  /// `account_nmber` spelling. The old names (customer_id, old_stb_no,
+  /// new_stb_no, new_vc_no) were never read, so the server saw an empty
+  /// serial and always answered "Invalid Serialnumber".
+  ///
+  /// Exactly one of [replaceSerialNumber] / [replaceVcNumber] carries the new
+  /// box; both are empty for a surrender.
   Future<Map<String, dynamic>> stbReplacement({
     required String authtoken,
     required String customerId,
-    required String oldStbNo,
-    required String newStbNo,
-    required String newVcNo,
+    required String serialNumber,
+    required String replacementTypeId,
+    required String amount,
+    required String receiptNumber,
+    required String remarks,
+    required String replaceSerialNumber,
+    required String replaceVcNumber,
+    required bool permanentSurrender,
+    required bool unpair,
   }) async {
     final response = await _dio.post(
       ApiConstants.stbReplacement,
       data: {
         'authtoken': authtoken,
-        'customer_id': customerId,
-        'old_stb_no': oldStbNo,
-        'new_stb_no': newStbNo,
-        'new_vc_no': newVcNo,
+        'serial_number': serialNumber,
+        'account_nmber': customerId,
+        'replacement_type_id': replacementTypeId,
+        'amount': amount,
+        'receipt_number': receiptNumber,
+        'remarks': remarks,
+        'replace_serial_number': replaceSerialNumber,
+        'replace_vc_number': replaceVcNumber,
+        // Native: "1" / "0" (Box_Operations_Fragment.java:487-491).
+        'is_permanent_surrender': permanentSurrender ? '1' : '0',
+        // Native: "1" = unpair the box, "2" = keep it paired (:494-498).
+        'pair_condition': unpair ? '1' : '2',
       },
     );
     return response.data as Map<String, dynamic>;

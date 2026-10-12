@@ -52,6 +52,10 @@ class ComplaintState {
   final List<Map<String, dynamic>> closerTypes;
   final List<Map<String, dynamic>> employees;
 
+  /// Service employees for the update screen (getServiceEmployeeList) —
+  /// a different list from [employees], which create-complaint uses.
+  final List<Map<String, dynamic>> serviceEmployees;
+
   const ComplaintState({
     this.isLoading = false,
     this.errorMessage,
@@ -61,6 +65,7 @@ class ComplaintState {
     this.subcategories = const [],
     this.closerTypes = const [],
     this.employees = const [],
+    this.serviceEmployees = const [],
   });
 
   ComplaintState copyWith({
@@ -72,6 +77,7 @@ class ComplaintState {
     List<ComplaintSubcategory>? subcategories,
     List<Map<String, dynamic>>? closerTypes,
     List<Map<String, dynamic>>? employees,
+    List<Map<String, dynamic>>? serviceEmployees,
   }) {
     return ComplaintState(
       isLoading: isLoading ?? this.isLoading,
@@ -82,6 +88,7 @@ class ComplaintState {
       subcategories: subcategories ?? this.subcategories,
       closerTypes: closerTypes ?? this.closerTypes,
       employees: employees ?? this.employees,
+      serviceEmployees: serviceEmployees ?? this.serviceEmployees,
     );
   }
 
@@ -108,16 +115,32 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
 
   // ── Load complaints ──────────────────────────────────────────────────────
 
+  /// Customer whose complaints the list shows; null = all of the dealer's.
+  String? _listCustomerId;
+  String _listUsersType = 'RESELLER';
+
+  /// Loads the complaints list. With a [customerId] it loads only that
+  /// customer's complaints, like native's customer flow
+  /// (Complaint_Operations_Fragment → getCustomerComplaintListRest);
+  /// without one, the dealer-wide list. [reloadComplaints] repeats the same
+  /// choice, so a refresh never swaps a customer's list for everyone's.
   Future<void> loadComplaints({
     int serviceEmployeeId = 0,
     String loginUsersType = 'RESELLER',
+    String? customerId,
   }) async {
+    final forCustomer =
+        (customerId != null && customerId.trim().isNotEmpty) ? customerId : null;
+    _listCustomerId = forCustomer;
+    _listUsersType = loginUsersType;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final result = await _repo.getComplaintList(
-        serviceEmployeeId: serviceEmployeeId,
-        loginUsersType: loginUsersType,
-      );
+      final result = forCustomer != null
+          ? await _repo.getCustomerComplaintList(customerId: forCustomer)
+          : await _repo.getComplaintList(
+              serviceEmployeeId: serviceEmployeeId,
+              loginUsersType: loginUsersType,
+            );
 
       switch (result) {
         case Success(:final data):
@@ -133,6 +156,12 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
       );
     }
   }
+
+  /// Repeats the last [loadComplaints] (same customer or dealer-wide).
+  Future<void> reloadComplaints() => loadComplaints(
+        loginUsersType: _listUsersType,
+        customerId: _listCustomerId,
+      );
 
   // ── Load categories ──────────────────────────────────────────────────────
 
@@ -195,6 +224,30 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
           [];
       state = state.copyWith(employees: list);
     } catch (_) {}
+  }
+
+  /// Loads the service employees for the update screen, like native's
+  /// GetServiceemployeelistRest (ComplaintHistory_Other_Fragment.java:1081-1170).
+  Future<void> loadServiceEmployees(int dealerId) async {
+    // copyWith clears both messages unless they are passed through.
+    state = state.copyWith(
+      serviceEmployees: const [],
+      errorMessage: state.errorMessage,
+      successMessage: state.successMessage,
+    );
+    try {
+      final ds = ref.read(complaintRemoteDatasourceProvider);
+      final data = await ds.getServiceEmployeeList(dealerId: dealerId);
+      final raw = data['getServiceEmployeeList'];
+      state = state.copyWith(
+        serviceEmployees:
+            raw is List ? raw.whereType<Map<String, dynamic>>().toList() : [],
+        errorMessage: state.errorMessage,
+        successMessage: state.successMessage,
+      );
+    } catch (_) {
+      // Unknown, not "none": native keeps its -1 default in this case.
+    }
   }
 
   // ── Create complaint ─────────────────────────────────────────────────────
@@ -278,9 +331,23 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
       final commentWithSuffix =
           '$comment.Complaint Status Change From Flutter app';
 
+      // Native sends the picked service employee, else -1. Its code means to
+      // fall back to the logged-in employee when the dealer has no service
+      // employees (ComplaintHistory_Other_Fragment.java:1169), but the line
+      // before it throws (:1168, NullPointerException — seen in logcat), so
+      // in practice it always sends -1 (updatecomp log: assignedemp=-1).
+      // The own-id value is what the server rejects: Flutter's
+      // assignedemp=98 came back "Complaint update failed.".
+      final assignedEmp = assignedEmployeeId ?? '-1';
+
       final result = await _repo.closeComplaint(
         complaintId: complaintId,
-        remarks: commentWithSuffix,
+        ticketNumber: ticketNumber,
+        comment: commentWithSuffix,
+        status: status,
+        assignedEmp: assignedEmp,
+        closerTicketTypeId: closerTicketTypeId,
+        closerReasonId: closerReasonId,
       );
 
       switch (result) {
@@ -335,6 +402,10 @@ class ComplaintNotifier extends Notifier<ComplaintState> {
         return list
             .cast<Map<String, dynamic>>()
             .map((e) => ComplaintModel.fromJson(e))
+            // With no complaints the server still sends one blank placeholder
+            // row (getCustomerComplaintListRest "No records found."); native
+            // never shows it.
+            .where((c) => c.complaintId.trim().isNotEmpty)
             .toList();
       }
     }

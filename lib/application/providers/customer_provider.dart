@@ -28,14 +28,15 @@ final customerRepositoryProvider = Provider<CustomerRepository>((ref) {
 // Search field enum
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// The six search fields supported by the customer search API.
+/// The five search fields of the customer search API — the same five boxes
+/// as native's SearchCustomer_Fragment. CAF numbers are searched through
+/// Customer ID (native labels it "Customer ID/CAF No").
 enum CustomerSearchField {
-  customerNumber('Customer #'),
+  customerNumber('Customer ID'),
   customerName('Name'),
   mobileNumber('Mobile'),
-  boxNumber('STB #'),
-  lcoCustomerId('LCO ID'),
-  cafNumber('CAF #');
+  boxNumber('Serial/VC Number'),
+  lcoCustomerId('LCO ID');
 
   final String label;
   const CustomerSearchField(this.label);
@@ -256,8 +257,6 @@ class CustomerSearchNotifier extends Notifier<CustomerSearchState> {
         return {'boxNumber': query};
       case CustomerSearchField.lcoCustomerId:
         return {'lcoCustomerId': query};
-      case CustomerSearchField.cafNumber:
-        return {'cafNumber': query};
     }
   }
 

@@ -110,11 +110,16 @@ class ComplaintRepositoryImpl implements ComplaintRepository {
   Future<Result<List<Map<String, dynamic>>>> getComplaintTypes() async {
     try {
       final data = await _remoteDatasource.getComplaintTypes();
-      final list = data['data'] as List? ??
+      // complaintTypesRest returns the statuses as
+      // complaintStatuses: [{"value": "RESOLVED"}, …] (LcoRestServices.php:2614;
+      // native reads `value`, ComplaintHistory_Other_Fragment.java:1369).
+      // None of the old keys exist, so the status list used to be empty.
+      final list = data['complaintStatuses'] as List? ??
+          data['data'] as List? ??
           data['complaintTypes'] as List? ??
           data['closerTypes'] as List? ??
           [];
-      return Success(list.cast<Map<String, dynamic>>());
+      return Success(list.whereType<Map<String, dynamic>>().toList());
     } on ApiException catch (e) {
       return Failure(e.message, statusCode: e.statusCode);
     } catch (e) {
@@ -149,12 +154,22 @@ class ComplaintRepositoryImpl implements ComplaintRepository {
   @override
   Future<Result<Map<String, dynamic>>> closeComplaint({
     required String complaintId,
-    String? remarks,
+    required String ticketNumber,
+    required String comment,
+    required String status,
+    required String assignedEmp,
+    String? closerTicketTypeId,
+    String? closerReasonId,
   }) async {
     try {
       final data = await _remoteDatasource.closeComplaint(
         complaintId: complaintId,
-        remarks: remarks,
+        ticketNumber: ticketNumber,
+        comment: comment,
+        status: status,
+        assignedEmp: assignedEmp,
+        closerTicketTypeId: closerTicketTypeId,
+        closerReasonId: closerReasonId,
       );
       return Success(data);
     } on ApiException catch (e) {

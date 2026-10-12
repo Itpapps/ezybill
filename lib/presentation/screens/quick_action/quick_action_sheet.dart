@@ -305,17 +305,19 @@ class _HeaderBar extends StatelessWidget {
         children: [
           // Lightning icon + title + LCO badge.
           //
-          // The title is the ONLY element in this Row allowed to shrink: it is
-          // the sole Flexible inside the Expanded group, so it absorbs the
-          // whole shortfall and ellipsises, while the wallet / TOP UP / close
-          // controls always lay out at their natural size. Previously the
-          // wallet was the only Flexible here and a Spacer competed with it
-          // for the leftover space, so on phone widths the balance was scaled
-          // away to nothing — it only survived on tablets.
+          // Only this group shrinks: the wallet / TOP UP / close controls
+          // always lay out at their natural size. Inside it the title gives
+          // way first (Flexible, ellipsised), then the LCO badge, which is
+          // capped to the space left — with a large balance and the TOP UP
+          // pill on a phone, the fixed-width badge used to overflow the row
+          // (by 13 px on a 360 dp screen). Previously the wallet was the only
+          // Flexible here and a Spacer competed with it for the leftover
+          // space, so on phone widths the balance was scaled away to nothing.
           const Icon(LucideIcons.zap, size: 18, color: Color(0xFFF5A623)),
           const SizedBox(width: 6),
           Expanded(
-            child: Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) => Row(
               children: [
                 Flexible(
                   child: Text(
@@ -330,10 +332,15 @@ class _HeaderBar extends StatelessWidget {
                   ),
                 ),
 
-                // LCO badge
+                // LCO badge — never wider than the space left in the group.
                 if (lcoCode.isNotEmpty) ...[
                   const SizedBox(width: 10),
-                  Container(
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth:
+                          (constraints.maxWidth - 10).clamp(0.0, double.infinity),
+                    ),
+                    child: Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
@@ -351,8 +358,10 @@ class _HeaderBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  ),
                 ],
               ],
+            ),
             ),
           ),
           const SizedBox(width: 10),

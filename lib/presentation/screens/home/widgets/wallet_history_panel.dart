@@ -22,7 +22,8 @@ class WalletHistoryPanel extends StatelessWidget {
   /// Whether wallet history is currently loading.
   final bool isLoading;
 
-  /// List of wallet history entries. Each has `amount` and `date` keys.
+  /// Wallet recharge rows from `getLcoWalletReport` (`credit_amount`,
+  /// `Deposit_Date`, …).
   final List<Map<String, dynamic>> entries;
 
   @override
@@ -113,10 +114,9 @@ class _Panel extends StatelessWidget {
               )
             else
               ...entries.take(5).map((entry) {
-                final amount = entry['amount']?.toString() ?? '0';
-                final date = entry['date']?.toString() ??
-                    entry['created_date']?.toString() ??
-                    '';
+                // getLcoWalletReport row keys (LcoRestServices.php:8036).
+                final amount = entry['credit_amount']?.toString() ?? '0';
+                final date = entry['Deposit_Date']?.toString() ?? '';
                 return _HistoryRow(amount: amount, date: date);
               }),
           ],

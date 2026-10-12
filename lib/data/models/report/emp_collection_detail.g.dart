@@ -8,21 +8,21 @@ part of 'emp_collection_detail.dart';
 
 _EmpCollectionDetail _$EmpCollectionDetailFromJson(Map<String, dynamic> json) =>
     _EmpCollectionDetail(
-      customerId: json['customerId'] as String? ?? '',
-      customerName: json['customerName'] as String? ?? '',
-      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0.0,
-      paidOn: json['paidOn'] as String? ?? '',
-      paymentMode: json['paymentMode'] as String? ?? '',
-      paymentId: json['paymentId'] as String? ?? '',
+      customerId: json['customer_id'] as String? ?? '',
+      customerName: json['customer_name'] as String? ?? '',
+      paidAmount: (json['paid_amount'] as num?)?.toDouble() ?? 0.0,
+      paidOn: json['paid_on'] as String? ?? '',
+      paymentMode: json['payment_mode'] as String? ?? '',
+      paymentId: json['payment_id'] as String? ?? '',
     );
 
 Map<String, dynamic> _$EmpCollectionDetailToJson(
   _EmpCollectionDetail instance,
 ) => <String, dynamic>{
-  'customerId': instance.customerId,
-  'customerName': instance.customerName,
-  'paidAmount': instance.paidAmount,
-  'paidOn': instance.paidOn,
-  'paymentMode': instance.paymentMode,
-  'paymentId': instance.paymentId,
+  'customer_id': instance.customerId,
+  'customer_name': instance.customerName,
+  'paid_amount': instance.paidAmount,
+  'paid_on': instance.paidOn,
+  'payment_mode': instance.paymentMode,
+  'payment_id': instance.paymentId,
 };

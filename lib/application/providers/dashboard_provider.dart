@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/config/app_session.dart';
+import '../../core/utils/date_formatters.dart';
 import '../../core/utils/result.dart';
 import '../../data/datasources/remote/dashboard_remote_datasource.dart';
 import '../../data/models/dashboard/dashboard_response.dart';
@@ -229,12 +230,28 @@ class DashboardNotifier extends Notifier<DashboardState> {
 
     state = state.copyWith(walletHistoryLoading: true);
 
-    final result = await _repo.getLcoWallet(dealerId: session.dealerId);
+    // The server rejects the call without both dates (start_date/end_date
+    // are isRequired, LcoRestServices.php:7997), so ask for the last 30 days.
+    final now = DateTime.now();
+    final result = await _repo.getLcoWallet(
+      dealerId: session.dealerId,
+      startDate: formatApiDate(now.subtract(const Duration(days: 30))),
+      endDate: formatApiDate(now),
+    );
     switch (result) {
       case Success(:final data):
-        final list = (data['lcoWalletList'] as List<dynamic>?)
-                ?.cast<Map<String, dynamic>>() ??
-            [];
+        // Rows come back under getLcoWalletReport (LcoRestServices.php:8036).
+        final raw = data['getLcoWalletReport'];
+        final list = raw is List
+            ? raw
+                .whereType<Map<String, dynamic>>()
+                // This panel and its chip count recharges, i.e. rows that
+                // credited the wallet. The full ledger (credits and debits)
+                // is on the Wallet History screen.
+                .where((r) =>
+                    (double.tryParse('${r['credit_amount']}') ?? 0) > 0)
+                .toList()
+            : <Map<String, dynamic>>[];
         state = state.copyWith(
           walletHistory: list,
           walletHistoryLoading: false,

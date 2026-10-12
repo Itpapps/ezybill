@@ -31,6 +31,7 @@ _CustomerModel _$CustomerModelFromJson(Map<String, dynamic> json) =>
       vcNumber: json['vc_number'] as String?,
       stbCount: (json['stb_count'] as num?)?.toInt() ?? 0,
       baid: json['baid'] as String?,
+      serviceEndDate: json['service_enddate'] as String?,
     );
 
 Map<String, dynamic> _$CustomerModelToJson(_CustomerModel instance) =>
@@ -58,4 +59,5 @@ Map<String, dynamic> _$CustomerModelToJson(_CustomerModel instance) =>
       'vc_number': instance.vcNumber,
       'stb_count': instance.stbCount,
       'baid': instance.baid,
+      'service_enddate': instance.serviceEndDate,
     };

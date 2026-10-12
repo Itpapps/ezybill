@@ -177,7 +177,12 @@ class ReportNotifier extends Notifier<ReportState> {
           final details = parseList<EmpCollectionDetail>(
             data['collectionList'] ?? data['collResultList'],
             EmpCollectionDetail.fromJson,
-          );
+          )
+              // With no collections the server still sends one dummy row
+              // with no customer_id (LcoRestServices.php:2789); native's
+              // parse rejects it, so drop it instead of showing a ₹0 row.
+              .where((d) => d.customerId.isNotEmpty)
+              .toList();
           state = state.copyWith(
             isDetailLoading: false,
             empCollectionDetails: details,

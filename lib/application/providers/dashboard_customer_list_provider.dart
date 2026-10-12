@@ -34,6 +34,48 @@ enum CustomerFilterTab {
   bool get hasListEndpoint => true; // All tabs now use getdashboardlist
 }
 
+/// Sort order of the dashboard list. "Area" is intentionally absent:
+/// getdashboardlist does not send the customer's location (`location_id` is
+/// commented out of its keys, LcoRestServices.php:8371).
+enum DashboardSort { name, dueDate }
+
+/// Stable sort: ties keep the server's order, and rows without a value
+/// (no name, no or invalid due date) go to the end.
+List<CustomerModel> sortDashboardCustomers(
+  List<CustomerModel> list,
+  DashboardSort sort,
+) {
+  String nameKey(CustomerModel c) => c.customerName.trim().toLowerCase();
+  DateTime? dueKey(CustomerModel c) {
+    final d = DateTime.tryParse(c.serviceEndDate?.trim() ?? '');
+    // "0000-00-00" parses to a year-0 date; treat it as no date.
+    return (d == null || d.year < 1900) ? null : d;
+  }
+
+  int byName(CustomerModel a, CustomerModel b) {
+    final x = nameKey(a), y = nameKey(b);
+    if (x.isEmpty != y.isEmpty) return x.isEmpty ? 1 : -1;
+    return x.compareTo(y);
+  }
+
+  int byDue(CustomerModel a, CustomerModel b) {
+    final x = dueKey(a), y = dueKey(b);
+    if ((x == null) != (y == null)) return x == null ? 1 : -1;
+    if (x != null && y != null) {
+      final c = x.compareTo(y);
+      if (c != 0) return c;
+    }
+    return byName(a, b);
+  }
+
+  final indexed = list.indexed.toList();
+  indexed.sort((a, b) {
+    final c = sort == DashboardSort.name ? byName(a.$2, b.$2) : byDue(a.$2, b.$2);
+    return c != 0 ? c : a.$1.compareTo(b.$1);
+  });
+  return [for (final e in indexed) e.$2];
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // State
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,6 +89,7 @@ class DashboardCustomerListState {
   final int totalCount;
   /// 1-based page index for UI pagination.
   final int currentPage;
+  final DashboardSort sort;
 
   const DashboardCustomerListState({
     this.isLoading = false,
@@ -56,6 +99,7 @@ class DashboardCustomerListState {
     this.customers = const [],
     this.totalCount = 0,
     this.currentPage = 1,
+    this.sort = DashboardSort.name,
   });
 
   /// Alias used by the widget layer.
@@ -89,6 +133,7 @@ class DashboardCustomerListState {
     List<CustomerModel>? customers,
     int? totalCount,
     int? currentPage,
+    DashboardSort? sort,
   }) {
     return DashboardCustomerListState(
       isLoading: isLoading ?? this.isLoading,
@@ -98,6 +143,7 @@ class DashboardCustomerListState {
       customers: customers ?? this.customers,
       totalCount: totalCount ?? this.totalCount,
       currentPage: currentPage ?? this.currentPage,
+      sort: sort ?? this.sort,
     );
   }
 }
@@ -169,7 +215,8 @@ class DashboardCustomerListNotifier
           }
           state = state.copyWith(
             isLoading: false,
-            customers: data.existCustomerDetails,
+            customers:
+                sortDashboardCustomers(data.existCustomerDetails, state.sort),
             totalCount: data.customerCount,
             currentPage: 1,
           );
@@ -284,6 +331,8 @@ class DashboardCustomerListNotifier
             'vc_number': m['vc_number']?.toString() ?? '',
             // CAS type stored in baid field for fresh box display
             'baid': m['cas']?.toString() ?? '',
+            // Due date — drives the "Due date" sort.
+            'service_enddate': m['service_enddate']?.toString(),
           };
           return CustomerModel.fromJson(normalized);
         } catch (e) {
@@ -295,7 +344,7 @@ class DashboardCustomerListNotifier
       state = state.copyWith(
         isLoading: false,
         isLoadingMore: false,
-        customers: allRecords,
+        customers: sortDashboardCustomers(allRecords, state.sort),
         totalCount: allRecords.length,
         currentPage: 1,
       );
@@ -309,6 +358,18 @@ class DashboardCustomerListNotifier
     }
   }
 
+
+  /// Re-sorts the loaded list and returns to page 1. The choice is kept in
+  /// state, so tab switches and refreshes come back sorted the same way.
+  void setSort(DashboardSort sort) {
+    if (sort == state.sort) return;
+    state = state.copyWith(
+      sort: sort,
+      customers: sortDashboardCustomers(state.customers, sort),
+      currentPage: 1,
+      errorMessage: state.errorMessage,
+    );
+  }
 
   void goToPage(int page) {
     if (state.customers.isEmpty) return;

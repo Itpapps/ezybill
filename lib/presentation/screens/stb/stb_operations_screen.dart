@@ -38,6 +38,9 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
   final _searchController = TextEditingController();
   String? _activeCustomerId;
 
+  /// Customer whose box list already triggered the replacement-switch load.
+  String? _replacementCheckedFor;
+
   @override
   void initState() {
     super.initState();
@@ -116,7 +119,23 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
     final stbState = ref.watch(stbProvider);
     final session = ref.watch(appSessionProvider);
 
-    ref.listen<StbState>(stbProvider, (_, state) {
+    ref.listen<StbState>(stbProvider, (prev, state) {
+      // Native shows Replacement only when the dealer allows it
+      // (show_replacement, Box_Operations_Fragment.java:251-255). It comes
+      // from the per-box details call, but it is a dealer-level switch
+      // (LcoRestServices.php:1859), so one box answers it for the list.
+      if (!identical(prev?.stbList, state.stbList) &&
+          state.stbList.isNotEmpty &&
+          _activeCustomerId != null &&
+          _replacementCheckedFor != _activeCustomerId) {
+        final stockId = state.stbList.first.stockId ?? '';
+        if (stockId.isNotEmpty) {
+          _replacementCheckedFor = _activeCustomerId;
+          ref
+              .read(stbProvider.notifier)
+              .loadReplacementOptions(_activeCustomerId!, stockId);
+        }
+      }
       if (state.successMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -422,11 +441,16 @@ class _StbOperationsScreenState extends ConsumerState<StbOperationsScreen> {
               'customerName': widget.customerName,
             });
           },
+          showReplace: stbState.replacementOptions?.enabled == true,
           onReplace: () {
             context.push(RouteNames.stbReplacement, extra: {
               'customerId': _activeCustomerId,
               'stbNo': box.stbNo,
               'customerName': widget.customerName,
+              'stockId': box.stockId,
+              'vcNo': box.vcNo,
+              'casType': box.casType,
+              'status': statusText,
             });
           },
         );
@@ -693,6 +717,7 @@ class _StbCard extends StatelessWidget {
   final VoidCallback onActivate;
   // Other
   final VoidCallback onPackages;
+  final bool showReplace;
   final VoidCallback onReplace;
 
   const _StbCard({
@@ -710,6 +735,7 @@ class _StbCard extends StatelessWidget {
     required this.activateColor,
     required this.onActivate,
     required this.onPackages,
+    required this.showReplace,
     required this.onReplace,
   });
 
@@ -876,13 +902,14 @@ class _StbCard extends StatelessWidget {
                   onTap: onPackages,
                 ),
 
-                // Replace
-                _ActionButton(
-                  icon: LucideIcons.refreshCw,
-                  label: AppLocalizations.of(context)!.replacement,
-                  color: colors.purple,
-                  onTap: onReplace,
-                ),
+                // Replace — only when the dealer allows it, like native.
+                if (showReplace)
+                  _ActionButton(
+                    icon: LucideIcons.refreshCw,
+                    label: AppLocalizations.of(context)!.replacement,
+                    color: colors.purple,
+                    onTap: onReplace,
+                  ),
               ],
             ),
           ),

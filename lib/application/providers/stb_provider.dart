@@ -14,6 +14,70 @@ final stbRemoteDatasourceProvider = Provider<StbRemoteDatasource>((ref) {
 });
 
 // ---------------------------------------------------------------------------
+// STB replacement options
+// ---------------------------------------------------------------------------
+
+/// One replacement reason, as the server lists it for this user type.
+class ReplacementType {
+  final String id;
+  final String name;
+  const ReplacementType(this.id, this.name);
+
+  /// Native switches the form on the reason NAME: a surrender needs no new
+  /// box and offers "permanent surrender" (Box_Operations_Fragment.java:519-527).
+  bool get isSurrender => name.trim().toUpperCase() == 'SURRENDER';
+}
+
+/// What the server allows for STB replacement, from
+/// getCustomerParticularBoxDetailsRest (LcoRestServices.php:1846-1880):
+/// `show_replacement` (dealer switch SHOW_REPLACEMENT_IN_LCO_MOBILE_APP),
+/// `replacement_types` and `stb_replacement_form_validations`.
+class ReplacementOptions {
+  final bool enabled;
+  final List<ReplacementType> types;
+  final bool amountMandatory;
+  final bool receiptMandatory;
+
+  const ReplacementOptions({
+    this.enabled = false,
+    this.types = const [],
+    this.amountMandatory = false,
+    this.receiptMandatory = false,
+  });
+}
+
+/// Parses the replacement fields the way native does
+/// (Customer_STB_Select_Fragment.java:1172-1209): only a status-0 reply
+/// counts, and duplicate reason ids are dropped
+/// (Box_Operations_Fragment.java:190-199).
+ReplacementOptions parseReplacementOptions(Map<String, dynamic> data) {
+  int asInt(dynamic v) => int.tryParse(v?.toString().trim() ?? '') ?? 0;
+
+  final code = data['status_code'] ?? data['statusCode'];
+  if (code?.toString() != '0') return const ReplacementOptions();
+
+  final seen = <String>{};
+  final types = <ReplacementType>[];
+  final raw = data['replacement_types'];
+  if (raw is List) {
+    for (final t in raw.whereType<Map>()) {
+      final id = t['replacement_type_id']?.toString().trim() ?? '';
+      final name = t['replacement_type']?.toString().trim() ?? '';
+      if (id.isEmpty || !seen.add(id)) continue;
+      types.add(ReplacementType(id, name));
+    }
+  }
+  final v = data['stb_replacement_form_validations'];
+  final validations = v is Map ? v : const {};
+  return ReplacementOptions(
+    enabled: asInt(data['show_replacement']) == 1,
+    types: types,
+    amountMandatory: asInt(validations['amount_mandatory']) == 1,
+    receiptMandatory: asInt(validations['receipt_number_mandatory']) == 1,
+  );
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 
@@ -27,6 +91,10 @@ class StbState {
   final bool isTempDeactivated;
   final Map<String, dynamic>? boxDetails;
 
+  /// Null until loaded; callers treat null as "replacement not enabled",
+  /// like native's default show_replacement "0".
+  final ReplacementOptions? replacementOptions;
+
   const StbState({
     this.isLoading = false,
     this.errorMessage,
@@ -36,6 +104,7 @@ class StbState {
     this.deactivationReasons = const [],
     this.isTempDeactivated = false,
     this.boxDetails,
+    this.replacementOptions,
   });
 
   /// Filtered reasons: exclude reasonId == 17 ONLY.
@@ -53,6 +122,7 @@ class StbState {
     List<DeactivationReason>? deactivationReasons,
     bool? isTempDeactivated,
     Map<String, dynamic>? boxDetails,
+    ReplacementOptions? replacementOptions,
   }) {
     return StbState(
       isLoading: isLoading ?? this.isLoading,
@@ -63,6 +133,7 @@ class StbState {
       deactivationReasons: deactivationReasons ?? this.deactivationReasons,
       isTempDeactivated: isTempDeactivated ?? this.isTempDeactivated,
       boxDetails: boxDetails ?? this.boxDetails,
+      replacementOptions: replacementOptions ?? this.replacementOptions,
     );
   }
 }
@@ -394,40 +465,83 @@ class StbNotifier extends Notifier<StbState> {
 
   // -- STB Replacement --------------------------------------------------------
 
-  Future<bool> replaceStb(
+  /// Loads the replacement switch, reasons and mandatory flags for a box,
+  /// the same call native makes when a box is opened
+  /// (Customer_STB_Select_Fragment.java:1138-1209).
+  ///
+  /// Deliberately silent — no spinner, no error banner — because the STB
+  /// Operations screen calls it in the background. Returns null when the
+  /// call fails; callers treat that as "not enabled".
+  Future<ReplacementOptions?> loadReplacementOptions(
     String customerId,
-    String oldStbNo,
-    String newStbNo,
-    String newVcNo,
+    String stockId,
   ) async {
-    state = state.copyWith(
-        isLoading: true, errorMessage: null, successMessage: null);
+    try {
+      final data = await _remoteDs.getParticularBoxDetails(
+        authtoken: _token,
+        customerId: customerId,
+        stockId: stockId,
+        userType: ref.read(appSessionProvider)?.userType,
+      );
+      final options = parseReplacementOptions(data);
+      state = state.copyWith(
+        replacementOptions: options,
+        // copyWith clears both messages unless they are passed through.
+        errorMessage: state.errorMessage,
+        successMessage: state.successMessage,
+      );
+      return options;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Sends a replacement exactly as native does (SurrenderBoxRest,
+  /// Box_Operations_Fragment.java:2304-2390) and returns what native shows:
+  /// `code` 0 = success, 1 = failure (message from
+  /// `response_details.response_message`), >1 = server error (`status_msg`),
+  /// -1 = no reply. Shared state is untouched so the STB Operations screen
+  /// underneath does not react; the replacement screen shows the result.
+  Future<({int code, String message})> replaceStb({
+    required String customerId,
+    required String serialNumber,
+    required String replacementTypeId,
+    required String amount,
+    required String receiptNumber,
+    required String remarks,
+    required String replaceSerialNumber,
+    required String replaceVcNumber,
+    required bool permanentSurrender,
+    required bool unpair,
+  }) async {
     try {
       final data = await _remoteDs.stbReplacement(
         authtoken: _token,
         customerId: customerId,
-        oldStbNo: oldStbNo,
-        newStbNo: newStbNo,
-        newVcNo: newVcNo,
+        serialNumber: serialNumber,
+        replacementTypeId: replacementTypeId,
+        amount: amount,
+        receiptNumber: receiptNumber,
+        remarks: remarks,
+        replaceSerialNumber: replaceSerialNumber,
+        replaceVcNumber: replaceVcNumber,
+        permanentSurrender: permanentSurrender,
+        unpair: unpair,
       );
-
-      if (_isSuccess(data)) {
-        state = state.copyWith(
-          isLoading: false,
-          successMessage:
-              _serverMsg(data, fallback: 'STB replaced successfully'),
-        );
-        return true;
-      } else {
-        state = state.copyWith(
-          isLoading: false,
-          errorMessage: _serverMsg(data, fallback: 'Replacement failed'),
-        );
-        return false;
-      }
+      final code = _statusCode(data);
+      final details = data['response_details'];
+      final display = details is Map
+          ? details['response_message']?.toString()
+          : null;
+      final message = code > 1
+          ? _serverMsg(data, fallback: display ?? '')
+          : (display ?? _serverMsg(data));
+      return (code: code, message: message);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
-      return false;
+      return (
+        code: -1,
+        message: e.toString().replaceAll('ApiException: ', ''),
+      );
     }
   }
 

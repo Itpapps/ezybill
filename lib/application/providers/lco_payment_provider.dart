@@ -252,8 +252,10 @@ class LcoPaymentNotifier extends Notifier<LcoPaymentState> {
         endDate: endDate,
       );
 
-      final rawList =
-          (result['lcoWalletList'] as List<dynamic>?) ?? <dynamic>[];
+      // The server returns the rows under getLcoWalletReport
+      // (LcoRestServices.php:8036; native Report_EmpCollect_Fragment.java:285).
+      final raw = result['getLcoWalletReport'];
+      final rawList = raw is List ? raw : const <dynamic>[];
       final entries = rawList
           .map((e) => LcoWalletEntry.fromJson(e as Map<String, dynamic>))
           .toList();

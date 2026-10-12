@@ -52,14 +52,24 @@ class _LcoTopupScreenState extends ConsumerState<LcoTopupScreen> {
       : _customAmountController.text.trim();
 
   void _selectPreset(int amount) {
+    final text = amount.toString();
     setState(() {
       _selectedPreset = amount;
-      _customAmountController.clear();
+      // Show the chosen amount in the amount field. A programmatic write does
+      // not fire onChanged, so the preset stays highlighted; .value (not
+      // .text) also puts the caret at the end.
+      _customAmountController.value = TextEditingValue(
+        text: text,
+        selection: TextSelection.collapsed(offset: text.length),
+      );
     });
   }
 
   void _onCustomAmountChanged(String value) {
-    if (value.isNotEmpty) {
+    // Any hand edit — including clearing the field — makes the typed text the
+    // amount, so drop the preset. Otherwise an emptied field would still send
+    // the highlighted preset.
+    if (_selectedPreset != null) {
       setState(() => _selectedPreset = null);
     }
   }

@@ -15,7 +15,7 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$EmpCollectionDetail {
 
-@JsonKey(name: 'customerId') String get customerId;@JsonKey(name: 'customerName') String get customerName;@JsonKey(name: 'paidAmount') double get paidAmount;@JsonKey(name: 'paidOn') String get paidOn;@JsonKey(name: 'paymentMode') String get paymentMode;@JsonKey(name: 'paymentId') String get paymentId;
+@JsonKey(name: 'customer_id') String get customerId;@JsonKey(name: 'customer_name') String get customerName;@JsonKey(name: 'paid_amount') double get paidAmount;@JsonKey(name: 'paid_on') String get paidOn;@JsonKey(name: 'payment_mode') String get paymentMode;@JsonKey(name: 'payment_id') String get paymentId;
 /// Create a copy of EmpCollectionDetail
 /// with the given fields replaced by the non-null parameter values.
 @JsonKey(includeFromJson: false, includeToJson: false)
@@ -48,7 +48,7 @@ abstract mixin class $EmpCollectionDetailCopyWith<$Res>  {
   factory $EmpCollectionDetailCopyWith(EmpCollectionDetail value, $Res Function(EmpCollectionDetail) _then) = _$EmpCollectionDetailCopyWithImpl;
 @useResult
 $Res call({
-@JsonKey(name: 'customerId') String customerId,@JsonKey(name: 'customerName') String customerName,@JsonKey(name: 'paidAmount') double paidAmount,@JsonKey(name: 'paidOn') String paidOn,@JsonKey(name: 'paymentMode') String paymentMode,@JsonKey(name: 'paymentId') String paymentId
+@JsonKey(name: 'customer_id') String customerId,@JsonKey(name: 'customer_name') String customerName,@JsonKey(name: 'paid_amount') double paidAmount,@JsonKey(name: 'paid_on') String paidOn,@JsonKey(name: 'payment_mode') String paymentMode,@JsonKey(name: 'payment_id') String paymentId
 });
 
 
@@ -155,7 +155,7 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'customerId')  String customerId, @JsonKey(name: 'customerName')  String customerName, @JsonKey(name: 'paidAmount')  double paidAmount, @JsonKey(name: 'paidOn')  String paidOn, @JsonKey(name: 'paymentMode')  String paymentMode, @JsonKey(name: 'paymentId')  String paymentId)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function(@JsonKey(name: 'customer_id')  String customerId, @JsonKey(name: 'customer_name')  String customerName, @JsonKey(name: 'paid_amount')  double paidAmount, @JsonKey(name: 'paid_on')  String paidOn, @JsonKey(name: 'payment_mode')  String paymentMode, @JsonKey(name: 'payment_id')  String paymentId)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _EmpCollectionDetail() when $default != null:
 return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidOn,_that.paymentMode,_that.paymentId);case _:
@@ -176,7 +176,7 @@ return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidO
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'customerId')  String customerId, @JsonKey(name: 'customerName')  String customerName, @JsonKey(name: 'paidAmount')  double paidAmount, @JsonKey(name: 'paidOn')  String paidOn, @JsonKey(name: 'paymentMode')  String paymentMode, @JsonKey(name: 'paymentId')  String paymentId)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function(@JsonKey(name: 'customer_id')  String customerId, @JsonKey(name: 'customer_name')  String customerName, @JsonKey(name: 'paid_amount')  double paidAmount, @JsonKey(name: 'paid_on')  String paidOn, @JsonKey(name: 'payment_mode')  String paymentMode, @JsonKey(name: 'payment_id')  String paymentId)  $default,) {final _that = this;
 switch (_that) {
 case _EmpCollectionDetail():
 return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidOn,_that.paymentMode,_that.paymentId);}
@@ -193,7 +193,7 @@ return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidO
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'customerId')  String customerId, @JsonKey(name: 'customerName')  String customerName, @JsonKey(name: 'paidAmount')  double paidAmount, @JsonKey(name: 'paidOn')  String paidOn, @JsonKey(name: 'paymentMode')  String paymentMode, @JsonKey(name: 'paymentId')  String paymentId)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function(@JsonKey(name: 'customer_id')  String customerId, @JsonKey(name: 'customer_name')  String customerName, @JsonKey(name: 'paid_amount')  double paidAmount, @JsonKey(name: 'paid_on')  String paidOn, @JsonKey(name: 'payment_mode')  String paymentMode, @JsonKey(name: 'payment_id')  String paymentId)?  $default,) {final _that = this;
 switch (_that) {
 case _EmpCollectionDetail() when $default != null:
 return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidOn,_that.paymentMode,_that.paymentId);case _:
@@ -208,15 +208,15 @@ return $default(_that.customerId,_that.customerName,_that.paidAmount,_that.paidO
 @JsonSerializable()
 
 class _EmpCollectionDetail implements EmpCollectionDetail {
-  const _EmpCollectionDetail({@JsonKey(name: 'customerId') this.customerId = '', @JsonKey(name: 'customerName') this.customerName = '', @JsonKey(name: 'paidAmount') this.paidAmount = 0.0, @JsonKey(name: 'paidOn') this.paidOn = '', @JsonKey(name: 'paymentMode') this.paymentMode = '', @JsonKey(name: 'paymentId') this.paymentId = ''});
+  const _EmpCollectionDetail({@JsonKey(name: 'customer_id') this.customerId = '', @JsonKey(name: 'customer_name') this.customerName = '', @JsonKey(name: 'paid_amount') this.paidAmount = 0.0, @JsonKey(name: 'paid_on') this.paidOn = '', @JsonKey(name: 'payment_mode') this.paymentMode = '', @JsonKey(name: 'payment_id') this.paymentId = ''});
   factory _EmpCollectionDetail.fromJson(Map<String, dynamic> json) => _$EmpCollectionDetailFromJson(json);
 
-@override@JsonKey(name: 'customerId') final  String customerId;
-@override@JsonKey(name: 'customerName') final  String customerName;
-@override@JsonKey(name: 'paidAmount') final  double paidAmount;
-@override@JsonKey(name: 'paidOn') final  String paidOn;
-@override@JsonKey(name: 'paymentMode') final  String paymentMode;
-@override@JsonKey(name: 'paymentId') final  String paymentId;
+@override@JsonKey(name: 'customer_id') final  String customerId;
+@override@JsonKey(name: 'customer_name') final  String customerName;
+@override@JsonKey(name: 'paid_amount') final  double paidAmount;
+@override@JsonKey(name: 'paid_on') final  String paidOn;
+@override@JsonKey(name: 'payment_mode') final  String paymentMode;
+@override@JsonKey(name: 'payment_id') final  String paymentId;
 
 /// Create a copy of EmpCollectionDetail
 /// with the given fields replaced by the non-null parameter values.
@@ -251,7 +251,7 @@ abstract mixin class _$EmpCollectionDetailCopyWith<$Res> implements $EmpCollecti
   factory _$EmpCollectionDetailCopyWith(_EmpCollectionDetail value, $Res Function(_EmpCollectionDetail) _then) = __$EmpCollectionDetailCopyWithImpl;
 @override @useResult
 $Res call({
-@JsonKey(name: 'customerId') String customerId,@JsonKey(name: 'customerName') String customerName,@JsonKey(name: 'paidAmount') double paidAmount,@JsonKey(name: 'paidOn') String paidOn,@JsonKey(name: 'paymentMode') String paymentMode,@JsonKey(name: 'paymentId') String paymentId
+@JsonKey(name: 'customer_id') String customerId,@JsonKey(name: 'customer_name') String customerName,@JsonKey(name: 'paid_amount') double paidAmount,@JsonKey(name: 'paid_on') String paidOn,@JsonKey(name: 'payment_mode') String paymentMode,@JsonKey(name: 'payment_id') String paymentId
 });
 
 

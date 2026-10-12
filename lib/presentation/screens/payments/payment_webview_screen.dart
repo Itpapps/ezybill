@@ -249,14 +249,16 @@ class _PaymentWebviewScreenState extends State<PaymentWebviewScreen> {
         appBar: AppBar(
           title: Text('Payment Gateway',
               style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+          // Always leaves, back to the top-up screen. Only the Back key is
+          // gated by _onWillPop(). The native gateway page is a fragment
+          // inside MainActivity, so its toolbar (logo → Dashboard, menu) and
+          // nav drawer stay on screen and never consult canGoBack()
+          // (MainActivity.java:151-161, 257-263). This full-screen route has
+          // no such chrome, so gating this arrow too would leave the user no
+          // way out until the payment finished.
           leading: IconButton(
             icon: Icon(LucideIcons.arrowLeft, color: c.ink),
-            onPressed: () async {
-              final canPop = await _onWillPop();
-              if (canPop && mounted) {
-                Navigator.of(context).pop();
-              }
-            },
+            onPressed: () => Navigator.of(context).pop(),
           ),
           bottom: _isLoading
               ? PreferredSize(

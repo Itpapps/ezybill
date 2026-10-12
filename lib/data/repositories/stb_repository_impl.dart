@@ -205,17 +205,29 @@ class StbRepositoryImpl implements StbRepository {
   @override
   Future<Result<Map<String, dynamic>>> stbReplacement({
     required String customerId,
-    required String oldStbNo,
-    required String newStbNo,
-    required String newVcNo,
+    required String serialNumber,
+    required String replacementTypeId,
+    required String amount,
+    required String receiptNumber,
+    required String remarks,
+    required String replaceSerialNumber,
+    required String replaceVcNumber,
+    required bool permanentSurrender,
+    required bool unpair,
   }) async {
     try {
       final data = await _remoteDatasource.stbReplacement(
         authtoken: _authtoken,
         customerId: customerId,
-        oldStbNo: oldStbNo,
-        newStbNo: newStbNo,
-        newVcNo: newVcNo,
+        serialNumber: serialNumber,
+        replacementTypeId: replacementTypeId,
+        amount: amount,
+        receiptNumber: receiptNumber,
+        remarks: remarks,
+        replaceSerialNumber: replaceSerialNumber,
+        replaceVcNumber: replaceVcNumber,
+        permanentSurrender: permanentSurrender,
+        unpair: unpair,
       );
       return Success(data);
     } on ApiException catch (e) {

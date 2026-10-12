@@ -304,6 +304,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                         customerId: extra?['customerId']?.toString(),
                         stbNo: extra?['stbNo']?.toString(),
                         customerName: extra?['customerName']?.toString(),
+                        stockId: extra?['stockId']?.toString(),
+                        vcNo: extra?['vcNo']?.toString(),
+                        casType: extra?['casType']?.toString(),
+                        status: extra?['status']?.toString(),
                       );
                     },
                   ),

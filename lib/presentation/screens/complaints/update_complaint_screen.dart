@@ -71,8 +71,11 @@ class _UpdateComplaintScreenState
 
       final session = ref.read(appSessionProvider);
       if (session != null) {
-        // Always load employees — mandatory for TEAMLEAD, optional for others
-        notifier.loadEmployees(session.dealerId);
+        // Service employees — mandatory pick for TEAMLEAD, optional for
+        // others. Native's update screen uses getServiceEmployeeList
+        // (ComplaintHistory_Other_Fragment.GetServiceemployeelistRest), not
+        // the LCO employee list that create-complaint uses.
+        notifier.loadServiceEmployees(session.dealerId);
       }
     });
   }
@@ -131,12 +134,8 @@ class _UpdateComplaintScreenState
         ),
       );
 
-      // Reload complaints and pop back
-      if (session != null) {
-        ref
-            .read(complaintProvider.notifier)
-            .loadComplaints(loginUsersType: session.userType);
-      }
+      // Reload the same list (this customer's, or everyone's) and pop back.
+      ref.read(complaintProvider.notifier).reloadComplaints();
       Navigator.of(context).pop();
     } else {
       final error =
@@ -144,6 +143,36 @@ class _UpdateComplaintScreenState
       _showSnack(error, colors.red);
     }
   }
+
+  /// Id and label of one getServiceEmployeeList entry — native reads
+  /// `employee_id` / `first_name` (ComplaintHistory_Other_Fragment.java:
+  /// 1109-1114); the other keys are fallbacks.
+  static int _empId(Map<String, dynamic> e) =>
+      int.tryParse(
+          (e['employee_id'] ?? e['employeeId'] ?? e['lco_employee_id'] ?? '')
+              .toString()) ??
+      0;
+
+  static String _empName(Map<String, dynamic> e, int id) =>
+      (e['first_name'] ??
+              e['employeeName'] ??
+              e['lco_employee_name'] ??
+              e['firstName'] ??
+              'Employee $id')
+          .toString();
+
+  /// Status label/value of one complaintStatuses entry. The server sends
+  /// `{"value": "RESOLVED"}` (native reads `value`,
+  /// ComplaintHistory_Other_Fragment.java:1369); the rest are fallbacks.
+  static String _statusName(Map<String, dynamic> t) =>
+      (t['value'] ??
+              t['statusName'] ??
+              t['typeName'] ??
+              t['name'] ??
+              t['complaint_type'] ??
+              '')
+          .toString()
+          .trim();
 
   void _showSnack(String message, Color bgColor) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -337,11 +366,11 @@ class _UpdateComplaintScreenState
               ),
               style: TextStyle(
                   fontFamily: 'DM Sans', fontSize: 14, color: colors.ink),
-              items: cState.closerTypes.map((type) {
-                final name = type['typeName']?.toString() ??
-                    type['name']?.toString() ??
-                    type['complaint_type']?.toString() ??
-                    '';
+              items: cState.closerTypes
+                  .map(_statusName)
+                  // The server's empty-result placeholder has a blank name.
+                  .where((name) => name.isNotEmpty)
+                  .map((name) {
                 return DropdownMenuItem<String>(
                   value: name,
                   child: Text(name,
@@ -357,11 +386,7 @@ class _UpdateComplaintScreenState
                   // Try to capture closer_ticket_type_id and closer_reason_id
                   // from the selected closer type for the closeComplaintRest params.
                   final selectedType = cState.closerTypes.firstWhere(
-                    (t) =>
-                        (t['typeName']?.toString() ??
-                            t['name']?.toString() ??
-                            t['complaint_type']?.toString()) ==
-                        val,
+                    (t) => _statusName(t) == val,
                     orElse: () => {},
                   );
                   _selectedCloserTicketTypeId =
@@ -422,15 +447,9 @@ class _UpdateComplaintScreenState
                 ),
                 style: TextStyle(
                     fontFamily: 'DM Sans', fontSize: 14, color: colors.ink),
-                items: cState.employees.map((emp) {
-                  final id = int.tryParse(
-                          emp['employeeId']?.toString() ??
-                          emp['lco_employee_id']?.toString() ?? '') ??
-                      0;
-                  final name = emp['employeeName']?.toString() ??
-                      emp['lco_employee_name']?.toString() ??
-                      emp['firstName']?.toString() ??
-                      'Employee $id';
+                items: cState.serviceEmployees.map((emp) {
+                  final id = _empId(emp);
+                  final name = _empName(emp, id);
                   return DropdownMenuItem<int>(
                     value: id,
                     child: Text(name,
@@ -450,7 +469,7 @@ class _UpdateComplaintScreenState
             // Non-TEAMLEAD optional employee dropdown
             if (session != null &&
                 !session.isTeamLead &&
-                cState.employees.isNotEmpty) ...[
+                cState.serviceEmployees.isNotEmpty) ...[
               DropdownButtonFormField<int?>(
                 value: _selectedEmployeeId,
                 isExpanded: true,
@@ -469,23 +488,18 @@ class _UpdateComplaintScreenState
                 style: TextStyle(
                     fontFamily: 'DM Sans', fontSize: 14, color: colors.ink),
                 items: [
+                  // Native's "select" entry (-1 = nothing picked).
                   DropdownMenuItem<int?>(
                     value: null,
-                    child: Text('None',
+                    child: Text('Select',
                         style: TextStyle(
                             fontFamily: 'DM Sans',
                             fontSize: 14,
                             color: colors.ink40)),
                   ),
-                  ...cState.employees.map((emp) {
-                    final id = int.tryParse(
-                            emp['employeeId']?.toString() ??
-                            emp['lco_employee_id']?.toString() ?? '') ??
-                        0;
-                    final name = emp['employeeName']?.toString() ??
-                        emp['lco_employee_name']?.toString() ??
-                        emp['firstName']?.toString() ??
-                        'Employee $id';
+                  ...cState.serviceEmployees.map((emp) {
+                    final id = _empId(emp);
+                    final name = _empName(emp, id);
                     return DropdownMenuItem<int?>(
                       value: id,
                       child: Text(name,

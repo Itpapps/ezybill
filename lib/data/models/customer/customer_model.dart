@@ -29,6 +29,10 @@ sealed class CustomerModel with _$CustomerModel {
     @JsonKey(name: 'vc_number') String? vcNumber,
     @JsonKey(name: 'stb_count') @Default(0) int stbCount,
     @JsonKey(name: 'baid') String? baid,
+    /// Service end (due) date of this row's STB, e.g. "2026-03-25 23:59:59".
+    /// Only the dashboard list (getdashboardlist) sends it; native shows it
+    /// in AssignedSTBAdapter.java:230-233.
+    @JsonKey(name: 'service_enddate') String? serviceEndDate,
   }) = _CustomerModel;
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) =>
@@ -63,6 +67,7 @@ sealed class CustomerModel with _$CustomerModel {
       'pin_code', 'crf_number', 'bill_type', 'baid',
       'account_number', 'serial_number', 'vc_number',
       'billing_address', 'installation_address', 'customerName',
+      'service_enddate',
     ];
     for (final key in stringFields) {
       if (r[key] is num) r[key] = r[key].toString();

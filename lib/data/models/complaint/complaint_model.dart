@@ -25,5 +25,24 @@ sealed class ComplaintModel with _$ComplaintModel {
   }) = _ComplaintModel;
 
   factory ComplaintModel.fromJson(Map<String, dynamic> json) =>
-      _$ComplaintModelFromJson(json);
+      _$ComplaintModelFromJson(_sanitize(json));
+
+  /// The lists differ in which columns they send: the customer list
+  /// (getCustomerComplaintListRest) has no `description`, for one — native
+  /// reads only the columns it shows (Complaint_Operations_Fragment.java:
+  /// 540-575). Missing required text becomes '' instead of failing the whole
+  /// list, and non-string scalars are stringified (server values are strings
+  /// by convention, but a number must not break a row).
+  static Map<String, dynamic> _sanitize(Map<String, dynamic> json) {
+    final r = Map<String, dynamic>.from(json);
+    const requiredText = [
+      'simple_complaint_id', 'tkt_number', 'customer_id', 'customer_name',
+      'complaint', 'description', 'status', 'date',
+    ];
+    for (final key in requiredText) {
+      r[key] ??= '';
+    }
+    r.updateAll((_, v) => (v == null || v is String) ? v : v.toString());
+    return r;
+  }
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../../core/constants/api_constants.dart';
 import '../../../core/network/api_exception.dart';
 import '../../../core/network/dio_client.dart';
@@ -47,6 +49,11 @@ class ComplaintRemoteDatasource {
 
   /// Get complaints for a specific customer
   /// Server: getCustomerComplaintListRest_post
+  ///
+  /// The server reads the customer as `altCustomerId` (LcoRestServices.php,
+  /// getCustomerComplaintListRest_post), which is what native sends
+  /// (Complaint_Operations_Fragment.java:504). It used to go out as
+  /// `customerId`, which the server never reads.
   Future<Map<String, dynamic>> getCustomerComplaintList({
     required String customerId,
   }) async {
@@ -54,7 +61,26 @@ class ComplaintRemoteDatasource {
       ApiConstants.customerComplaintList,
       data: {
         'authtoken': _authtoken,
-        'customerId': customerId,
+        'altCustomerId': customerId,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
+
+  /// Service employees a complaint update can be assigned to.
+  /// Server: getServiceEmployeeList_post (LcoRestServices.php:8117) — reads
+  /// `dealer_id`; returns `getServiceEmployeeList` [{employee_id, first_name}]
+  /// or status_code 1 "No Services Employees.". Native's update screen uses
+  /// this list (ComplaintHistory_Other_Fragment.GetServiceemployeelistRest),
+  /// not the LCO employee list used when creating a complaint.
+  Future<Map<String, dynamic>> getServiceEmployeeList({
+    required int dealerId,
+  }) async {
+    final response = await _dio.post(
+      ApiConstants.serviceEmployeeList,
+      data: {
+        'authtoken': _authtoken,
+        'dealer_id': dealerId,
       },
     );
     return response.data as Map<String, dynamic>;
@@ -142,17 +168,47 @@ class ComplaintRemoteDatasource {
   }
 
   /// Close / update a complaint
-  /// Server: closeComplaintRest_post
+  /// Server: closeComplaintRest_post (LcoRestServices.php:6928)
+  ///
+  /// complaintId, ticketNumber, comment, status and assignedemp are all
+  /// `isRequired` on the server (:6934), and native sends exactly these five
+  /// (ComplaintHistory_Other_Fragment.java:1601-1605). The old call sent only
+  /// complaintId plus `remarks`, so every update failed validation.
+  /// The closer ids are optional — the server reads them only for RESOLVED
+  /// with ticket closure enabled — and go out only when one was chosen.
   Future<Map<String, dynamic>> closeComplaint({
     required String complaintId,
-    String? remarks,
+    required String ticketNumber,
+    required String comment,
+    required String status,
+    required String assignedEmp,
+    String? closerTicketTypeId,
+    String? closerReasonId,
   }) async {
+    if (kDebugMode) {
+      // Plain values for comparison with native's `updatecomp` log line
+      // (ComplaintHistory_Other_Fragment.java:1606). No token, no comment.
+      debugPrint('[COMPLAINT-UPDATE] complaintId=$complaintId '
+          'ticketNumber=$ticketNumber status=$status assignedemp=$assignedEmp');
+    }
     final response = await _dio.post(
       ApiConstants.closeComplaint,
       data: {
-        'authtoken': _authtoken,
+        // Native's V2 payload is exactly the five fields below — identity
+        // comes from the JWT header. The server hands this WHOLE payload to
+        // Simplecomplaints_model->insertstatus() (LcoRestServices.php:7033),
+        // so an extra `authtoken` key is not harmless here the way it is for
+        // calls that read named fields only. V1 (wsController) keeps it.
+        if (ApiConstants.isWsController) 'authtoken': _authtoken,
         'complaintId': complaintId,
-        if (remarks != null) 'remarks': remarks,
+        'ticketNumber': ticketNumber,
+        'comment': comment,
+        'status': status,
+        'assignedemp': assignedEmp,
+        if (closerTicketTypeId != null && closerTicketTypeId.isNotEmpty)
+          'closer_ticket_type_id': closerTicketTypeId,
+        if (closerReasonId != null && closerReasonId.isNotEmpty)
+          'closer_reason_id': closerReasonId,
       },
     );
 

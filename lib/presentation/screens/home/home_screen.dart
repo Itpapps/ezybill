@@ -49,10 +49,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   /// Pill tab index: 0=Active, 1=Inactive, 2=Fresh, 3=Assigned
   int _selectedTabIndex = 0;
 
-  /// Sort mode: 0=Name, 1=Due Date, 2=Area
-  int _sortMode = 0;
-
-  List<String> _sortLabels(AppLocalizations l) => [l.name, l.dueDate, l.area];
+  /// Label for the list sort button. The sort itself lives in
+  /// dashboardCustomerListProvider so it applies before paging.
+  String _sortLabel(AppLocalizations l, DashboardSort sort) => switch (sort) {
+        DashboardSort.name => l.name,
+        DashboardSort.dueDate => l.dueDate,
+      };
 
   @override
   void initState() {
@@ -692,7 +694,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       children: [
         // Sort button
         GestureDetector(
-          onTap: () => setState(() => _sortMode = (_sortMode + 1) % 3),
+          onTap: () => ref
+              .read(dashboardCustomerListProvider.notifier)
+              .setSort(listState.sort == DashboardSort.name
+                  ? DashboardSort.dueDate
+                  : DashboardSort.name),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -706,7 +712,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Icon(LucideIcons.arrowDownUp, size: 11, color: c.ink40),
                 const SizedBox(width: 4),
                 Text(
-                  _sortLabels(l)[_sortMode],
+                  _sortLabel(l, listState.sort),
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,

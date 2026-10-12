@@ -66,11 +66,18 @@ abstract class StbRepository {
     required String stbNo,
   });
 
-  /// Replace an STB with a new one.
+  /// Replace an STB with a new one (server contract: see
+  /// StbRemoteDatasource.stbReplacement).
   Future<Result<Map<String, dynamic>>> stbReplacement({
     required String customerId,
-    required String oldStbNo,
-    required String newStbNo,
-    required String newVcNo,
+    required String serialNumber,
+    required String replacementTypeId,
+    required String amount,
+    required String receiptNumber,
+    required String remarks,
+    required String replaceSerialNumber,
+    required String replaceVcNumber,
+    required bool permanentSurrender,
+    required bool unpair,
   });
 }

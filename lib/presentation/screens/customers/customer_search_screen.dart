@@ -326,17 +326,15 @@ class _SearchHeader extends StatelessWidget {
   String _placeholderFor(CustomerSearchField field) {
     switch (field) {
       case CustomerSearchField.customerNumber:
-        return 'Enter customer number...';
+        return 'Enter customer ID...';
       case CustomerSearchField.customerName:
         return 'Enter customer name...';
       case CustomerSearchField.mobileNumber:
         return 'Enter mobile number...';
       case CustomerSearchField.boxNumber:
-        return 'Enter STB / serial number...';
+        return 'Enter serial / VC number...';
       case CustomerSearchField.lcoCustomerId:
         return 'Enter LCO customer ID...';
-      case CustomerSearchField.cafNumber:
-        return 'Enter CAF number...';
     }
   }
 }

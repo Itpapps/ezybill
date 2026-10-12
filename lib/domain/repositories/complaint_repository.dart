@@ -44,7 +44,12 @@ abstract class ComplaintRepository {
   /// Close a complaint.
   Future<Result<Map<String, dynamic>>> closeComplaint({
     required String complaintId,
-    String? remarks,
+    required String ticketNumber,
+    required String comment,
+    required String status,
+    required String assignedEmp,
+    String? closerTicketTypeId,
+    String? closerReasonId,
   });
 
   /// Get complaint history.
