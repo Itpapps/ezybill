@@ -1,9 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,9 +26,151 @@ import '../../../l10n/app_localizations.dart';
 const String _kRememberMeKey = 'remember_me_enabled';
 const String _kSavedUsernameKey = 'remember_me_username';
 
-/// Input-field corner radius. The target uses a rounded rectangle here, not
-/// the pill shape used for the Sign In CTA.
-const BorderRadius _kFieldRadius = BorderRadius.all(Radius.circular(16));
+// ── Login palette (white & red only) ─────────────────────────────────────────
+// Login-only values from the redesign spec. AppColors is NOT modified.
+
+const Color _kBgTop = Color(0xFFF6E8EA);
+const Color _kBgMid = Color(0xFFF1DEE1);
+const Color _kBgBottom = Color(0xFFEBD2D5);
+const Color _kRed = Color(0xFFD42A32);
+const Color _kRedDeco = Color(0xFFD62A32);
+const Color _kGlowRed = Color(0xFFDC2D35);
+const Color _kInk = Color(0xFF1E1A1C);
+const Color _kInkSoft = Color(0xFF6E6468);
+const Color _kPlaceholder = Color(0xFFA99EA3);
+const Color _kLabel = Color(0xFF3E3639);
+const Color _kEye = Color(0xFF8C8287);
+const Color _kShadowWarm = Color(0xFFA05058); // rgb(160, 80, 88)
+
+// Soft-touch surfaces. The card face is a faint blush rather than pure white,
+// so the white highlights of the raised logo, fields and checkbox can show.
+const Color _kCardTop = Color(0xFFF9F2F3);
+const Color _kCardBottom = Color(0xFFF4E9EB);
+const Color _kSoftFaceTop = Color(0xFFFFFCFC);
+const Color _kSoftFaceBottom = Color(0xFFF3E8EA);
+const Color _kFieldFaceBottom = Color(0xFFF7EFF1);
+const Color _kSoftShadow = Color(0x8CC39BA2); // rgba(195, 155, 162, 0.55)
+const List<Color> _kRedGradient = [
+  Color(0xFFEC4950),
+  Color(0xFFD02830),
+  Color(0xFFBC1F27),
+];
+
+/// Input-field corner radius.
+const BorderRadius _kFieldRadius = BorderRadius.all(Radius.circular(18));
+
+/// How much room a focused field keeps around it when the keyboard opens.
+/// Flutter's default (20 all round) left the Sign In button under the
+/// keyboard; 160 below keeps the next field and the button in view too.
+const EdgeInsets _kFieldScrollPadding = EdgeInsets.fromLTRB(20, 20, 20, 160);
+
+/// One google_fonts base style per weight, built once. Calling GoogleFonts
+/// inside every build would restart a failed font fetch on each keyboard frame
+/// while the device is offline and the font is not cached yet.
+final Map<FontWeight, TextStyle> _kLoginFontByWeight = {};
+
+/// Login text style in the app's own font — the theme's Plus Jakarta Sans,
+/// through google_fonts (already a dependency).
+TextStyle _loginText(
+  double size,
+  FontWeight weight,
+  Color color, {
+  double? letterSpacing,
+}) =>
+    (_kLoginFontByWeight[weight] ??=
+            GoogleFonts.plusJakartaSans(fontWeight: weight))
+        .copyWith(
+      fontSize: size,
+      color: color,
+      letterSpacing: letterSpacing,
+    );
+
+/// Card layout metrics. Phones get a compact set so the single card stays
+/// short; tablets (shortest side >= 600) get the full spec sizes.
+class _LoginMetrics {
+  const _LoginMetrics({
+    required this.cardRadius,
+    required this.cardPadding,
+    required this.logoTile,
+    required this.logoTileRadius,
+    required this.logoInner,
+    required this.logoInnerRadius,
+    required this.gapLogoTitle,
+    required this.titleSize,
+    required this.dividerTop,
+    required this.dividerBottom,
+    required this.welcomeSize,
+    required this.gapBeforeFields,
+    required this.fieldHeight,
+    required this.fieldGap,
+    required this.gapBeforeRemember,
+    required this.gapBeforeButton,
+    required this.buttonHeight,
+    required this.buttonTextSize,
+  });
+
+  final double cardRadius;
+  final EdgeInsets cardPadding;
+  final double logoTile;
+  final double logoTileRadius;
+  final double logoInner;
+  final double logoInnerRadius;
+  final double gapLogoTitle;
+  final double titleSize;
+  final double dividerTop;
+  final double dividerBottom;
+  final double welcomeSize;
+  final double gapBeforeFields;
+  final double fieldHeight;
+  final double fieldGap;
+  final double gapBeforeRemember;
+  final double gapBeforeButton;
+  final double buttonHeight;
+  final double buttonTextSize;
+
+  static const phone = _LoginMetrics(
+    cardRadius: 34,
+    cardPadding: EdgeInsets.fromLTRB(22, 22, 22, 22),
+    logoTile: 84,
+    logoTileRadius: 26,
+    logoInner: 60,
+    logoInnerRadius: 18,
+    gapLogoTitle: 10,
+    titleSize: 24,
+    dividerTop: 14,
+    dividerBottom: 12,
+    welcomeSize: 20,
+    gapBeforeFields: 16,
+    fieldHeight: 52,
+    // Room for each raised field's soft shadow before the next one.
+    fieldGap: 14,
+    gapBeforeRemember: 12,
+    gapBeforeButton: 16,
+    buttonHeight: 50,
+    buttonTextSize: 16,
+  );
+
+  static const tablet = _LoginMetrics(
+    cardRadius: 44,
+    cardPadding: EdgeInsets.fromLTRB(36, 34, 36, 34),
+    logoTile: 100,
+    logoTileRadius: 30,
+    logoInner: 66,
+    logoInnerRadius: 20,
+    gapLogoTitle: 14,
+    titleSize: 28,
+    dividerTop: 24,
+    dividerBottom: 22,
+    welcomeSize: 22,
+    gapBeforeFields: 22,
+    fieldHeight: 58,
+    fieldGap: 18,
+    gapBeforeRemember: 14,
+    gapBeforeButton: 22,
+    buttonHeight: 56,
+    buttonTextSize: 16.5,
+  );
+}
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -68,8 +213,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     _loadRememberedUsername();
   }
 
+  /// The app theme's brightness, kept current so [dispose] can hand the
+  /// status bar back (Theme cannot be looked up while the screen is removed).
+  Brightness _appBrightness = Brightness.light;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appBrightness = Theme.of(context).brightness;
+  }
+
   @override
   void dispose() {
+    // The login's dark status-bar icons would otherwise stay on the next
+    // screen (Home has no AnnotatedRegion of its own). Send back the style
+    // MaterialApp uses for the current theme.
+    SystemChrome.setSystemUIOverlayStyle(
+      _appBrightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
+    );
     _usernameController.dispose();
     _passwordController.dispose();
     _usernameFocus.dispose();
@@ -305,9 +468,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     final l = AppLocalizations.of(context)!;
     final authState = ref.watch(authProvider);
     final isLoading = authState.status == AuthStatus.loading;
-    final colors = Theme.of(context).extension<AppColors>()!;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenHeight = MediaQuery.sizeOf(context).height;
+    final m = MediaQuery.sizeOf(context).shortestSide >= 600
+        ? _LoginMetrics.tablet
+        : _LoginMetrics.phone;
 
     // Listen for error state and show snackbar.
     ref.listen<AuthState>(authProvider, (prev, next) {
@@ -318,256 +482,97 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
       }
     });
 
-    return Scaffold(
-      // Without this the Scaffold's own Material paints scaffoldBackgroundColor
-      // (near-white in light) in the band vacated below the body when the IME
-      // opens, which can flash if the resize leads the keyboard animation.
-      backgroundColor:
-          Color.lerp(colors.redDark, Colors.black, isDark ? 0.66 : 0.50)!,
-      body: SizedBox(
-        width: double.infinity,
-        // `height` here is still CLAMPED by the Scaffold body's constraints,
-        // which shrink when the keyboard opens. So this box is NOT a reliable
-        // anchor — every decorative layer below carries its own explicit
-        // `height: screenHeight` instead, which a Positioned child may exceed
-        // (the Stack clips it). That is what keeps the canvas fixed.
-        height: screenHeight,
-        // Decorative layers paint first (behind). The content SafeArea is the
-        // last child, so it paints on top and is hit-tested first; the
-        // decorative layers are childless DecoratedBox/Container, whose
-        // hitTestSelf is false, so they cannot absorb a pointer.
-        // NOTE: SafeArea is the sole NON-positioned child, so RenderStack
-        // lays it out with loosened constraints (StackFit.loose). The content
-        // column reaches full width via the version Row's MainAxisSize.max
-        // and the button's SizedBox(width: double.infinity) — not via a tight
-        // parent constraint as it was at HEAD.
-        child: Stack(
-          children: [
-            // Base gradient — fixed to true screen height so its four stops
-            // cannot recompress when the body shrinks.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: screenHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  // Deepened locally toward the target crimson. AppColors is
-                  // NOT modified — these are login-only lerps off the tokens.
-                  gradient: LinearGradient(
-                    colors: [
-                      Color.lerp(colors.red, Colors.black,
-                          isDark ? 0.18 : 0.08)!,
-                      Color.lerp(colors.red, Colors.black,
-                          isDark ? 0.26 : 0.15)!,
-                      Color.lerp(colors.redDark, Colors.black,
-                          isDark ? 0.38 : 0.24)!,
-                      Color.lerp(colors.redDark, Colors.black,
-                          isDark ? 0.66 : 0.50)!,
-                    ],
-                    stops: const [0.0, 0.30, 0.68, 1.0],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+    // Light canvas → dark status-bar icons while this screen is shown. A
+    // region's style stays in effect after the screen goes, so dispose()
+    // hands the status bar back to the app theme's style.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        // Matches the bottom of the backdrop gradient, so the band the IME
+        // vacates below the body can never flash a different colour.
+        backgroundColor: _kBgBottom,
+        body: SizedBox(
+          width: double.infinity,
+          // The body's constraints shrink when the keyboard opens, so the
+          // backdrop carries its own explicit `height: screenHeight` (which a
+          // Positioned child may exceed; the Stack clips it). That keeps the
+          // decorative canvas fixed while the content scrolls.
+          height: screenHeight,
+          child: Stack(
+            children: [
+              // Decorative backdrop — one static painter, rasterised once and
+              // served from the RepaintBoundary cache; never hit-tested.
+              Positioned(
+                left: 0,
+                right: 0,
+                top: 0,
+                height: screenHeight,
+                child: const IgnorePointer(
+                  child: RepaintBoundary(
+                    child: CustomPaint(
+                      size: Size.infinite,
+                      painter: _LoginBackdropPainter(),
+                    ),
                   ),
                 ),
               ),
-            ),
-            // ── Sweeping bands ──────────────────────────────────────
-            // Curved ribbons rather than the straight rotated capsules this
-            // replaced. Same colours, same alphas, same lower-left-to-upper-
-            // right run — only the edges are now arcs. One Positioned layer
-            // holding one painter, fixed to `screenHeight` like every other
-            // decorative layer, so the keyboard cannot move it.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: screenHeight,
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: _SweepPainter(isDark: isDark),
-                ),
-              ),
-            ),
-            // ── Halftone texture ────────────────────────────────────
-            // Purely additive: it paints circles over the gradient and the
-            // bands and modifies no existing layer. Fixed to `screenHeight`
-            // like every other decorative layer, so the keyboard cannot move
-            // it. The RepaintBoundary means the field rasterises once and is
-            // then served from cache.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: screenHeight,
-              child: RepaintBoundary(
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: _HalftonePainter(
-                    color:
-                        Colors.white.withValues(alpha: isDark ? 0.10 : 0.17),
-                  ),
-                ),
-              ),
-            ),
-            // Key light, upper-left — restrained so it deepens rather than
-            // washes out the crimson.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: screenHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(-0.65, -0.85),
-                    radius: 1.15,
-                    colors: [
-                      Colors.white.withValues(alpha: isDark ? 0.05 : 0.07),
-                      Colors.white.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.0, 0.62],
-                  ),
-                ),
-              ),
-            ),
-            // Vignette, lower-right — THE black corner that was still moving.
-            // `Positioned.fill` tracked the shrinking Stack, so its
-            // Alignment(0.9, 1.0) centre rode up with the keyboard. A fixed
-            // height decouples it from the viewport entirely.
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: screenHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    center: const Alignment(0.9, 1.0),
-                    radius: 1.25,
-                    colors: [
-                      Colors.black.withValues(alpha: isDark ? 0.40 : 0.30),
-                      // Fades to transparent BLACK, matching the start colour.
-                      // `Colors.transparent` is also transparent black, but
-                      // being explicit keeps this consistent with the white
-                      // falloffs elsewhere in the file.
-                      Colors.black.withValues(alpha: 0.0),
-                    ],
-                    stops: const [0.0, 0.72],
-                  ),
-                ),
-              ),
-            ),
-            SafeArea(
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                // The scroll viewport — not the raw screen — is what the
-                // content has to fill. `screenHeight` is a device constant, so
-                // the old minHeight stayed at full height when the IME shrank
-                // the body: the column kept centring inside an oversized box,
-                // and drifted DOWN as `padding.bottom` collapsed to 0. Reading
-                // the incoming constraint makes the box track the space that
-                // actually exists. The decorative layers still use
-                // `screenHeight`, so the background stays anchored.
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(
-                          minHeight: constraints.maxHeight,
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 28),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(height: 28),
-
-                              // ── Logo / Branding Area ────────────────────────────
-                              _buildHeader(colors),
-
-                              const SizedBox(height: 28),
-
-                              // ── Login Card ──────────────────────────────────────
-                              // RepaintBoundary caches the card's raster. Its four
-                              // BoxShadows are mask-filter blurs (the largest at
-                              // sigma ~34); without this they re-blur on every scroll
-                              // frame and every keyboard scroll-into-view frame,
-                              // because SingleChildScrollView's viewport is a repaint
-                              // boundary but nothing inside it is.
-                              RepaintBoundary(
-                                child: _buildLoginCard(colors, isDark, isLoading),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // ── Version ─────────────────────────────────────────
-                              Row(
-                                children: [
-                                  // Rules fade OUT toward the screen edges and
-                                  // are brightest where they meet the label,
-                                  // as in the reference. A flat bar reads as a
-                                  // hard line with two blunt ends; this reads
-                                  // as a drawn divider.
-                                  Expanded(
-                                    child: Container(
-                                      height: 1,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                          colors: [
-                                            Colors.white.withValues(alpha: 0.0),
-                                            Colors.white.withValues(alpha: 0.30),
-                                          ],
+              SafeArea(
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  // The scroll viewport — not the raw screen — is what the
+                  // content has to fill, so the box tracks the space that
+                  // actually exists when the keyboard is open.
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(height: 20),
+                                // Phone: full width minus 24px each side.
+                                // Tablet: capped at 560px and centred.
+                                Center(
+                                  child: ConstrainedBox(
+                                    constraints:
+                                        const BoxConstraints(maxWidth: 560),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        // RepaintBoundary gives the card its
+                                        // own layer, so scrolling moves it
+                                        // without repainting its blurred
+                                        // shadows.
+                                        RepaintBoundary(
+                                          child: _buildLoginCard(
+                                              l, m, isLoading),
                                         ),
-                                      ),
+                                        const SizedBox(height: 18),
+                                        _buildVersion(),
+                                      ],
                                     ),
                                   ),
-                                  Padding(
-                                    padding:
-                                        const EdgeInsets.symmetric(horizontal: 12),
-                                    child: Text(
-                                      'v1.0.0',
-                                      style: TextStyle(
-                                        fontFamily: 'Plus Jakarta Sans',
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w500,
-                                        color: Colors.white.withValues(alpha: 0.70),
-                                      ),
-                                    ),
-                                  ),
-                                  Expanded(
-                                    child: Container(
-                                      height: 1,
-                                      decoration: BoxDecoration(
-                                        gradient: LinearGradient(
-                                          begin: Alignment.centerLeft,
-                                          end: Alignment.centerRight,
-                                          colors: [
-                                            Colors.white.withValues(alpha: 0.30),
-                                            Colors.white.withValues(alpha: 0.0),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-
-                              const SizedBox(height: 16),
-                            ],
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -662,465 +667,476 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
     );
   }
 
-  Widget _buildHeader(AppColors colors) {
-    return Column(
-      children: [
-        // Logo icon container
-        Container(
-          width: 80,
-          height: 80,
+  /// Raised soft tile holding the red brand square. The mark inside is the
+  /// unchanged [_buildBrandMark] (BMS client logo, TV icon fallback).
+  Widget _buildLogoTile(_LoginMetrics m) {
+    return Container(
+      width: m.logoTile,
+      height: m.logoTile,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(m.logoTileRadius),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_kSoftFaceTop, _kSoftFaceBottom],
+        ),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.9),
+          width: 1.5,
+        ),
+        boxShadow: const [
+          // Light from the top-left, then the warm shadow bottom-right.
+          BoxShadow(
+            color: Colors.white,
+            offset: Offset(-8, -8),
+            blurRadius: 18,
+          ),
+          BoxShadow(
+            color: _kSoftShadow,
+            offset: Offset(9, 10),
+            blurRadius: 20,
+          ),
+        ],
+      ),
+      child: Container(
+        width: m.logoInner,
+        height: m.logoInner,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(m.logoInnerRadius),
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFEC4950), _kRed, Color(0xFFBC1F27)],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _kRed.withValues(alpha: 0.32),
+              offset: const Offset(0, 5),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            _buildBrandMark(),
+            Positioned(left: 7, top: 6, child: _buildGlint()),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Small 4-point sparkle on the brand square's top-left corner.
+  Widget _buildGlint() {
+    Widget ray(double w, double h, Alignment begin, Alignment end) => Container(
+          width: w,
+          height: h,
           decoration: BoxDecoration(
             gradient: LinearGradient(
+              begin: begin,
+              end: end,
               colors: [
-                Color.lerp(colors.red, Colors.white, 0.24)!,
-                colors.red,
-                colors.redDark,
+                Colors.white.withValues(alpha: 0.0),
+                Colors.white.withValues(alpha: 0.95),
+                Colors.white.withValues(alpha: 0.0),
               ],
-              stops: const [0.0, 0.55, 1.0],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
             ),
-            borderRadius: BorderRadius.circular(22),
-            // Crisper rim to match the target's defined icon edge.
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.38),
-              width: 1,
+          ),
+        );
+    return SizedBox(
+      width: 12,
+      height: 15,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          ray(1.5, 15, Alignment.topCenter, Alignment.bottomCenter),
+          ray(12, 1.5, Alignment.centerLeft, Alignment.centerRight),
+          Container(
+            width: 4.5,
+            height: 4.5,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: RadialGradient(
+                colors: [
+                  Colors.white,
+                  Colors.white.withValues(alpha: 0.0),
+                ],
+                stops: const [0.2, 1.0],
+              ),
             ),
-            boxShadow: [
-              // Luminous red halo.
-              BoxShadow(
-                color: colors.red.withValues(alpha: 0.55),
-                blurRadius: 28,
-                spreadRadius: 1,
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.32),
-                blurRadius: 18,
-                offset: const Offset(0, 9),
-              ),
-            ],
           ),
-          // Gloss highlight over the upper half — fixed 80x80 tile, so the
-          // overlay cannot change geometry.
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Specular gloss. A RadialGradient centred just ABOVE the tile
-              // gives the curved highlight boundary a real glossy icon has;
-              // the previous LinearGradient band cut off in a straight line,
-              // which is what made it read as matte. Fills the same fixed
-              // 80x80 tile, so nothing about the logo's size changes.
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(21),
-                    gradient: RadialGradient(
-                      center: const Alignment(-0.30, -0.95),
-                      radius: 1.08,
-                      colors: [
-                        Colors.white.withValues(alpha: 0.34),
-                        Colors.white.withValues(alpha: 0.12),
-                        Colors.white.withValues(alpha: 0.0),
-                      ],
-                      stops: const [0.0, 0.44, 0.74],
-                    ),
-                  ),
-                ),
-              ),
-              // Client logo from BMS if one was supplied, else the TV mark.
-              // Sits inside the FIXED 80x80 tile with a 38x38 box, so it can
-              // never change the tile's size or the screen's height. Any
-              // failure path (empty URL, 404, offline, slow load) falls back
-              // to the same icon, so something always renders.
-              _buildBrandMark(),
-              // ── Rim light ───────────────────────────────────────────
-              // The reference carries its shine ON THE BORDER — a bright
-              // hairline running along the tile's top-left edge and dying
-              // away toward the bottom-right, the way light catches the lip
-              // of a glass button. Painted over the mark so the edge stays
-              // unbroken. Strokes inside the fixed 80x80 tile, so it cannot
-              // change the tile's size or the screen's height.
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: const _RimLightPainter(radius: 21),
-                ),
-              ),
-              // ── 4-point specular glint ──────────────────────────────
-              // Three static elements inside the fixed 80x80 tile: two
-              // tapered rays crossing at a bright core. Positioned, so it
-              // adds no layout size; painted last so it stays crisp over
-              // both the gloss and the icon. No blur, no painter, no
-              // animation. Same structure in light and dark — it reads
-              // against the red tile, which is identical in both themes.
-              Positioned(
-                left: 12,
-                top: 8,
-                child: SizedBox(
-                  width: 14,
-                  height: 19,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // 1. Vertical ray — the longer of the two.
-                      Container(
-                        width: 1.6,
-                        height: 19,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.0),
-                              Colors.white.withValues(alpha: 0.90),
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                            stops: const [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                      ),
-                      // 2. Horizontal ray — shorter, same taper.
-                      Container(
-                        width: 14,
-                        height: 1.6,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                            colors: [
-                              Colors.white.withValues(alpha: 0.0),
-                              Colors.white.withValues(alpha: 0.90),
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                            stops: const [0.0, 0.5, 1.0],
-                          ),
-                        ),
-                      ),
-                      // 3. Bright core.
-                      Container(
-                        width: 5,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              Colors.white.withValues(alpha: 1.0),
-                              Colors.white.withValues(alpha: 0.0),
-                            ],
-                            stops: const [0.18, 1.0],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+        ],
+      ),
+    );
+  }
+
+  // ── Version ────────────────────────────────────────────────────────────────
+
+  /// Version text (same literal source as before) between two red rules that
+  /// fade out toward the edges.
+  Widget _buildVersion() {
+    Widget rule(List<Color> colors) => Expanded(
+          child: Container(
+            height: 1,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: colors),
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        rule([
+          _kRedDeco.withValues(alpha: 0.0),
+          _kRedDeco.withValues(alpha: 0.30),
+        ]),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(
+            'v1.0.0',
+            style: _loginText(12.5, FontWeight.w500, _kInkSoft),
           ),
         ),
-        const SizedBox(height: 18),
-        Text(
-          l.appName,
-          style: TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
-            fontSize: 32,
-            fontWeight: FontWeight.w800,
-            color: Colors.white,
-            letterSpacing: -0.5,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'Cable TV Billing Management',
-          style: TextStyle(
-            fontFamily: 'Plus Jakarta Sans',
-            fontSize: 14,
-            fontWeight: FontWeight.w500,
-            color: Colors.white.withValues(alpha: 0.7),
-          ),
-        ),
+        rule([
+          _kRedDeco.withValues(alpha: 0.30),
+          _kRedDeco.withValues(alpha: 0.0),
+        ]),
       ],
     );
   }
 
   // ── Login Card ─────────────────────────────────────────────────────────────
 
-  Widget _buildLoginCard(AppColors colors, bool isDark, bool isLoading) {
-    return Container(
-      padding: const EdgeInsets.all(24),
+  /// The single soft card holding everything: branding, divider, fields,
+  /// Remember Me and Sign In. All form wiring is unchanged.
+  Widget _buildLoginCard(
+      AppLocalizations l, _LoginMetrics m, bool isLoading) {
+    return DecoratedBox(
+      // Outer shell — shadows and a hairline outline. The shell has no fill,
+      // so only the shadows show around the card's shape. Shadows paint in
+      // list order, so the even halo sits over the white light and keeps the
+      // left and top edges visible against the pale background.
       decoration: BoxDecoration(
-        // Faint luminous top edge falling to the flat surface colour.
-        gradient: LinearGradient(
-          colors: [
-            isDark
-                ? Color.lerp(colors.card, Colors.white, 0.07)!
-                : Colors.white,
-            colors.card,
-            isDark
-                ? Color.lerp(colors.card, Colors.black, 0.16)!
-                : Color.lerp(colors.card, colors.ink, 0.04)!,
-          ],
-          stops: const [0.0, 0.38, 1.0],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-        borderRadius: BorderRadius.circular(22),
-        // Rim: cool hairline in dark, near-white lift in light.
+        borderRadius: BorderRadius.circular(m.cardRadius),
         border: Border.all(
-          color: isDark
-              ? colors.ink.withValues(alpha: 0.14)
-              : Colors.white.withValues(alpha: 0.90),
+          color: _kShadowWarm.withValues(alpha: 0.12),
           width: 1,
         ),
-        // All three layers are outer shadows — they paint beyond the border
-        // box and never contribute to width, height or layout spacing.
         boxShadow: [
-          // 1. Sharp edge glow — tight, bright, sitting right on the rim.
-          //    Low blur is what makes it read as a crisp lit edge rather
-          //    than another soft halo.
+          // Soft light from the top-left, held back from the edge.
           BoxShadow(
-            color: isDark
-                ? colors.red.withValues(alpha: 0.30)
-                : Color.lerp(colors.red, Colors.white, 0.62)!
-                    .withValues(alpha: 0.72),
-            // Crisper in dark (the target's edge is defined, not diffuse);
-            // wider in light, where the core reads as emitted light.
-            blurRadius: isDark ? 10 : 18,
-          ),
-          // 2. Mid halo — carries the colour outward from the rim.
-          BoxShadow(
-            color: colors.red.withValues(alpha: isDark ? 0.24 : 0.32),
-            blurRadius: 28,
-            spreadRadius: 3,
-          ),
-          // 3. Bottom bloom — the target's dominant, lowest-frequency glow.
-          BoxShadow(
-            // In light the spill carries the same white-pink tint as the
-            // core, rather than reading as pure red.
-            color: isDark
-                ? colors.red.withValues(alpha: 0.22)
-                : Color.lerp(colors.red, Colors.white, 0.22)!
-                    .withValues(alpha: 0.42),
-            blurRadius: 58,
-            spreadRadius: isDark ? 6 : 8,
-            offset: Offset(0, isDark ? 22 : 26),
-          ),
-          // 4. Elevation — grounds the card against the background.
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.50 : 0.18),
+            color: Colors.white.withValues(alpha: 0.75),
+            offset: const Offset(-14, -14),
             blurRadius: 30,
-            offset: const Offset(0, 14),
+          ),
+          // Even halo on every side, including left and top.
+          BoxShadow(
+            color: _kShadowWarm.withValues(alpha: 0.16),
+            offset: const Offset(0, 3),
+            blurRadius: 16,
+          ),
+          // Main warm drop shadow, bottom-right.
+          BoxShadow(
+            color: _kShadowWarm.withValues(alpha: 0.28),
+            offset: const Offset(16, 22),
+            blurRadius: 44,
           ),
         ],
       ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Card title
-            Text(
-              'Welcome Back',
-              style: TextStyle(
-                fontFamily: 'Plus Jakarta Sans',
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: colors.ink,
+      child: Container(
+        margin: const EdgeInsets.all(1), // inside the hairline
+        padding: m.cardPadding,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(m.cardRadius - 1),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.9),
+            width: 1.5,
+          ),
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [_kCardTop, _kCardBottom],
+          ),
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ── Branding ────────────────────────────────────────────
+              Center(child: _buildLogoTile(m)),
+              SizedBox(height: m.gapLogoTitle),
+              Text(
+                l.appName,
+                textAlign: TextAlign.center,
+                style: _loginText(m.titleSize, FontWeight.w800, _kInk,
+                    letterSpacing: -0.4),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Sign in to your account',
-              style: TextStyle(
-                fontFamily: 'Plus Jakarta Sans',
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                color: colors.ink40,
-              ),
-            ),
-            const SizedBox(height: 24),
 
-            // ── Username Field ──────────────────────────────────────
-            TextFormField(
-              controller: _usernameController,
-              focusNode: _usernameFocus,
-              enabled: !isLoading,
-              textInputAction: TextInputAction.next,
-              keyboardType: TextInputType.text,
-              autocorrect: false,
-              onFieldSubmitted: (_) =>
-                  FocusScope.of(context).requestFocus(_passwordFocus),
-              decoration: _inputDecoration(
-                colors: colors,
-                hint: l.username,
-                icon: LucideIcons.user,
-              ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Please enter your username';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // ── Password Field ──────────────────────────────────────
-            TextFormField(
-              controller: _passwordController,
-              focusNode: _passwordFocus,
-              enabled: !isLoading,
-              obscureText: _obscurePassword,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _handleLogin(),
-              decoration: _inputDecoration(
-                colors: colors,
-                hint: l.password,
-                icon: LucideIcons.lock,
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _obscurePassword ? LucideIcons.eyeOff : LucideIcons.eye,
-                    size: 20,
-                    color: colors.ink20,
-                  ),
-                  onPressed: () {
-                    setState(() => _obscurePassword = !_obscurePassword);
-                  },
-                ),
-              ),
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 12),
-
-            // ── Remember Me ─────────────────────────────────────────
-            GestureDetector(
-              onTap: isLoading
-                  ? null
-                  : () => setState(() => _rememberMe = !_rememberMe),
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 22,
-                    height: 22,
-                    child: Checkbox(
-                      value: _rememberMe,
-                      onChanged: isLoading
-                          ? null
-                          : (v) =>
-                              setState(() => _rememberMe = v ?? false),
-                      activeColor: colors.red,
-                      checkColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      side: BorderSide(
-                        color: colors.red.withValues(alpha: 0.75),
-                        width: 1.5,
-                      ),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    l.rememberMe,
-                    style: TextStyle(
-                      fontFamily: 'Plus Jakarta Sans',
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      color: colors.ink60,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ── Login Button ────────────────────────────────────────
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: AppRadius.pillBR,
-                  // Gradient lives on the wrapper; the button itself stays
-                  // transparent so onPressed/disabled behaviour is untouched.
+              // ── Divider — red fading in from both sides ─────────────
+              Container(
+                height: 1,
+                margin:
+                    EdgeInsets.only(top: m.dividerTop, bottom: m.dividerBottom),
+                decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
-                      Color.lerp(colors.red, Colors.white, 0.18)!
-                          .withValues(alpha: isLoading ? 0.7 : 1.0),
-                      colors.red.withValues(alpha: isLoading ? 0.7 : 1.0),
-                      colors.redDark.withValues(alpha: isLoading ? 0.7 : 1.0),
+                      Color(0x00C8232B),
+                      Color(0x38C8232B), // #C8232B at 22%
+                      Color(0x00C8232B),
                     ],
-                    stops: const [0.0, 0.5, 1.0],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
                   ),
-                  boxShadow: isLoading
-                      ? []
-                      : [
-                          // Tight rim-light + wider bloom beneath the pill.
-                          BoxShadow(
-                            color: colors.red.withValues(alpha: 0.50),
-                            blurRadius: 10,
-                            spreadRadius: -1,
-                            offset: const Offset(0, 2),
-                          ),
-                          BoxShadow(
-                            color: colors.red.withValues(alpha: 0.38),
-                            blurRadius: 26,
-                            spreadRadius: -2,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                ),
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _handleLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.transparent,
-                    disabledForegroundColor: Colors.white,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: AppRadius.pillBR,
-                    ),
-                    elevation: 0,
-                  ),
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          l.loginButton,
-                          style: TextStyle(
-                            fontFamily: 'Plus Jakarta Sans',
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
                 ),
               ),
-            ),
 
-            // ── API URL indicator (debug/profile builds only) ─────────
-            // Absent from release: end users never set the URL by hand — BMS
-            // registration supplies it programmatically via setBaseUrl().
-            if (kDevToolsEnabled) ...[
-              const SizedBox(height: 12),
-              _buildApiUrlIndicator(colors, isDark),
+              // Card title
+              Text(
+                'Welcome Back',
+                textAlign: TextAlign.center,
+                style: _loginText(m.welcomeSize, FontWeight.w700, _kInk),
+              ),
+              SizedBox(height: m.gapBeforeFields),
+
+              // Fields and Remember Me fade back while signing in, the way
+              // the disabled fields used to look. Only the look changes; the
+              // disabling itself is the unchanged `enabled` / `onTap` wiring.
+              Opacity(
+                opacity: isLoading ? 0.6 : 1.0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ── Username Field ──────────────────────────────────────
+                    TextFormField(
+                      controller: _usernameController,
+                      focusNode: _usernameFocus,
+                      enabled: !isLoading,
+                      textInputAction: TextInputAction.next,
+                      keyboardType: TextInputType.text,
+                      autocorrect: false,
+                      onFieldSubmitted: (_) =>
+                          FocusScope.of(context).requestFocus(_passwordFocus),
+                      style: _loginText(15, FontWeight.w600, _kInk),
+                      cursorColor: _kRed,
+                      scrollPadding: _kFieldScrollPadding,
+                      decoration: _inputDecoration(
+                        m: m,
+                        hint: l.username,
+                        icon: LucideIcons.user,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter your username';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: m.fieldGap),
+
+                    // ── Password Field ──────────────────────────────────────
+                    TextFormField(
+                      controller: _passwordController,
+                      focusNode: _passwordFocus,
+                      enabled: !isLoading,
+                      obscureText: _obscurePassword,
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) => _handleLogin(),
+                      style: _loginText(15, FontWeight.w600, _kInk),
+                      cursorColor: _kRed,
+                      scrollPadding: _kFieldScrollPadding,
+                      decoration: _inputDecoration(
+                        m: m,
+                        hint: l.password,
+                        icon: LucideIcons.lock,
+                        // IconButton keeps a 48x48 touch target.
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? LucideIcons.eyeOff
+                                : LucideIcons.eye,
+                            size: 20,
+                            color: _kEye,
+                          ),
+                          onPressed: () {
+                            setState(
+                                () => _obscurePassword = !_obscurePassword);
+                          },
+                        ),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        return null;
+                      },
+                    ),
+                    SizedBox(height: m.gapBeforeRemember),
+
+                    // ── Remember Me ─────────────────────────────────────────
+                    // Same GestureDetector + Checkbox wiring as before. The red
+                    // gradient box (or the raised soft box when unticked) is
+                    // painted behind the Checkbox, which is made transparent so
+                    // only its white check mark shows.
+                    GestureDetector(
+                      onTap: isLoading
+                          ? null
+                          : () => setState(() => _rememberMe = !_rememberMe),
+                      behavior: HitTestBehavior.opaque,
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                gradient: _rememberMe
+                                    ? const LinearGradient(
+                                        begin: Alignment.topCenter,
+                                        end: Alignment.bottomCenter,
+                                        colors: _kRedGradient,
+                                      )
+                                    : const LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          _kSoftFaceTop,
+                                          _kSoftFaceBottom,
+                                        ],
+                                      ),
+                                border: _rememberMe
+                                    ? null
+                                    : Border.all(
+                                        color: _kRed.withValues(alpha: 0.30),
+                                        width: 1.2,
+                                      ),
+                                boxShadow: _rememberMe
+                                    ? [
+                                        BoxShadow(
+                                          color: _kRed.withValues(alpha: 0.30),
+                                          offset: const Offset(0, 3),
+                                          blurRadius: 8,
+                                        ),
+                                      ]
+                                    : const [
+                                        BoxShadow(
+                                          color: Colors.white,
+                                          offset: Offset(-2, -2),
+                                          blurRadius: 4,
+                                        ),
+                                        BoxShadow(
+                                          color: _kSoftShadow,
+                                          offset: Offset(2, 2.5),
+                                          blurRadius: 5,
+                                        ),
+                                      ],
+                              ),
+                              child: Checkbox(
+                                value: _rememberMe,
+                                onChanged: isLoading
+                                    ? null
+                                    : (v) => setState(
+                                        () => _rememberMe = v ?? false),
+                                fillColor: const WidgetStatePropertyAll(
+                                    Colors.transparent),
+                                checkColor: Colors.white,
+                                side: BorderSide.none,
+                                overlayColor: const WidgetStatePropertyAll(
+                                    Colors.transparent),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          // Flexible: very large text wraps instead of
+                          // running past the card padding.
+                          Flexible(
+                            child: Text(
+                              l.rememberMe,
+                              style: _loginText(14, FontWeight.w500, _kLabel),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: m.gapBeforeButton),
+
+              // ── Login Button ────────────────────────────────────────
+              SizedBox(
+                width: double.infinity,
+                height: m.buttonHeight,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: AppRadius.pillBR,
+                    // Gradient lives on the wrapper; the button itself stays
+                    // transparent so onPressed/disabled behaviour is untouched.
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        for (final c in _kRedGradient)
+                          c.withValues(alpha: isLoading ? 0.7 : 1.0),
+                      ],
+                    ),
+                    boxShadow: isLoading
+                        ? []
+                        : const [
+                            BoxShadow(
+                              color: Color(0x61C8232B), // rgba(200,35,43,0.38)
+                              offset: Offset(0, 14),
+                              blurRadius: 26,
+                            ),
+                          ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: isLoading ? null : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.transparent,
+                      disabledForegroundColor: Colors.white,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.pillBR,
+                      ),
+                      elevation: 0,
+                    ),
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            l.loginButton,
+                            style: _loginText(m.buttonTextSize,
+                                FontWeight.w600, Colors.white),
+                          ),
+                  ),
+                ),
+              ),
+
+              // ── API URL indicator (debug/profile builds only) ─────────
+              // Absent from release: end users never set the URL by hand — BMS
+              // registration supplies it programmatically via setBaseUrl().
+              // Light palette: the card is white in both themes now.
+              if (kDevToolsEnabled) ...[
+                const SizedBox(height: 12),
+                _buildApiUrlIndicator(AppColors.light, false),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -1128,70 +1144,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
 
   // ── Input Decoration Helper ────────────────────────────────────────────────
 
+  /// Raised soft-touch field: light halo top-left, warm shadow bottom-right,
+  /// no visible border line (a faint red ring only on focus / error), round
+  /// raised icon well.
   InputDecoration _inputDecoration({
-    required AppColors colors,
+    required _LoginMetrics m,
     required String hint,
     required IconData icon,
     Widget? suffixIcon,
   }) {
     return InputDecoration(
       hintText: hint,
-      // Accent tile keeps the icon inside the existing field height:
-      // 36px tall against ~46px of content, so geometry is unchanged.
-      prefixIcon: Container(
-        width: 36,
-        height: 36,
-        margin: const EdgeInsets.only(left: 8, right: 8),
-        decoration: BoxDecoration(
-          color: colors.redSoft,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: colors.red.withValues(alpha: 0.20),
-            width: 1,
-          ),
-        ),
-        child: Icon(icon, size: 18, color: colors.red),
-      ),
-      prefixIconConstraints: const BoxConstraints(
-        minWidth: 52,
-        minHeight: 36,
-      ),
+      hintStyle: _loginText(15, FontWeight.w500, _kPlaceholder),
+      prefixIcon: _FieldIconTile(icon: icon),
+      prefixIconConstraints: const BoxConstraints(minWidth: 54, minHeight: 36),
       suffixIcon: suffixIcon,
-      filled: true,
-      fillColor: colors.bg,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: _kFieldRadius,
-        borderSide: BorderSide(color: colors.ink10, width: 1.5),
+      // The face is a gradient painted by _SoftFieldBorder, not a flat fill.
+      filled: false,
+      // ~20px text line + padding = the field height from the metrics.
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: 4,
+        vertical: (m.fieldHeight - 20) / 2,
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: _kFieldRadius,
-        borderSide: BorderSide(color: colors.ink10, width: 1.5),
+      border: const _SoftFieldBorder(),
+      enabledBorder: const _SoftFieldBorder(),
+      disabledBorder: const _SoftFieldBorder(),
+      focusedBorder: _SoftFieldBorder(
+        borderSide: BorderSide(color: _kRed.withValues(alpha: 0.40), width: 1.2),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: _kFieldRadius,
-        borderSide: BorderSide(color: colors.red, width: 1.5),
+      errorBorder: _SoftFieldBorder(
+        borderSide: BorderSide(color: _kRed.withValues(alpha: 0.55), width: 1.2),
       ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: _kFieldRadius,
-        borderSide: BorderSide(color: colors.redDot, width: 1.5),
+      focusedErrorBorder: _SoftFieldBorder(
+        borderSide: BorderSide(color: _kRed.withValues(alpha: 0.75), width: 1.2),
       ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: _kFieldRadius,
-        borderSide: BorderSide(color: colors.redDot, width: 1.5),
-      ),
-      hintStyle: TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
-        color: colors.ink20,
-      ),
-      errorStyle: TextStyle(
-        fontFamily: 'Plus Jakarta Sans',
-        fontSize: 11,
-        fontWeight: FontWeight.w500,
-        color: colors.redDot,
-      ),
+      errorStyle: _loginText(11.5, FontWeight.w500, _kRed),
     );
   }
 }
@@ -1232,33 +1219,29 @@ class _HalftoneField {
   final double alpha;
 }
 
-/// The three clusters in the design: a dense corner top-right, and two
-/// shorter bands running off the left edge.
+/// The three dot clusters in the design: a dense corner top-right, a band
+/// off the left edge mid-screen, and a cluster bottom-left.
 const List<_HalftoneField> _kHalftoneFields = [
-  // Cluster rectangles traced from the reference: a tall, tight field pinned
-  // to the top-right edge, and two narrow bands hugging the left edge. Pitch
-  // and dot size are finer than before so the lattice reads as halftone
-  // rather than as scattered blobs. Alphas are UNCHANGED.
   _HalftoneField(
-    area: Rect.fromLTRB(0.68, 0.02, 1.02, 0.32),
-    anchor: Alignment.centerRight,
-    spacing: 0.024,
-    dotRadius: 0.0062,
+    area: Rect.fromLTRB(0.70, 0.02, 1.02, 0.26),
+    anchor: Alignment.topRight,
+    spacing: 0.030,
+    dotRadius: 0.0060,
     alpha: 1.0,
   ),
   _HalftoneField(
-    area: Rect.fromLTRB(-0.02, 0.20, 0.13, 0.42),
+    area: Rect.fromLTRB(-0.02, 0.40, 0.12, 0.62),
     anchor: Alignment.centerLeft,
-    spacing: 0.024,
-    dotRadius: 0.0058,
+    spacing: 0.030,
+    dotRadius: 0.0056,
     alpha: 0.85,
   ),
   _HalftoneField(
-    area: Rect.fromLTRB(-0.02, 0.44, 0.12, 0.66),
-    anchor: Alignment.centerLeft,
-    spacing: 0.024,
-    dotRadius: 0.0054,
-    alpha: 0.70,
+    area: Rect.fromLTRB(0.02, 0.80, 0.30, 0.97),
+    anchor: Alignment.bottomLeft,
+    spacing: 0.030,
+    dotRadius: 0.0056,
+    alpha: 0.80,
   ),
 ];
 
@@ -1278,6 +1261,8 @@ class _HalftonePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final paint = Paint()..isAntiAlias = true;
+    // Scale off a capped width so dots and pitch stay phone-sized on tablets.
+    final unit = math.min(size.width, 460.0);
 
     for (final field in _kHalftoneFields) {
       final rect = Rect.fromLTRB(
@@ -1288,10 +1273,10 @@ class _HalftonePainter extends CustomPainter {
       );
       if (rect.isEmpty) continue;
 
-      final step = field.spacing * size.width;
+      final step = field.spacing * unit;
       if (step <= 0) continue;
 
-      final maxRadius = field.dotRadius * size.width;
+      final maxRadius = field.dotRadius * unit;
       final anchor = field.anchor.withinRect(rect);
 
       for (double y = rect.top; y <= rect.bottom; y += step) {
@@ -1317,268 +1302,242 @@ class _HalftonePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Curved sweep bands
+// Backdrop
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// One curved ribbon of the background sweep.
+/// The decorative canvas behind the card: a vertical gradient, two soft red
+/// glows (top-right, bottom-left), a tilted white panel bottom-right, a faint
+/// thin ring and three dot clusters.
 ///
-/// Geometry is FRACTIONAL (0..1 of the canvas) so the composition holds from
-/// 320px through tablet, and in landscape, instead of a fixed rotation that
-/// would flatten out as the aspect ratio changes.
-///
-/// A band is ANCHORED at ([startX], [startY]) — an edge of the screen — and
-/// TERMINATES at ([endX], [endY]) somewhere out in the middle. It does not
-/// span the full width. Where it terminates it fades to nothing, so the arc
-/// tails off instead of stopping at a blunt end.
-class _SweepBand {
-  const _SweepBand({
-    required this.startX,
-    required this.startY,
-    required this.controlX,
-    required this.controlY,
-    required this.endX,
-    required this.endY,
-    required this.thickness,
-    required this.lightAlpha,
-    required this.darkAlpha,
-    this.edgeLight = 0.0,
-    this.edgeDark = 0.0,
-    this.fade = true,
-    this.tint = _SweepTint.light,
-  });
-
-  /// Anchored end — sits on a screen edge (0.0 = left, 1.0 = right).
-  final double startX;
-  final double startY;
-
-  /// Quadratic control point for the upper edge. Setting [controlY] equal to
-  /// [endY] makes the tangent horizontal where the band terminates, so the
-  /// arc levels off smoothly rather than turning a corner.
-  final double controlX;
-  final double controlY;
-
-  /// Free end — terminates out in the field, not on an edge.
-  final double endX;
-  final double endY;
-
-  /// Vertical thickness, applied to every point of the lower edge.
-  final double thickness;
-
-  final double lightAlpha;
-  final double darkAlpha;
-
-  /// Opacity of the CRISP stroked line along the ribbon's leading edge. This
-  /// is what makes an arc read as a drawn curve instead of a soft wash — a
-  /// low-alpha fill has no edge to see. Zero disables the stroke.
-  final double edgeLight;
-  final double edgeDark;
-
-  /// Whether to taper to transparent at the free end.
-  final bool fade;
-
-  final _SweepTint tint;
-}
-
-enum _SweepTint { light, dark }
-
-/// ONE arc in from the left and ONE in from the right, as in the reference.
-///
-/// They occupy different bands of the screen and their x-ranges barely meet,
-/// so they CANNOT cross. Neither runs the full width. Every alpha, edge
-/// opacity and thickness is carried over unchanged from the bands these
-/// replaced, so nothing gets brighter or darker.
-const List<_SweepBand> _kSweepBands = [
-  // ── Arc in from the LEFT edge, upper third ──
-  _SweepBand(
-    startX: 0.0,
-    startY: 0.085,
-    controlX: 0.34,
-    controlY: 0.245,
-    endX: 0.58,
-    endY: 0.245,
-    thickness: 0.075,
-    lightAlpha: 0.065,
-    darkAlpha: 0.040,
-    edgeLight: 0.17,
-    edgeDark: 0.12,
-  ),
-
-  // ── Arc in from the RIGHT edge, sitting below the left one ──
-  _SweepBand(
-    startX: 1.0,
-    startY: 0.235,
-    controlX: 0.70,
-    controlY: 0.430,
-    endX: 0.38,
-    endY: 0.430,
-    thickness: 0.070,
-    lightAlpha: 0.055,
-    darkAlpha: 0.034,
-    edgeLight: 0.15,
-    edgeDark: 0.105,
-  ),
-
-  // Lower shade — thick enough to run off the bottom of the canvas, which is
-  // what grounds the composition under the card. Unchanged: full width, no
-  // taper, same alphas it has always had.
-  _SweepBand(
-    startX: 0.0,
-    startY: 0.440,
-    controlX: 0.58,
-    controlY: 0.470,
-    endX: 1.0,
-    endY: 0.600,
-    thickness: 0.60,
-    lightAlpha: 0.13,
-    darkAlpha: 0.20,
-    fade: false,
-    tint: _SweepTint.dark,
-  ),
-];
-
-/// Paints the curved sweep behind the login content.
-///
-/// Static — no animation and no state. [shouldRepaint] fires only on a theme
-/// switch, so the sweep rasterises once and is then served from the
-/// RepaintBoundary cache; it does NOT redraw while the keyboard animates.
-class _SweepPainter extends CustomPainter {
-  const _SweepPainter({required this.isDark});
-
-  final bool isDark;
-
-  /// A horizontal ramp that is solid at the band's anchored end and clear at
-  /// its free end, so the arc tails off instead of stopping abruptly.
-  Shader _taper(Color base, double alpha, double x0, double x1, double h) {
-    final anchoredLeft = x0 < x1;
-    final rect = Rect.fromLTRB(
-      anchoredLeft ? x0 : x1,
-      0,
-      anchoredLeft ? x1 : x0,
-      h,
-    );
-    final solid = base.withValues(alpha: alpha);
-    final clear = base.withValues(alpha: 0.0);
-    return LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      colors: anchoredLeft ? [solid, solid, clear] : [clear, solid, solid],
-      stops: anchoredLeft ? const [0.0, 0.40, 1.0] : const [0.0, 0.60, 1.0],
-    ).createShader(rect);
-  }
+/// Static — no state, never repaints — so behind its RepaintBoundary it is
+/// rasterised once and does not redraw while the keyboard animates.
+class _LoginBackdropPainter extends CustomPainter {
+  const _LoginBackdropPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty) return;
     final w = size.width;
     final h = size.height;
-    final paint = Paint()..isAntiAlias = true;
+    final rect = Offset.zero & size;
 
-    for (final band in _kSweepBands) {
-      final t = band.thickness * h;
-      final x0 = band.startX * w;
-      final x1 = band.endX * w;
-      final cx = band.controlX * w;
-      final base =
-          band.tint == _SweepTint.dark ? Colors.black : Colors.white;
+    // 1. Base: #F9EFF0 → #F3E2E4 → #ECD4D6, top to bottom.
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_kBgTop, _kBgMid, _kBgBottom],
+          stops: [0.0, 0.5, 1.0],
+        ).createShader(rect),
+    );
 
-      final path = Path()
-        ..moveTo(x0, band.startY * h)
-        ..quadraticBezierTo(cx, band.controlY * h, x1, band.endY * h)
-        ..lineTo(x1, band.endY * h + t)
-        ..quadraticBezierTo(cx, band.controlY * h + t, x0, band.startY * h + t)
-        ..close();
-
-      final alpha = isDark ? band.darkAlpha : band.lightAlpha;
-      paint.style = PaintingStyle.fill;
-      if (band.fade) {
-        // The taper shader already carries the band's alpha. The paint colour
-        // MULTIPLIES a shader's output, so it must be fully opaque here —
-        // setting it to `alpha` as well squared the opacity (0.065² ≈ 0.4%)
-        // and made the arcs vanish.
-        paint
-          ..shader = _taper(base, alpha, x0, x1, h)
-          ..color = const Color(0xFFFFFFFF);
-      } else {
-        paint
-          ..shader = null
-          ..color = base.withValues(alpha: alpha);
-      }
-      canvas.drawPath(path, paint);
-
-      // Crisp leading edge. The fill above only shifts the tone; this stroke
-      // is what actually draws the arc, and it is the difference between a
-      // detailed curve and a soft wash. It covers a hairline of pixels, so it
-      // adds essentially nothing to the screen's overall brightness.
-      final edgeAlpha = isDark ? band.edgeDark : band.edgeLight;
-      if (edgeAlpha > 0) {
-        final edge = Path()
-          ..moveTo(x0, band.startY * h)
-          ..quadraticBezierTo(cx, band.controlY * h, x1, band.endY * h);
-        paint
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = w * 0.0036;
-        if (band.fade) {
-          paint
-            ..shader = _taper(base, edgeAlpha, x0, x1, h)
-            ..color = const Color(0xFFFFFFFF);
-        } else {
-          paint
-            ..shader = null
-            ..color = base.withValues(alpha: edgeAlpha);
-        }
-        canvas.drawPath(edge, paint);
-      }
+    // 2. Soft red glows fading to nothing.
+    void glow(Offset center, double radius, double alpha) {
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              _kGlowRed.withValues(alpha: alpha),
+              _kGlowRed.withValues(alpha: 0.0),
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)),
+      );
     }
+
+    final reach = math.max(w, h * 0.6);
+    glow(Offset(w, h * 0.04), reach * 0.75, 0.16);
+    glow(Offset(0, h * 0.96), reach * 0.70, 0.13);
+
+    // 3. Tilted rounded white panel, bottom-right (−28°).
+    final panelW = math.min(w * 0.95, 620.0);
+    canvas.save();
+    canvas.translate(w * 0.88, h * 0.97);
+    canvas.rotate(-28 * math.pi / 180);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: panelW,
+          height: panelW * 0.62,
+        ),
+        Radius.circular(panelW * 0.13),
+      ),
+      Paint()..color = Colors.white.withValues(alpha: 0.50),
+    );
+    canvas.restore();
+
+    // 4. Faint thin ring, upper right.
+    canvas.drawCircle(
+      Offset(w * 0.96, h * 0.24),
+      math.min(w, h) * 0.62,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.2
+        ..color = _kRedDeco.withValues(alpha: 0.14),
+    );
+
+    // 5. Red dot clusters, fading out at their edges.
+    _HalftonePainter(color: _kRedDeco.withValues(alpha: 0.20))
+        .paint(canvas, size);
   }
 
   @override
-  bool shouldRepaint(covariant _SweepPainter oldDelegate) =>
-      isDark != oldDelegate.isDark;
+  bool shouldRepaint(covariant _LoginBackdropPainter oldDelegate) => false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Brand tile rim light
+// Raised soft-touch text field
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Strokes the brand tile's rounded border with a light that is bright at the
-/// top-left and fades out toward the bottom-right.
+/// Field shape that looks gently raised off the card: a white halo along the
+/// top-left, a warm shadow along the bottom-right, and a face that is a touch
+/// lighter at the top than at the bottom.
 ///
-/// A [Border] cannot take a gradient, which is why this is a painter rather
-/// than another BoxDecoration. It draws a hairline only — no fill — so it adds
-/// no perceptible brightness to the tile, just a defined lit edge.
-class _RimLightPainter extends CustomPainter {
-  const _RimLightPainter({required this.radius});
-
-  /// Corner radius of the tile, so the stroke follows the same curve.
-  final double radius;
+/// The halos are painted here, clipped to OUTSIDE the field, and the face is
+/// painted over them, so nothing depends on paint order. It extends
+/// [OutlineInputBorder], so the decorator's layout and error-text placement
+/// are exactly the stock ones; only [paint] differs. [lerpFrom]/[lerpTo] keep
+/// this type through the focus animation, so the look cannot drop out for a
+/// frame.
+class _SoftFieldBorder extends OutlineInputBorder {
+  const _SoftFieldBorder({
+    super.borderSide = BorderSide.none,
+    super.borderRadius = _kFieldRadius,
+  }) : super(gapPadding: 0);
 
   @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    final rect = Offset.zero & size;
-    final paint = Paint()
-      ..isAntiAlias = true
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6
-      ..shader = const LinearGradient(
-        begin: Alignment.topLeft,
-        end: Alignment.bottomRight,
-        colors: [
-          Color(0xE6FFFFFF),
-          Color(0x59FFFFFF),
-          Color(0x00FFFFFF),
-        ],
-        stops: [0.0, 0.34, 0.70],
-      ).createShader(rect);
-
-    // Inset by half the stroke so the line sits ON the border, not outside it.
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(rect.deflate(0.8), Radius.circular(radius)),
-      paint,
+  _SoftFieldBorder copyWith({
+    BorderSide? borderSide,
+    BorderRadius? borderRadius,
+    double? gapPadding,
+  }) {
+    return _SoftFieldBorder(
+      borderSide: borderSide ?? this.borderSide,
+      borderRadius: borderRadius ?? this.borderRadius,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _RimLightPainter oldDelegate) =>
-      radius != oldDelegate.radius;
+  _SoftFieldBorder scale(double t) {
+    return _SoftFieldBorder(
+      borderSide: borderSide.scale(t),
+      borderRadius: borderRadius * t,
+    );
+  }
+
+  @override
+  ShapeBorder? lerpFrom(ShapeBorder? a, double t) {
+    if (a is _SoftFieldBorder) {
+      return _SoftFieldBorder(
+        borderSide: BorderSide.lerp(a.borderSide, borderSide, t),
+        borderRadius: BorderRadius.lerp(a.borderRadius, borderRadius, t)!,
+      );
+    }
+    return super.lerpFrom(a, t);
+  }
+
+  @override
+  ShapeBorder? lerpTo(ShapeBorder? b, double t) {
+    if (b is _SoftFieldBorder) {
+      return _SoftFieldBorder(
+        borderSide: BorderSide.lerp(borderSide, b.borderSide, t),
+        borderRadius: BorderRadius.lerp(borderRadius, b.borderRadius, t)!,
+      );
+    }
+    return super.lerpTo(b, t);
+  }
+
+  @override
+  void paint(
+    Canvas canvas,
+    Rect rect, {
+    double? gapStart,
+    double gapExtent = 0.0,
+    double gapPercentage = 0.0,
+    TextDirection? textDirection,
+  }) {
+    final rrect = borderRadius.resolve(textDirection).toRRect(rect);
+
+    // 1. Halos, outside the field only.
+    canvas.save();
+    canvas.clipPath(
+      Path()
+        ..fillType = PathFillType.evenOdd
+        ..addRect(rect.inflate(32))
+        ..addRRect(rrect),
+    );
+    canvas.drawRRect(
+      rrect.shift(const Offset(-4, -4)),
+      Paint()
+        ..color = Colors.white
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+    );
+    canvas.drawRRect(
+      rrect.shift(const Offset(4, 5)),
+      Paint()
+        ..color = _kSoftShadow
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+    );
+    canvas.restore();
+
+    // 2. Face — lighter at the top, so the field reads as gently domed.
+    canvas.drawRRect(
+      rrect,
+      Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_kSoftFaceTop, _kFieldFaceBottom],
+        ).createShader(rect),
+    );
+
+    // 3. Faint ring only when a side is set (focus / error).
+    if (borderSide.style != BorderStyle.none && borderSide.width > 0) {
+      canvas.drawRRect(
+        rrect.deflate(borderSide.width / 2),
+        borderSide.toPaint(),
+      );
+    }
+  }
+}
+
+/// Round raised 36x36 well holding a field's leading icon.
+class _FieldIconTile extends StatelessWidget {
+  const _FieldIconTile({required this.icon});
+
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      margin: const EdgeInsetsDirectional.only(start: 8, end: 10),
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_kSoftFaceTop, _kSoftFaceBottom],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.white,
+            offset: Offset(-2.5, -2.5),
+            blurRadius: 5,
+          ),
+          BoxShadow(
+            color: _kSoftShadow,
+            offset: Offset(2.5, 3),
+            blurRadius: 6,
+          ),
+        ],
+      ),
+      child: Icon(icon, size: 18, color: _kRed),
+    );
+  }
 }

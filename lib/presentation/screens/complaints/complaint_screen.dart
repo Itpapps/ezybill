@@ -929,6 +929,17 @@ class _CreateComplaintTabState extends ConsumerState<_CreateComplaintTab> {
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              // A 4-line box needs its own corners: without these the theme's
+              // pill-shaped enabled/focused borders turned it into a capsule.
+              // Same colours and width as the theme; only the radius differs.
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.ink10, width: 1.5),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: c.red, width: 1.5),
+              ),
               filled: true,
               fillColor: c.bg,
             ),
