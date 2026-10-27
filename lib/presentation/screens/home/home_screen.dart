@@ -21,6 +21,7 @@ import '../../common/widgets/pill_tab_bar.dart';
 
 import '../../common/widgets/subscriber_card.dart';
 import '../../common/widgets/language_selector.dart';
+import '../../common/widgets/logout_confirm_dialog.dart';
 import '../../common/widgets/topup_confirm_dialog.dart';
 import '../../router/route_names.dart';
 import 'widgets/alert_chips.dart';
@@ -188,54 +189,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<bool> _onWillPop() async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (ctx) {
-        final c = Theme.of(ctx).extension<AppColors>()!;
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.cardBR,
-          ),
-          title: Text(
-            'Logout',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              color: c.ink,
-            ),
-          ),
-          content: Text(
-            AppLocalizations.of(ctx)!.logoutConfirm,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: c.ink60,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(
-                'Cancel',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: c.ink40,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(
-                'Logout',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  color: c.red,
-                ),
-              ),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => LogoutConfirmDialog(
+        title: 'Logout',
+        message: AppLocalizations.of(ctx)!.logoutConfirm,
+        cancelLabel: 'Cancel',
+        confirmLabel: 'Logout',
+        onCancel: () => Navigator.pop(ctx, false),
+        onConfirm: () => Navigator.pop(ctx, true),
+      ),
     );
 
     if (result == true && mounted) {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +16,7 @@ import '../../../core/services/debug_log_service.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../common/widgets/language_selector.dart';
+import '../../common/widgets/logout_confirm_dialog.dart';
 import '../../router/route_names.dart';
 import '../bluetooth/paired_device_list_screen.dart';
 import '../../../l10n/app_localizations.dart';
@@ -41,33 +44,22 @@ class SettingsScreen extends ConsumerWidget {
           SliverAppBar(
             expandedHeight: 200,
             pinned: true,
-            backgroundColor: colors.red,
+            // The page's own colour, so the header (expanded or collapsed)
+            // reads as part of the page in both themes. The AppBar picks
+            // dark or light status-bar icons from this colour by itself.
+            backgroundColor: colors.bg,
             flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [colors.red, colors.redDark],
-                  ),
-                ),
+              background: _SoftHeaderBackdrop(
+                colors: colors,
                 child: SafeArea(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const SizedBox(height: 20),
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundColor: Colors.white.withValues(alpha: 0.2),
-                        child: Text(
-                          _getInitials(
-                              authLocal.firstName, authLocal.lastName),
-                          style: const TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
-                        ),
+                      _SoftAvatar(
+                        initials: _getInitials(
+                            authLocal.firstName, authLocal.lastName),
+                        colors: colors,
                       ),
                       const SizedBox(height: 12),
                       // Centred and kept to one line. Without textAlign a name
@@ -82,10 +74,10 @@ class SettingsScreen extends ConsumerWidget {
                           textAlign: TextAlign.center,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            color: colors.ink,
                           ),
                         ),
                       ),
@@ -99,7 +91,8 @@ class SettingsScreen extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 13,
-                            color: Colors.white.withValues(alpha: 0.7),
+                            fontWeight: FontWeight.w500,
+                            color: colors.ink60,
                           ),
                         ),
                       ),
@@ -413,45 +406,16 @@ class SettingsScreen extends ConsumerWidget {
     final l = AppLocalizations.of(context)!;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        backgroundColor: colors.card,
-        title: Text(
-          l.logout,
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: colors.ink,
-          ),
-        ),
-        content: Text(
-          l.logoutConfirm,
-          style: TextStyle(fontSize: 14, color: colors.ink60),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(
-              l.cancel,
-              style: TextStyle(color: colors.ink40),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ref.read(authProvider.notifier).logout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Text(l.logout),
-          ),
-        ],
+      builder: (ctx) => LogoutConfirmDialog(
+        title: l.logout,
+        message: l.logoutConfirm,
+        cancelLabel: l.cancel,
+        confirmLabel: l.logout,
+        onCancel: () => Navigator.pop(ctx),
+        onConfirm: () {
+          Navigator.pop(ctx);
+          ref.read(authProvider.notifier).logout();
+        },
       ),
     );
   }
@@ -761,6 +725,183 @@ class _SettingsTile extends StatelessWidget {
         if (showDivider)
           Divider(height: 1, indent: 64, color: colors.ink05),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Soft profile header (the login screen's soft look, in the app's own colours)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The page colour with a faint red glow and a small dot cluster in the
+/// top-right corner, echoing the login screen. Static: behind its
+/// RepaintBoundary it is painted once and only redraws when the theme flips.
+class _SoftHeaderBackdrop extends StatelessWidget {
+  const _SoftHeaderBackdrop({required this.colors, required this.child});
+
+  final AppColors colors;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        RepaintBoundary(
+          child: CustomPaint(
+            painter: _HeaderBackdropPainter(
+              bg: colors.bg,
+              red: colors.red,
+              isDark: Theme.of(context).brightness == Brightness.dark,
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+
+class _HeaderBackdropPainter extends CustomPainter {
+  const _HeaderBackdropPainter({
+    required this.bg,
+    required this.red,
+    required this.isDark,
+  });
+
+  final Color bg;
+  final Color red;
+  final bool isDark;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    canvas.drawRect(Offset.zero & size, Paint()..color = bg);
+
+    // Faint red glow from the top-right corner.
+    final glowCenter = Offset(size.width, 0);
+    final glowRadius = math.max(size.width, size.height) * 0.8;
+    canvas.drawCircle(
+      glowCenter,
+      glowRadius,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            red.withValues(alpha: isDark ? 0.14 : 0.08),
+            red.withValues(alpha: 0.0),
+          ],
+        ).createShader(
+            Rect.fromCircle(center: glowCenter, radius: glowRadius)),
+    );
+
+    // Dot cluster, densest in the top-right corner and fading out from it.
+    final unit = math.min(size.width, 460.0);
+    final step = unit * 0.03;
+    final maxRadius = unit * 0.0055;
+    final cluster =
+        Rect.fromLTRB(size.width * 0.72, 0, size.width, size.height * 0.75);
+    final dot = Paint()..isAntiAlias = true;
+    for (double y = cluster.top + step / 2; y <= cluster.bottom; y += step) {
+      for (double x = cluster.right - step / 2; x >= cluster.left; x -= step) {
+        final t = 1.0 -
+            Offset(
+              (cluster.right - x) / cluster.width,
+              (y - cluster.top) / cluster.height,
+            ).distance;
+        if (t <= 0.05) continue;
+        dot.color = red.withValues(alpha: (isDark ? 0.22 : 0.16) * t);
+        canvas.drawCircle(Offset(x, y), maxRadius * (0.35 + 0.65 * t), dot);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _HeaderBackdropPainter oldDelegate) =>
+      bg != oldDelegate.bg ||
+      red != oldDelegate.red ||
+      isDark != oldDelegate.isDark;
+}
+
+/// Red initials disc inside a raised soft ring, like the login logo. 80x80
+/// overall — the old CircleAvatar's size — so the header's layout and its
+/// fit inside the 200px expandedHeight are unchanged.
+class _SoftAvatar extends StatelessWidget {
+  const _SoftAvatar({required this.initials, required this.colors});
+
+  final String initials;
+  final AppColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: 80,
+      height: 80,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF232A3B), Color(0xFF161B27)]
+              : const [Color(0xFFFFFFFF), Color(0xFFEDF0F5)],
+        ),
+        // Light from the top-left, then the shadow bottom-right.
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  offset: const Offset(-5, -5),
+                  blurRadius: 12,
+                ),
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  offset: const Offset(6, 8),
+                  blurRadius: 16,
+                ),
+              ]
+            : const [
+                BoxShadow(
+                  color: Colors.white,
+                  offset: Offset(-6, -6),
+                  blurRadius: 14,
+                ),
+                BoxShadow(
+                  color: Color(0x80A3B1C6), // rgba(163, 177, 198, 0.50)
+                  offset: Offset(6, 8),
+                  blurRadius: 16,
+                ),
+              ],
+      ),
+      child: Container(
+        width: 68,
+        height: 68,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [const Color(0xFFEF5350), colors.red, colors.redDark],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: colors.red.withValues(alpha: 0.30),
+              offset: const Offset(0, 5),
+              blurRadius: 12,
+            ),
+          ],
+        ),
+        child: Text(
+          initials,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontSize: 28,
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+        ),
+      ),
     );
   }
 }
